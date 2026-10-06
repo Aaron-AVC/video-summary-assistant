@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
   settingsStorage,
-  type SettingsSnapshot
+  type SettingsExportSnapshot
 } from "@/features/settings/lib/settings-storage"
 import {
   clearTranscriptLogs,
@@ -49,13 +49,13 @@ const EMPTY_INVENTORY: DataInventory = {
 
 type DataManagementSnapshot = {
   generatedAt: string
-  settings: SettingsSnapshot
+  settings: SettingsExportSnapshot
   localData: PersistenceExport
   diagnosticLogs: TranscriptLogEntry[]
 }
 
 type DataManagementDependencies = {
-  exportSettings: () => Promise<SettingsSnapshot>
+  exportSettings: () => Promise<SettingsExportSnapshot>
   exportLocalData: () => Promise<PersistenceExport>
   getTranscriptLogs: () => Promise<TranscriptLogEntry[]>
   clearSettings: () => Promise<void>
@@ -153,7 +153,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       const payload = await createDataManagementSnapshot()
 
       downloadJson(
-        `youtube-summarizer-export-${new Date().toISOString().slice(0, 10)}.json`,
+        `video-summary-assistant-export-${new Date().toISOString().slice(0, 10)}.json`,
         payload
       )
       await refreshInventory()

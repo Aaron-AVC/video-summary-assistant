@@ -33,6 +33,16 @@ export const providerConfigSchema = z.object({
   updatedAt: isoDateTimeSchema
 })
 
+export const providerConfigExportSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1),
+  baseUrl: z.string().trim().url(),
+  model: z.string().trim().min(1),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+  isDefault: z.boolean().optional(),
+  hasApiKey: z.boolean()
+})
 export const transcriptSnapshotSchema = z.object({
   id: z.string().min(1),
   videoId: z.string().trim().min(1),
@@ -86,7 +96,7 @@ export const recentVideoSchema = z.object({
 })
 
 export const persistenceExportSchema = z.object({
-  providerConfigs: z.array(providerConfigSchema),
+  providerConfigs: z.array(providerConfigExportSchema),
   transcriptSnapshots: z.array(transcriptSnapshotSchema),
   analysisRuns: z.array(analysisRunSchema),
   segmentSummaries: z.array(segmentSummarySchema),
@@ -96,6 +106,7 @@ export const persistenceExportSchema = z.object({
 export type PersistedRunStatus = z.infer<typeof persistedRunStatusSchema>
 export type TranscriptCueEntity = z.infer<typeof transcriptCueSchema>
 export type ProviderConfigEntity = z.infer<typeof providerConfigSchema>
+export type ProviderConfigExportEntity = z.infer<typeof providerConfigExportSchema>
 export type TranscriptSnapshotEntity = z.infer<typeof transcriptSnapshotSchema>
 export type SegmentSummaryEntity = z.infer<typeof segmentSummarySchema>
 export type AnalysisRunEntity = z.infer<typeof analysisRunSchema>

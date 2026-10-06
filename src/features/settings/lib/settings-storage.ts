@@ -1,3 +1,5 @@
+import { sanitizeProviderConfigForExport } from "@/lib/export/provider-config-export"
+
 export type ThemePreference = "light" | "dark" | "system"
 
 export type ProviderConfigRecord = {
@@ -16,6 +18,10 @@ export type SettingsSnapshot = {
   defaultProviderId: string | null
   providerConfigs: ProviderConfigRecord[]
   diagnosticLogging: boolean
+}
+
+export type SettingsExportSnapshot = Omit<SettingsSnapshot, "providerConfigs"> & {
+  providerConfigs: ReturnType<typeof sanitizeProviderConfigForExport>[]
 }
 
 type StorageValue = string | number | boolean | null | undefined | object
@@ -244,8 +250,16 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     async setDiagnosticLogging(enabled: boolean) {
       await adapter.set({ [SETTINGS_KEYS.diagnosticLogging]: enabled })
     },
-    async exportSettings() {
+    async getSettingsSnapshot() {
       return getSnapshot()
+    },
+    async exportSettings(): Promise<SettingsExportSnapshot> {
+      const snapshot = await getSnapshot()
+
+      return {
+        ...snapshot,
+        providerConfigs: snapshot.providerConfigs.map(sanitizeProviderConfigForExport)
+      }
     },
     async clearSettings() {
       await adapter.remove(SETTINGS_KEY_LIST)

@@ -114,7 +114,7 @@ export function ProviderForm({
   async function hydrate(nextSelectedProviderId?: string | null) {
     setIsLoading(true)
 
-    const snapshot = await settingsStorage.exportSettings()
+    const snapshot = await settingsStorage.getSettingsSnapshot()
     const nextProviders = snapshot.providerConfigs
     const resolvedSelectedProviderId =
       nextSelectedProviderId ??

@@ -1,33 +1,37 @@
 # TASK_STATE
 
-- 最后完成：Task 1 — Clean baseline
-- 状态：完成；等待用户下一步指令
-- 范围边界：Task 2 尚未开始；未实现平台 adapter、Bilibili、Provider 多 Profile、动态 optional host permissions、ASR/Vision 或新长视频架构
+- 最后完成：Task 1 — Clean baseline（独立复审 CR-01 修复后重新验证）
+- 状态：PASS；等待用户下一步指令
+- Task 1 基线 commit：`db4da4668da5a22bc2ce22801391255dd96656e8`（未 amend、未 rebase、未改写）
+- Task 1 re-review：
+  - `CR-01 — Important`：用户可下载的数据导出会从 settings storage 与 IndexedDB providerConfigs 两条路径泄露明文 `apiKey`
+  - 修复：新增显式白名单 Provider export DTO/sanitizer；`settingsStorage.exportSettings()` 与 `historyRepository.exportLocalData()` 均只导出非敏感 metadata，可附带 `hasApiKey`，不导出 `apiKey`、Authorization 或 Bearer token
+  - 兼容边界：内部持久化和现有 API key 读取保持兼容；Provider 表单改用内部 `getSettingsSnapshot()`；未实施 Task 4 的 key migration、Provider Profile、`/models` 或 optional host permissions
+  - 附带清理：下载文件名改为 `video-summary-assistant-export-YYYY-MM-DD.json`
+  - 修复 commit：`fix: exclude API keys from data exports`（本文件随该原子提交；精确 SHA 以提交后的 `git rev-parse HEAD` 和最终报告为准，commit 无法在自身内容中嵌入自身 SHA）
+- CR-01 回归测试：
+  - 测试名：`excludes API keys from settings and IndexedDB provider exports`
+  - 将 sentinel `sk-secret-must-not-export` 分别写入真实 settings provider config 和注入的 IndexedDB provider config
+  - 通过真实 `settingsStorage.exportSettings()`、`historyRepository.exportLocalData()` 与 `createDataManagementSnapshot()` 后执行 `JSON.stringify(snapshot)`
+  - 断言序列化结果不含 sentinel 且不含 `"apiKey"`，同时保留 `name`、`baseUrl`、`model`
+  - 专门测试文件：3 passed，0 failed，8 assertions
+  - export/storage/repository/schema 相关测试：17 passed，0 failed，43 assertions
+- Task 1 重新验证：
+  - `bun test` — PASS：102 passed，0 failed，25 files，263 assertions
+  - `bun run typecheck` — PASS (`tsc --noEmit`)
+  - `bun run build` — PASS；Plasmo `chrome-mv3` production build 成功，仅有非阻塞 Browserslist 数据过期提示
+  - `git diff --check` — PASS
+  - Manifest 静态检查 — PASS：Manifest V3，含 Side Panel 与 YouTube watch content script；不含 `nativeMessaging`、helper localhost permission、Bilibili permission 或 `<all_urls>`
+  - Helper runtime 扫描 — PASS：未恢复 Native Messaging、helper health/transcript/settings/runtime fallback、yt-dlp/native host/LaunchAgent
+  - Task 2+ 可执行代码扫描 — PASS：未出现 `VideoPlatformAdapter`、`YouTubeAdapter`、`BilibiliAdapter`、`optional_host_permissions` 或 `/models`
 - 上游基线：`KristjanPikhof/YouTube-Summarizer` 固定快照 `48eee570e82cf74d37fcdb546058429cba74357a`
-- 导入范围：
-  - Plasmo、React、TypeScript 配置与扩展入口
-  - Side Panel、Options、popup、background 与 YouTube watch content script
-  - YouTube metadata 与浏览器内 timedtext/VTT、transcript panel、rendered DOM 字幕路径
-  - analysis schema/parsing、Ask AI、OpenAI-compatible client、Dexie/IndexedDB、history/settings/theme 与相关测试/UI 组件
-- 删除/退出正式基线：
-  - 未导入上游 `helper/`、上游 `.git` 和 helper 文档
-  - 移除 Python/yt-dlp/native host/macOS LaunchAgent、Native Messaging、helper health/transcript/settings/runtime message/fallback、helper-only scripts/tests/permissions
-  - 浏览器字幕路径全部失败时返回明确失败，不再调用不存在的 helper
-- 产品元数据：名称为 `Video Summary Assistant`，仓库为 `video-summary-assistant`；第三方作者与 MIT notice 保留在 `THIRD_PARTY_NOTICES.md` 和 `licenses/`，未替本项目原创代码声明许可证
-- Package manager：Bun `1.2.5`；环境记录 Node `v24.19.0`、npm `10.5.2`、Git `2.55.0.windows.3`
-- 依赖安装：`bun install --frozen-lockfile --registry=https://registry.npmjs.org` 成功
-- Tests：`bun test` — 101 passed，0 failed，25 files，259 assertions
-- Typecheck：`bun run typecheck` — PASS (`tsc --noEmit`)
-- Production build：`bun run build` — PASS，Plasmo `chrome-mv3` 产物位于 `build/chrome-mv3-prod/`；仅有非阻塞的 Browserslist 数据过期提示
-- Manifest 静态检查：PASS；Manifest V3，含 Side Panel 与 YouTube watch content script；不含 `nativeMessaging`、helper localhost permission、Bilibili permission 或 `<all_urls>`
-- 敏感信息扫描：PASS；未发现真实 API key、静态 Bearer token 或完整 Authorization header 日志。源码中的命中为运行时 header 构造、字段名、明显测试值/占位符及 YouTube 页面公开的 Innertube key
-- Chrome smoke：`NOT RUN — environment limitation`；当前 Codex GUI 控制初始化失败，未声称实际加载 Chrome
-- 第三方合规：`THIRD_PARTY_NOTICES.md` 已记录固定快照、实际导入/排除/修改范围；完整上游 MIT 文本位于 `licenses/YouTube-Summarizer-MIT.txt`
-- Commit：`chore: establish extension baseline`（本文件属于该原子提交；精确 SHA 以提交后的 `git rev-parse HEAD` 与最终报告为准，提交无法在自身内容中嵌入自身 SHA）
+- 技术基线：Plasmo、React、TypeScript、Bun `1.2.5`、Side Panel、Options、YouTube watch content script、浏览器内字幕、OpenAI-compatible analysis、Ask AI、Dexie/IndexedDB
+- Chrome smoke：`NOT RUN — environment limitation`；未声称实际加载 Chrome，仍需人工 unpacked smoke
+- 第三方合规：`THIRD_PARTY_NOTICES.md` 与 `licenses/YouTube-Summarizer-MIT.txt` 已保留固定快照、导入范围和 MIT notice
 - Known limitations：
-  - 当前仅支持 YouTube 且只读取浏览器可用字幕；无字幕时不提供 helper/ASR 回退
-  - AI Provider 动态 host permission 尚未实现，自定义 Provider 请求可能受扩展权限限制；Task 4 必须实现用户手势授权
-  - Provider API key 仍随 Provider 元数据保存在本地 extension storage；Task 4 必须完成 key storage 重构
-  - Chrome unpacked、Side Panel 和真实 YouTube watch page 仍需按最终报告中的人工步骤进行 GUI smoke
+  - 当前仅支持 YouTube 且只读取浏览器可用字幕；无 helper/ASR/Vision 回退
+  - Provider API key 仍保存在本地 extension storage；CR-01 仅保证下载导出边界不包含 key，完整 key storage migration 仍留给 Task 4
+  - AI Provider 动态 host permission 尚未实现；留给 Task 4
   - 当前 UI 是上游基线，不代表最终产品设计
-- 下一步：Task 2 — 引入平台 adapter 并在测试保护下迁移现有 YouTube 主链；尚未开始，必须等待用户明确指令
+- 范围边界：Task 2 尚未开始；未实现平台 adapter、Bilibili 或任何 Task 2+ 能力
+- 下一步：等待用户明确指令；不得自动开始 Task 2

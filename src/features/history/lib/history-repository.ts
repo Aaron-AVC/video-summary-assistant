@@ -1,5 +1,6 @@
 import { db, withDatabaseTransaction } from "@/lib/db"
 import { runWriteWithQuotaGuard } from "@/lib/db/errors"
+import { sanitizeProviderConfigForExport } from "@/lib/export/provider-config-export"
 import type { DatabaseSchema } from "@/lib/db/schema"
 import {
   RECENT_VIDEOS_RETENTION_LIMIT,
@@ -208,7 +209,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         ])
 
       return {
-        providerConfigs,
+        providerConfigs: providerConfigs.map(sanitizeProviderConfigForExport),
         transcriptSnapshots,
         analysisRuns: analysisRuns.map(normalizeAnalysisRun),
         segmentSummaries: normalizeSegments(segmentSummaries),

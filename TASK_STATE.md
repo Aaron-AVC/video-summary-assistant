@@ -1,15 +1,33 @@
 # TASK_STATE
 
-- 最后完成：Task 0 — Source audit / baseline decision
-- 状态：完成
-- 当前阶段：停止，等待用户明确指令；不要自动开始 Task 1
-- 结论：`YouTube-Summarizer` 为基底，BiliScript 提供 Bilibili adapter 参考，Video Digest 提供双平台生命周期参考
-- 本 Task 修改范围：仅 `docs/source-audit.md` 与本状态文件；没有修改产品代码
-- Git：当前分支为 `main`；`origin` 已配置为 `https://github.com/Aaron-AVC/video-summary-assistant.git`
-- 发布约束：Task 0 完成前执行测试/文档检查、`git diff --check`、原子 commit，并推送 `origin/main`；禁止 force push、历史重写、自动 merge、删除远端分支和发布商店
-- 源仓库审查快照：
-  - YouTube-Summarizer `48eee570e82cf74d37fcdb546058429cba74357a`
-  - BiliScript `25ddfeb81b61599f63fabcdabb3f197cdad11a92`
-  - Video Digest `08d693b9bd02ffa7cb99d4cdbcca6ceda2b72d84`
-- 测试说明：Task 0 没有产品依赖、测试脚本或产品代码；已执行源仓库结构/许可证审查、Git 远程可达性检查和文档内容检查。Task 1 才建立可运行的 typecheck/test/build 基线
-- 下一步：等待用户指令后执行 Task 1，不跨 Task 实施
+- 最后完成：Task 1 — Clean baseline
+- 状态：完成；等待用户下一步指令
+- 范围边界：Task 2 尚未开始；未实现平台 adapter、Bilibili、Provider 多 Profile、动态 optional host permissions、ASR/Vision 或新长视频架构
+- 上游基线：`KristjanPikhof/YouTube-Summarizer` 固定快照 `48eee570e82cf74d37fcdb546058429cba74357a`
+- 导入范围：
+  - Plasmo、React、TypeScript 配置与扩展入口
+  - Side Panel、Options、popup、background 与 YouTube watch content script
+  - YouTube metadata 与浏览器内 timedtext/VTT、transcript panel、rendered DOM 字幕路径
+  - analysis schema/parsing、Ask AI、OpenAI-compatible client、Dexie/IndexedDB、history/settings/theme 与相关测试/UI 组件
+- 删除/退出正式基线：
+  - 未导入上游 `helper/`、上游 `.git` 和 helper 文档
+  - 移除 Python/yt-dlp/native host/macOS LaunchAgent、Native Messaging、helper health/transcript/settings/runtime message/fallback、helper-only scripts/tests/permissions
+  - 浏览器字幕路径全部失败时返回明确失败，不再调用不存在的 helper
+- 产品元数据：名称为 `Video Summary Assistant`，仓库为 `video-summary-assistant`；第三方作者与 MIT notice 保留在 `THIRD_PARTY_NOTICES.md` 和 `licenses/`，未替本项目原创代码声明许可证
+- Package manager：Bun `1.2.5`；环境记录 Node `v24.19.0`、npm `10.5.2`、Git `2.55.0.windows.3`
+- 依赖安装：`bun install --frozen-lockfile --registry=https://registry.npmjs.org` 成功
+- Tests：`bun test` — 101 passed，0 failed，25 files，259 assertions
+- Typecheck：`bun run typecheck` — PASS (`tsc --noEmit`)
+- Production build：`bun run build` — PASS，Plasmo `chrome-mv3` 产物位于 `build/chrome-mv3-prod/`；仅有非阻塞的 Browserslist 数据过期提示
+- Manifest 静态检查：PASS；Manifest V3，含 Side Panel 与 YouTube watch content script；不含 `nativeMessaging`、helper localhost permission、Bilibili permission 或 `<all_urls>`
+- 敏感信息扫描：PASS；未发现真实 API key、静态 Bearer token 或完整 Authorization header 日志。源码中的命中为运行时 header 构造、字段名、明显测试值/占位符及 YouTube 页面公开的 Innertube key
+- Chrome smoke：`NOT RUN — environment limitation`；当前 Codex GUI 控制初始化失败，未声称实际加载 Chrome
+- 第三方合规：`THIRD_PARTY_NOTICES.md` 已记录固定快照、实际导入/排除/修改范围；完整上游 MIT 文本位于 `licenses/YouTube-Summarizer-MIT.txt`
+- Commit：`chore: establish extension baseline`（本文件属于该原子提交；精确 SHA 以提交后的 `git rev-parse HEAD` 与最终报告为准，提交无法在自身内容中嵌入自身 SHA）
+- Known limitations：
+  - 当前仅支持 YouTube 且只读取浏览器可用字幕；无字幕时不提供 helper/ASR 回退
+  - AI Provider 动态 host permission 尚未实现，自定义 Provider 请求可能受扩展权限限制；Task 4 必须实现用户手势授权
+  - Provider API key 仍随 Provider 元数据保存在本地 extension storage；Task 4 必须完成 key storage 重构
+  - Chrome unpacked、Side Panel 和真实 YouTube watch page 仍需按最终报告中的人工步骤进行 GUI smoke
+  - 当前 UI 是上游基线，不代表最终产品设计
+- 下一步：Task 2 — 引入平台 adapter 并在测试保护下迁移现有 YouTube 主链；尚未开始，必须等待用户明确指令

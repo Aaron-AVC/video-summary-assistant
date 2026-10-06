@@ -1,0 +1,25 @@
+node_modules/
+build/
+dist/
+.plasmo/
+coverage/
+
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+
+temp/
+tmp/
+source-audit-*/
+*.tmp
+*.log
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Keep package-manager lockfiles tracked for reproducible installs.
+*.tsbuildinfo

@@ -137,4 +137,36 @@ describe("readPageMetadata", () => {
     expect(metadata.tracks).toEqual([])
     expect(metadata.transcriptPanel).toBeNull()
   })
+
+  it("rejects stale player transcript metadata when the URL identity differs", () => {
+    const metadata = readPageMetadata(
+      "https://www.youtube.com/watch?v=videoBBBBB2",
+      `
+        <script>
+          var ytInitialPlayerResponse = {
+            "videoDetails": { "videoId": "videoAAAAA1", "title": "Stale A" },
+            "captions": {
+              "playerCaptionsTracklistRenderer": {
+                "captionTracks": [{
+                  "baseUrl": "https://www.youtube.com/api/timedtext?v=videoAAAAA1&lang=en",
+                  "languageCode": "en"
+                }]
+              }
+            },
+            "getTranscriptEndpoint": { "params": "stale-panel-params" }
+          };
+          var ytInitialData = {};
+          var ytcfg = {
+            "INNERTUBE_API_KEY": "stale-key",
+            "INNERTUBE_CONTEXT": { "client": { "clientName": "WEB" } }
+          };
+        </script>
+      `,
+    )
+
+    expect(metadata.videoId).toBe("videoBBBBB2")
+    expect(metadata.tracks).toEqual([])
+    expect(metadata.captionsAvailable).toBe(false)
+    expect(metadata.transcriptPanel).toBeNull()
+  })
 })

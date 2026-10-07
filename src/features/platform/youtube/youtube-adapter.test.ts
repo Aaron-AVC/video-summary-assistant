@@ -4,6 +4,8 @@ import type { PlatformPageEnvironment } from "@/features/platform/adapter"
 import { youtubeAdapter } from "@/features/platform/youtube/youtube-adapter"
 
 const VIDEO_ID = "video123456"
+const VIDEO_A = "videoAAAAA1"
+const VIDEO_B = "videoBBBBB2"
 
 describe("YouTubeAdapter contract", () => {
   it("handles supported desktop YouTube watch URLs", () => {
@@ -120,6 +122,45 @@ describe("YouTubeAdapter contract", () => {
     expect(transcript.segments).toEqual([{ startSec: 5, endSec: 6, text: "DOM text" }])
   })
 
+  it("does not return stale A transcript metadata for current video B", async () => {
+    const fetchImpl = mock(async () => okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nStale A text\n"))
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      location: `https://www.youtube.com/watch?v=${VIDEO_B}`,
+      html: createWatchHtml({ videoId: VIDEO_A, tracks: [createTrack(false, VIDEO_A)] }),
+      rows: [{ timestamp: "0:07", text: "Current B text" }],
+      fetchImpl,
+    }))
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(transcript.segments).toEqual([{ startSec: 7, endSec: 8, text: "Current B text" }])
+    expect(transcript.segments.some((segment) => segment.text === "Stale A text")).toBe(false)
+  })
+
+  it("keeps transcript identity safe across an A to B SPA transition", async () => {
+    const transcriptA = await youtubeAdapter.getTranscript(createEnvironment({
+      location: `https://www.youtube.com/watch?v=${VIDEO_A}`,
+      html: createWatchHtml({ videoId: VIDEO_A, tracks: [createTrack(false, VIDEO_A)] }),
+      fetchImpl: async () => okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nTranscript A\n"),
+    }))
+    const fetchB = mock(async () => okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nStale A text\n"))
+    const transcriptB = await youtubeAdapter.getTranscript(createEnvironment({
+      location: `https://www.youtube.com/watch?v=${VIDEO_B}`,
+      html: createWatchHtml({ videoId: VIDEO_A, tracks: [createTrack(false, VIDEO_A)] }),
+      rows: [{ timestamp: "0:09", text: "Transcript B" }],
+      fetchImpl: fetchB,
+    }))
+
+    expect(transcriptA.segments[0]?.text).toBe("Transcript A")
+    expect(transcriptB.segments[0]?.text).toBe("Transcript B")
+    expect(transcriptB.segments.some((segment) => segment.text === "Transcript A")).toBe(false)
+    expect(transcriptB.segments.some((segment) => segment.text === "Stale A text")).toBe(false)
+    expect(youtubeAdapter.getVideoIdentity(new URL(`https://www.youtube.com/watch?v=${VIDEO_B}`))).toEqual({
+      platform: "youtube",
+      videoId: VIDEO_B,
+      contentKey: `youtube:${VIDEO_B}`,
+    })
+  })
+
   it("seeks normally and clamps negative seconds", () => {
     const video = { currentTime: 10 }
     const env = createEnvironment({ video })
@@ -162,6 +203,7 @@ describe("YouTubeAdapter contract", () => {
 
 type EnvironmentOptions = {
   html?: string
+  location?: string
   title?: string
   author?: string
   duration?: number
@@ -210,15 +252,15 @@ function createEnvironment(options: EnvironmentOptions): PlatformPageEnvironment
 
   return {
     document,
-    location: new URL(`https://www.youtube.com/watch?v=${VIDEO_ID}`),
+    location: new URL(options.location ?? `https://www.youtube.com/watch?v=${VIDEO_ID}`),
     fetch: options.fetchImpl ?? (async () => okText("")),
     diagnosticLoggingEnabled: false,
   }
 }
 
-function createTrack(auto: boolean) {
+function createTrack(auto: boolean, videoId = VIDEO_ID) {
   return {
-    baseUrl: `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en${auto ? "&kind=asr" : ""}`,
+    baseUrl: `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en${auto ? "&kind=asr" : ""}`,
     languageCode: "en",
     kind: auto ? "asr" : undefined,
     vssId: auto ? "a.en" : ".en",
@@ -227,17 +269,19 @@ function createTrack(auto: boolean) {
 }
 
 function createWatchHtml({
+  videoId = VIDEO_ID,
   title = "Adapter video",
   tracks = [],
   panel = false,
 }: {
+  videoId?: string
   title?: string
   tracks?: ReturnType<typeof createTrack>[]
   panel?: boolean
 }) {
   return `<!doctype html><html><head><script>
     var ytInitialPlayerResponse = ${JSON.stringify({
-      videoDetails: { videoId: VIDEO_ID, title },
+      videoDetails: { videoId, title },
       captions: { playerCaptionsTracklistRenderer: { captionTracks: tracks } },
       ...(panel ? { getTranscriptEndpoint: { params: "panel-params" } } : {}),
     })};

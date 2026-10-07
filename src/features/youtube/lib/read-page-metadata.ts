@@ -55,15 +55,17 @@ type InitialDataShape = {
 export function readPageMetadata(pageUrl: string, html: string): TranscriptPageMetadata {
   const playerResponse = extractPlayerResponse(html)
   const initialData = extractInitialData(html)
-  const videoId =
-    extractVideoId(pageUrl) ??
-    extractVideoId(playerResponse.videoDetails?.videoId ?? "") ??
-    fail("Unable to resolve a canonical YouTube video ID.")
+  const urlVideoId = extractVideoId(pageUrl)
+  const playerVideoId = extractVideoId(playerResponse.videoDetails?.videoId ?? "")
+  const videoId = urlVideoId ?? playerVideoId ?? fail("Unable to resolve a canonical YouTube video ID.")
+  const playerMetadataMatchesVideo = playerVideoId === videoId
   const title = playerResponse.videoDetails?.title ?? extractTitleFromHtml(html)
-  const tracks = mapCaptionTracks(
-    playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks,
-  )
-  const transcriptPanel = extractTranscriptPanelBootstrap(html, playerResponse, initialData)
+  const tracks = playerMetadataMatchesVideo
+    ? mapCaptionTracks(playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks)
+    : []
+  const transcriptPanel = playerMetadataMatchesVideo
+    ? extractTranscriptPanelBootstrap(html, playerResponse, initialData)
+    : null
 
   return {
     videoId,

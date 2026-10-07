@@ -1,37 +1,59 @@
 # TASK_STATE
 
-- 最后完成：Task 1 — Clean baseline（独立复审 CR-01 修复后重新验证）
-- 状态：PASS；等待用户下一步指令
-- Task 1 基线 commit：`db4da4668da5a22bc2ce22801391255dd96656e8`（未 amend、未 rebase、未改写）
-- Task 1 re-review：
-  - `CR-01 — Important`：用户可下载的数据导出会从 settings storage 与 IndexedDB providerConfigs 两条路径泄露明文 `apiKey`
-  - 修复：新增显式白名单 Provider export DTO/sanitizer；`settingsStorage.exportSettings()` 与 `historyRepository.exportLocalData()` 均只导出非敏感 metadata，可附带 `hasApiKey`，不导出 `apiKey`、Authorization 或 Bearer token
-  - 兼容边界：内部持久化和现有 API key 读取保持兼容；Provider 表单改用内部 `getSettingsSnapshot()`；未实施 Task 4 的 key migration、Provider Profile、`/models` 或 optional host permissions
-  - 附带清理：下载文件名改为 `video-summary-assistant-export-YYYY-MM-DD.json`
-  - 修复 commit：`fix: exclude API keys from data exports`（本文件随该原子提交；精确 SHA 以提交后的 `git rev-parse HEAD` 和最终报告为准，commit 无法在自身内容中嵌入自身 SHA）
-- CR-01 回归测试：
-  - 测试名：`excludes API keys from settings and IndexedDB provider exports`
-  - 将 sentinel `sk-secret-must-not-export` 分别写入真实 settings provider config 和注入的 IndexedDB provider config
-  - 通过真实 `settingsStorage.exportSettings()`、`historyRepository.exportLocalData()` 与 `createDataManagementSnapshot()` 后执行 `JSON.stringify(snapshot)`
-  - 断言序列化结果不含 sentinel 且不含 `"apiKey"`，同时保留 `name`、`baseUrl`、`model`
-  - 专门测试文件：3 passed，0 failed，8 assertions
-  - export/storage/repository/schema 相关测试：17 passed，0 failed，43 assertions
-- Task 1 重新验证：
-  - `bun test` — PASS：102 passed，0 failed，25 files，263 assertions
-  - `bun run typecheck` — PASS (`tsc --noEmit`)
-  - `bun run build` — PASS；Plasmo `chrome-mv3` production build 成功，仅有非阻塞 Browserslist 数据过期提示
-  - `git diff --check` — PASS
-  - Manifest 静态检查 — PASS：Manifest V3，含 Side Panel 与 YouTube watch content script；不含 `nativeMessaging`、helper localhost permission、Bilibili permission 或 `<all_urls>`
-  - Helper runtime 扫描 — PASS：未恢复 Native Messaging、helper health/transcript/settings/runtime fallback、yt-dlp/native host/LaunchAgent
-  - Task 2+ 可执行代码扫描 — PASS：未出现 `VideoPlatformAdapter`、`YouTubeAdapter`、`BilibiliAdapter`、`optional_host_permissions` 或 `/models`
-- 上游基线：`KristjanPikhof/YouTube-Summarizer` 固定快照 `48eee570e82cf74d37fcdb546058429cba74357a`
-- 技术基线：Plasmo、React、TypeScript、Bun `1.2.5`、Side Panel、Options、YouTube watch content script、浏览器内字幕、OpenAI-compatible analysis、Ask AI、Dexie/IndexedDB
-- Chrome smoke：`NOT RUN — environment limitation`；未声称实际加载 Chrome，仍需人工 unpacked smoke
-- 第三方合规：`THIRD_PARTY_NOTICES.md` 与 `licenses/YouTube-Summarizer-MIT.txt` 已保留固定快照、导入范围和 MIT notice
-- Known limitations：
-  - 当前仅支持 YouTube 且只读取浏览器可用字幕；无 helper/ASR/Vision 回退
-  - Provider API key 仍保存在本地 extension storage；CR-01 仅保证下载导出边界不包含 key，完整 key storage migration 仍留给 Task 4
-  - AI Provider 动态 host permission 尚未实现；留给 Task 4
-  - 当前 UI 是上游基线，不代表最终产品设计
-- 范围边界：Task 2 尚未开始；未实现平台 adapter、Bilibili 或任何 Task 2+ 能力
-- 下一步：等待用户明确指令；不得自动开始 Task 2
+- 最后完成：Task 2 — Platform abstraction
+- 当前任务：Task 2 — Platform abstraction
+- 状态：PASS
+- Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
+- Task 2 最终验证 commit：待创建（本轮完成后创建唯一原子 commit `refactor: introduce platform adapter`）
+- Task 2 最终验证：已基于最新工作树完成
+- Chrome smoke：NOT RUN — environment limitation。Computer Use 在本轮再次初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
+- Task 3 尚未开始；本轮停止于 Task 2。
+
+## Task 1 — Clean baseline
+
+- 状态：PASS（独立复审 CR-01 修复后重新验证）
+- CR-01：用户可下载的数据导出曾从 settings storage 与 IndexedDB providerConfigs 两条路径泄露明文 API key。
+- 修复：新增白名单 Provider export DTO/sanitizer；settings 与 IndexedDB 导出只含非敏感 metadata，不导出 `apiKey`、Authorization 或 Bearer token。
+- 兼容边界：内部持久化仍兼容现有 API key 读取；未提前实施 Task 4 的 key migration、Provider Profile、`/models` 或 optional host permissions。
+- 回归测试：`src/features/settings/components/data-management.test.ts` 中 `excludes API keys from settings and IndexedDB provider exports` 专项测试通过（3 pass，8 expect calls）；sentinel 未出现在 settings 与 IndexedDB 导出 JSON，非敏感 name/baseUrl/model 保留。
+- Task 1 修复 commit：`fix: exclude API keys from data exports`；Task 1 最终复审基线为上方 HEAD。
+
+## Task 2 — Platform abstraction
+
+### Implementation
+
+- 新增平台领域层与运行时边界：
+  - `src/features/platform/types.ts`
+  - `src/features/platform/adapter.ts`
+  - `src/features/platform/registry.ts`
+  - `src/features/platform/persistence-compat.ts`
+  - `src/features/platform/youtube/youtube-adapter.ts`
+  - `src/features/platform/youtube/youtube-url.ts`
+- YouTube 主链已接入 adapter：identity、VideoInfo、transcript normalization、seek、timestamp URL；background/content script/runtime 均通过 registry/resolver 使用 adapter。
+- runtime contract 使用 namespace `video-summary-assistant/runtime`，active context 携带 `platform` 与 `contentKey`；YouTube contentKey 为 `youtube:<videoId>`。
+- Side Panel 消费 normalized transcript segments，不解析 VTT；generic background 不手写 YouTube timestamp URL。
+- YouTube desktop watch 支持范围由 adapter、Manifest content-script matches 和注入 matcher 共同约束为 `www.youtube.com/watch` 与 `youtube.com/watch`；Shorts 和 `m.youtube.com` 不进入半支持路径。
+- SPA video A → B identity 刷新、registry resolution、manifest wildcard matcher、seek/timestamp、transcript normalization 均有回归覆盖。
+- persistence 继续保留 videoId 兼容；未实施 Task 8 contentKey migration。
+- `docs/platform-architecture.md` 已记录边界、运行职责与延后 migration。
+
+### Final verification
+
+- `bun test`：PASS — 126 tests，0 fail，335 expect calls，30 files。
+- `bun run typecheck`：PASS。
+- `bun run build`：PASS — Plasmo chrome-mv3 production build completed。
+- `git diff --check`：PASS（修复 7 个 Task 2 文件的多余 EOF 空行后重新检查）。
+- 最终 `build/chrome-mv3-prod/manifest.json`：Manifest V3；Side Panel 存在；YouTube watch content script matches 存在；无 Bilibili permission、`nativeMessaging`、helper localhost permission 或 `<all_urls>`。
+- Task 1 CR-01 专项回归：PASS — `data-management.test.ts` 3 pass，8 expect calls。
+- 范围扫描：未发现 BilibiliAdapter、bilibili.com/api.bilibili.com/hdslb.com 可执行支持、`/models`、optional host permissions、key migration、ASR/Vision/Whisper 实现；测试中的 YouTube `kind=asr` 仅为既有字幕 track 元数据标记。
+- Chrome smoke：NOT RUN — environment limitation；未将环境限制判为产品失败。
+
+## Scope boundaries
+
+- Task 2 仅实现 YouTubeAdapter；BilibiliAdapter 未实现。
+- Task 4+ Provider key storage migration、Provider Profile、`/models`、optional host permissions，以及 ASR/Vision/Whisper 均未开始。
+- Task 8 persistence contentKey migration 未开始。
+
+## Completion gate
+
+- 本文件在 Task 2 最终验证通过后更新；下一步仅为创建并 push Task 2 唯一原子 commit，然后停止等待指令。

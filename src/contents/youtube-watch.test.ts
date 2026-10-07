@@ -1,18 +1,15 @@
 import { afterEach, describe, expect, it, mock } from "bun:test"
 
 import { FETCH_VIDEO_TRANSCRIPT } from "@/lib/runtime/messages"
-import type {
-  FetchVttSuccess,
-  TranscriptPageMetadata,
-} from "@/features/transcript/lib/transcript-schema"
+import type { VideoInfo, VideoTranscript } from "@/features/platform/types"
 import { fetchVideoTranscript } from "./youtube-watch"
 
 type TranscriptResponse = Awaited<ReturnType<typeof fetchVideoTranscript>>
 type TranscriptSuccessResponse = {
   ok: true
   type: typeof FETCH_VIDEO_TRANSCRIPT
-  metadata: TranscriptPageMetadata
-  transcript: FetchVttSuccess
+  video: VideoInfo
+  transcript: VideoTranscript
 }
 type TranscriptFailureResponse = {
   ok: false
@@ -43,8 +40,9 @@ describe("fetchVideoTranscript fallback isolation", () => {
     const success = expectTranscriptSuccess(response)
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
-    expect(success.transcript.rawVtt).toContain("DOM text")
-    expect(success.transcript.source).toBe("in_page")
+    expect(success.transcript.raw?.text).toContain("DOM text")
+    expect(success.transcript.source).toBe("unknown")
+    expect(success.transcript.segments).toEqual([{ startSec: 0, endSec: 1, text: "DOM text" }])
   })
 
   it("does not invoke a native helper after panel rejection and DOM failure", async () => {
@@ -143,6 +141,7 @@ function createTranscriptDocument(rows: Array<{ timestamp: string; text: string 
   }
 
   return {
+    title: "Video 1 - YouTube",
     documentElement: {
       outerHTML: createWatchHtml(),
     },

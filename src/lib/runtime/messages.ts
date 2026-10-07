@@ -1,9 +1,13 @@
 import { z } from "zod"
 
-import type { CurrentVideoContext } from "@/lib/runtime/current-video"
-import type { FetchVttSuccess, TranscriptPageMetadata } from "@/features/transcript/lib/transcript-schema"
+import type {
+  ActiveVideoContext,
+  VideoIdentity,
+  VideoInfo,
+  VideoTranscript,
+} from "@/features/platform/types"
 
-export const RUNTIME_MESSAGE_NAMESPACE = "yt-summarizer/runtime"
+export const RUNTIME_MESSAGE_NAMESPACE = "video-summary-assistant/runtime"
 
 export const GET_ACTIVE_VIDEO_CONTEXT = "get-active-video-context"
 export const OPEN_SIDEPANEL = "open-sidepanel"
@@ -12,51 +16,26 @@ export const JUMP_TO_TIMESTAMP = "jump-to-timestamp"
 export const FETCH_VIDEO_TRANSCRIPT = "fetch-video-transcript"
 
 export type RuntimeRequestMessage =
-  | {
-      channel: typeof RUNTIME_MESSAGE_NAMESPACE
-      type: typeof GET_ACTIVE_VIDEO_CONTEXT
-    }
-  | {
-      channel: typeof RUNTIME_MESSAGE_NAMESPACE
-      type: typeof OPEN_SIDEPANEL
-      tabId?: number
-    }
-  | {
-      channel: typeof RUNTIME_MESSAGE_NAMESPACE
-      type: typeof ANALYZE_VIDEO
-      tabId?: number
-    }
+  | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof GET_ACTIVE_VIDEO_CONTEXT }
+  | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof OPEN_SIDEPANEL; tabId?: number }
+  | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof ANALYZE_VIDEO; tabId?: number }
   | {
       channel: typeof RUNTIME_MESSAGE_NAMESPACE
       type: typeof JUMP_TO_TIMESTAMP
       tabId?: number
-      videoId: string
+      identity: VideoIdentity
       timestampSeconds: number
     }
-  | {
-      channel: typeof RUNTIME_MESSAGE_NAMESPACE
-      type: typeof FETCH_VIDEO_TRANSCRIPT
-      tabId?: number
-    }
+  | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof FETCH_VIDEO_TRANSCRIPT; tabId?: number }
 
 export type RuntimeResponseMessage =
-  | {
-      ok: true
-      type: typeof GET_ACTIVE_VIDEO_CONTEXT
-      tabId: number | null
-      context: CurrentVideoContext
-    }
-  | {
-      ok: true
-      type: typeof OPEN_SIDEPANEL
-      tabId: number | null
-      opened: boolean
-    }
+  | { ok: true; type: typeof GET_ACTIVE_VIDEO_CONTEXT; tabId: number | null; context: ActiveVideoContext }
+  | { ok: true; type: typeof OPEN_SIDEPANEL; tabId: number | null; opened: boolean }
   | {
       ok: true
       type: typeof ANALYZE_VIDEO
       tabId: number | null
-      context: CurrentVideoContext
+      context: ActiveVideoContext
       accepted: boolean
     }
   | {
@@ -71,8 +50,8 @@ export type RuntimeResponseMessage =
       ok: true
       type: typeof FETCH_VIDEO_TRANSCRIPT
       tabId: number | null
-      metadata: TranscriptPageMetadata
-      transcript: FetchVttSuccess
+      video: VideoInfo
+      transcript: VideoTranscript
     }
   | {
       ok: false
@@ -87,37 +66,22 @@ export type RuntimeResponseMessage =
     }
 
 export type ContentScriptRequestMessage =
-  | {
-      channel: typeof RUNTIME_MESSAGE_NAMESPACE
-      type: typeof GET_ACTIVE_VIDEO_CONTEXT
-    }
+  | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof GET_ACTIVE_VIDEO_CONTEXT }
   | {
       channel: typeof RUNTIME_MESSAGE_NAMESPACE
       type: typeof JUMP_TO_TIMESTAMP
       timestampSeconds: number
     }
-  | {
-      channel: typeof RUNTIME_MESSAGE_NAMESPACE
-      type: typeof FETCH_VIDEO_TRANSCRIPT
-    }
+  | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof FETCH_VIDEO_TRANSCRIPT }
 
 export type ContentScriptResponseMessage =
-  | {
-      ok: true
-      type: typeof GET_ACTIVE_VIDEO_CONTEXT
-      context: CurrentVideoContext
-    }
-  | {
-      ok: true
-      type: typeof JUMP_TO_TIMESTAMP
-      timestampSeconds: number
-      jumped: boolean
-    }
+  | { ok: true; type: typeof GET_ACTIVE_VIDEO_CONTEXT; context: ActiveVideoContext }
+  | { ok: true; type: typeof JUMP_TO_TIMESTAMP; timestampSeconds: number; jumped: boolean }
   | {
       ok: true
       type: typeof FETCH_VIDEO_TRANSCRIPT
-      metadata: TranscriptPageMetadata
-      transcript: FetchVttSuccess
+      video: VideoInfo
+      transcript: VideoTranscript
     }
   | {
       ok: false
@@ -125,17 +89,7 @@ export type ContentScriptResponseMessage =
       error: string
     }
 
-export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequestMessage {
-  return isRecord(value) && value.channel === RUNTIME_MESSAGE_NAMESPACE && typeof value.type === "string"
-}
-
-export function isContentScriptRequestMessage(
-  value: unknown
-): value is ContentScriptRequestMessage {
-  return isRuntimeRequestMessage(value)
-}
-
-const responseTypeSchema = z.enum([
+const requestTypeSchema = z.enum([
   GET_ACTIVE_VIDEO_CONTEXT,
   OPEN_SIDEPANEL,
   ANALYZE_VIDEO,
@@ -143,83 +97,93 @@ const responseTypeSchema = z.enum([
   FETCH_VIDEO_TRANSCRIPT,
 ])
 
-const tabIdSchema = z.number().nullable()
+export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequestMessage {
+  return (
+    isRecord(value)
+    && value.channel === RUNTIME_MESSAGE_NAMESPACE
+    && requestTypeSchema.safeParse(value.type).success
+  )
+}
 
-// Inner payload bodies are type-checked at the call site (parseAnalysisResult
-// etc); here we only guard the envelope's discriminator + must-have fields so
-// malformed dispatches fail loudly without crashing downstream consumers.
-const fetchVttSuccessSchema = z.looseObject({
-  ok: z.literal(true),
-  rawVtt: z.string(),
-  track: z.looseObject({
-    languageCode: z.string(),
-    baseUrl: z.string(),
-    name: z.string().nullish(),
-  }),
-  sourceUrl: z.string(),
-  source: z.string(),
+export function isContentScriptRequestMessage(value: unknown): value is ContentScriptRequestMessage {
+  if (!isRuntimeRequestMessage(value)) {
+    return false
+  }
+
+  return value.type === GET_ACTIVE_VIDEO_CONTEXT
+    || value.type === JUMP_TO_TIMESTAMP
+    || value.type === FETCH_VIDEO_TRANSCRIPT
+}
+
+const tabIdSchema = z.number().int().nonnegative().nullable()
+const videoPlatformSchema = z.literal("youtube")
+const videoIdentitySchema = z.object({
+  platform: videoPlatformSchema,
+  videoId: z.string().min(1),
+  partId: z.string().min(1).optional(),
+  contentKey: z.string().min(1),
 })
-
-const transcriptPageMetadataSchema = z.looseObject({
-  videoId: z.string(),
-  title: z.string().nullable(),
+const videoInfoSchema = videoIdentitySchema.extend({
+  title: z.string().min(1),
+  author: z.string().nullable().optional(),
+  durationSec: z.number().finite().nonnegative().nullable().optional(),
+  thumbnailUrl: z.string().url().nullable().optional(),
+  canonicalUrl: z.string().url(),
 })
-
-const currentVideoContextSchema = z.looseObject({
-  pageType: z.string(),
-  videoId: z.string().nullable(),
+const transcriptSegmentSchema = z.object({
+  startSec: z.number().finite().nonnegative(),
+  endSec: z.number().finite().nonnegative(),
+  text: z.string(),
+})
+const videoTranscriptSchema = z.object({
+  segments: z.array(transcriptSegmentSchema),
+  language: z.string().nullable().optional(),
+  source: z.enum(["manual", "auto", "unknown"]),
+  raw: z.object({
+    format: z.literal("vtt"),
+    text: z.string(),
+    sourceUrl: z.string().url().nullable().optional(),
+  }).optional(),
+})
+const activeVideoContextSchema = z.object({
+  pageType: z.enum(["video", "unsupported"]),
+  platform: videoPlatformSchema.nullable(),
+  videoId: z.string().min(1).nullable(),
+  partId: z.string().min(1).nullable(),
+  contentKey: z.string().min(1).nullable(),
   url: z.string(),
-  canonicalUrl: z.string().nullable(),
-  title: z.string().nullable(),
-  channelName: z.string().nullable(),
-  timestampSeconds: z.number(),
+  canonicalUrl: z.string().url().nullable(),
+  title: z.string().min(1).nullable(),
+  author: z.string().nullable(),
+  timestampSeconds: z.number().finite().nonnegative(),
   isReady: z.boolean(),
 })
 
 const runtimeResponseSuccessSchema = z.discriminatedUnion("type", [
   z.object({
-    ok: z.literal(true),
-    type: z.literal(GET_ACTIVE_VIDEO_CONTEXT),
-    tabId: tabIdSchema,
-    context: currentVideoContextSchema,
+    ok: z.literal(true), type: z.literal(GET_ACTIVE_VIDEO_CONTEXT), tabId: tabIdSchema,
+    context: activeVideoContextSchema,
   }),
   z.object({
-    ok: z.literal(true),
-    type: z.literal(OPEN_SIDEPANEL),
-    tabId: tabIdSchema,
+    ok: z.literal(true), type: z.literal(OPEN_SIDEPANEL), tabId: tabIdSchema,
     opened: z.boolean(),
   }),
   z.object({
-    ok: z.literal(true),
-    type: z.literal(ANALYZE_VIDEO),
-    tabId: tabIdSchema,
-    context: currentVideoContextSchema,
-    accepted: z.boolean(),
+    ok: z.literal(true), type: z.literal(ANALYZE_VIDEO), tabId: tabIdSchema,
+    context: activeVideoContextSchema, accepted: z.boolean(),
   }),
   z.object({
-    ok: z.literal(true),
-    type: z.literal(JUMP_TO_TIMESTAMP),
-    tabId: tabIdSchema,
-    timestampSeconds: z.number(),
-    jumped: z.boolean(),
-    openedNewTab: z.boolean(),
+    ok: z.literal(true), type: z.literal(JUMP_TO_TIMESTAMP), tabId: tabIdSchema,
+    timestampSeconds: z.number().finite(), jumped: z.boolean(), openedNewTab: z.boolean(),
   }),
   z.object({
-    ok: z.literal(true),
-    type: z.literal(FETCH_VIDEO_TRANSCRIPT),
-    tabId: tabIdSchema,
-    metadata: transcriptPageMetadataSchema,
-    transcript: fetchVttSuccessSchema,
+    ok: z.literal(true), type: z.literal(FETCH_VIDEO_TRANSCRIPT), tabId: tabIdSchema,
+    video: videoInfoSchema, transcript: videoTranscriptSchema,
   }),
 ])
-
 const runtimeResponseFailureSchema = z.object({
-  ok: z.literal(false),
-  type: responseTypeSchema,
-  error: z.string(),
-  tabId: tabIdSchema.nullish(),
+  ok: z.literal(false), type: requestTypeSchema, error: z.string(), tabId: tabIdSchema.nullish(),
 })
-
 const runtimeResponseMessageSchema = z.union([
   runtimeResponseSuccessSchema,
   runtimeResponseFailureSchema,
@@ -232,14 +196,8 @@ export type RuntimeMessageParseError = {
   tabId: null
 }
 
-/**
- * Sends a runtime message and validates the response against a Zod
- * discriminated union before returning. On parse failure, returns a typed
- * error envelope so callers can distinguish "transport failed" from
- * "response malformed" without crashing the UI.
- */
 export async function sendRuntimeMessage<TResponse extends RuntimeResponseMessage>(
-  message: RuntimeRequestMessage
+  message: RuntimeRequestMessage,
 ): Promise<TResponse | RuntimeMessageParseError> {
   let raw: unknown
   try {
@@ -248,10 +206,9 @@ export async function sendRuntimeMessage<TResponse extends RuntimeResponseMessag
     return {
       ok: false,
       type: "runtime-message-parse-error",
-      error:
-        transportError instanceof Error
-          ? transportError.message
-          : "Runtime message transport failed.",
+      error: transportError instanceof Error
+        ? transportError.message
+        : "Runtime message transport failed.",
       tabId: null,
     }
   }
@@ -267,18 +224,11 @@ export async function sendRuntimeMessage<TResponse extends RuntimeResponseMessag
       tabId: null,
     }
   }
-
   return parsed.data as TResponse
 }
 
-export function isRuntimeMessageParseError(
-  value: unknown
-): value is RuntimeMessageParseError {
-  return (
-    isRecord(value) &&
-    value.ok === false &&
-    value.type === "runtime-message-parse-error"
-  )
+export function isRuntimeMessageParseError(value: unknown): value is RuntimeMessageParseError {
+  return isRecord(value) && value.ok === false && value.type === "runtime-message-parse-error"
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

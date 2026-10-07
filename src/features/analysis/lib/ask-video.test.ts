@@ -23,6 +23,7 @@ describe("ask video", () => {
     })
 
     expect(prompt.systemPrompt).toContain("JSON only")
+    expect(prompt.systemPrompt).not.toContain("YouTube")
     expect(prompt.userPrompt).toContain("Where does the demo start?")
     expect(prompt.userPrompt).toContain("10s-20s")
     expect(prompt.userPrompt).toContain("citations")

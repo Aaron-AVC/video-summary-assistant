@@ -1,34 +1,18 @@
-import {
-  createCurrentVideoBridge,
-  isSupportedCurrentVideoPage,
-  jumpToVideoTimestamp,
-  readCurrentVideoContext
-} from "@/lib/runtime/current-video"
+import { resolvePlatformAdapter } from "@/features/platform/registry"
+import { createActiveVideoBridge, readActiveVideoContext } from "@/lib/runtime/current-video"
 import {
   FETCH_VIDEO_TRANSCRIPT,
   GET_ACTIVE_VIDEO_CONTEXT,
   JUMP_TO_TIMESTAMP,
   type ContentScriptRequestMessage,
   type ContentScriptResponseMessage,
-  isContentScriptRequestMessage
+  isContentScriptRequestMessage,
 } from "@/lib/runtime/messages"
-import { fetchTranscriptDom } from "@/features/transcript/lib/fetch-transcript-dom"
-import { fetchTranscriptPanel } from "@/features/transcript/lib/fetch-transcript-panel"
-import { createLogCollector } from "@/features/transcript/lib/transcript-log"
-import { fetchVtt } from "@/features/transcript/lib/fetch-vtt"
-import { readPageMetadata } from "@/features/youtube/lib/read-page-metadata"
-import {
-  TranscriptUnsupportedError,
-  type FetchVttFailure,
-  type FetchVttResult,
-} from "@/features/transcript/lib/transcript-schema"
 
 const DIAGNOSTIC_LOGGING_KEY = "yt-summarizer.diagnostic-logging"
-const CONTENT_BRIDGE_KEY = "__ytSummarizerContentBridgeMounted"
+const CONTENT_BRIDGE_KEY = "__videoSummaryAssistantContentBridgeMounted"
 
-type WindowWithContentBridge = Window & {
-  [CONTENT_BRIDGE_KEY]?: boolean
-}
+type WindowWithContentBridge = Window & { [CONTENT_BRIDGE_KEY]?: boolean }
 
 async function isDiagnosticLoggingEnabled(): Promise<boolean> {
   try {
@@ -40,12 +24,13 @@ async function isDiagnosticLoggingEnabled(): Promise<boolean> {
 }
 
 export const config = {
+  // Plasmo requires a literal array to emit content_scripts.matches in the build.
+  // youtube-url.test.ts asserts these stay aligned with the adapter support helper.
   matches: [
     "https://www.youtube.com/watch*",
     "https://youtube.com/watch*",
-    "https://m.youtube.com/watch*"
   ],
-  run_at: "document_idle"
+  run_at: "document_idle",
 }
 
 if (
@@ -55,190 +40,109 @@ if (
   && !(window as WindowWithContentBridge)[CONTENT_BRIDGE_KEY]
 ) {
   ;(window as WindowWithContentBridge)[CONTENT_BRIDGE_KEY] = true
+  createActiveVideoBridge({ document, window })
 
-  createCurrentVideoBridge({
-    document,
-    window
-  })
+  chrome.runtime.onMessage.addListener((
+    message: ContentScriptRequestMessage,
+    _sender,
+    sendResponse: (response: ContentScriptResponseMessage) => void,
+  ) => {
+    if (!isContentScriptRequestMessage(message)) return
 
-  chrome.runtime.onMessage.addListener(
-    (
-      message: ContentScriptRequestMessage,
-      _sender,
-      sendResponse: (response: ContentScriptResponseMessage) => void
-    ) => {
-      if (!isContentScriptRequestMessage(message)) {
-        return
-      }
-
-      if (message.type === GET_ACTIVE_VIDEO_CONTEXT) {
-        sendResponse({
-          ok: true,
+    if (message.type === GET_ACTIVE_VIDEO_CONTEXT) {
+      void readActiveVideoContext(document, window.location)
+        .then((context) => sendResponse({ ok: true, type: GET_ACTIVE_VIDEO_CONTEXT, context }))
+        .catch((error) => sendResponse({
+          ok: false,
           type: GET_ACTIVE_VIDEO_CONTEXT,
-          context: readCurrentVideoContext(document, window.location)
-        })
-
-        return
-      }
-
-      if (message.type === JUMP_TO_TIMESTAMP) {
-        sendResponse({
-          ok: true,
-          type: JUMP_TO_TIMESTAMP,
-          timestampSeconds: message.timestampSeconds,
-          jumped: jumpToVideoTimestamp(document, message.timestampSeconds)
-        })
-
-        return
-      }
-
-      if (message.type === FETCH_VIDEO_TRANSCRIPT) {
-        void fetchVideoTranscript(document, window.location)
-          .then(sendResponse)
-          .catch((error) => {
-            sendResponse({
-              ok: false,
-              type: FETCH_VIDEO_TRANSCRIPT,
-              error: error instanceof Error ? error.message : "Unable to fetch the YouTube transcript."
-            })
-          })
-
-        return true
-      }
+          error: formatError(error, "Unable to read the active video context."),
+        }))
+      return true
     }
-  )
+
+    const adapter = resolvePlatformAdapter(window.location.href)
+    if (!adapter) {
+      sendResponse({
+        ok: false,
+        type: message.type,
+        error: "Open a supported video page before continuing.",
+      })
+      return
+    }
+
+    const env = {
+      document,
+      location: new URL(window.location.href),
+      fetch: (input: string | URL, init?: RequestInit) => fetch(input, init),
+    }
+
+    if (message.type === JUMP_TO_TIMESTAMP) {
+      sendResponse({
+        ok: true,
+        type: JUMP_TO_TIMESTAMP,
+        timestampSeconds: message.timestampSeconds,
+        jumped: adapter.seek(env, message.timestampSeconds),
+      })
+      return
+    }
+
+    if (message.type === FETCH_VIDEO_TRANSCRIPT) {
+      void Promise.all([
+        adapter.readVideoInfo(env),
+        isDiagnosticLoggingEnabled().then((enabled) => adapter.getTranscript({
+          ...env,
+          diagnosticLoggingEnabled: enabled,
+        })),
+      ]).then(([video, transcript]) => sendResponse({
+        ok: true,
+        type: FETCH_VIDEO_TRANSCRIPT,
+        video,
+        transcript,
+      })).catch((error) => sendResponse({
+        ok: false,
+        type: FETCH_VIDEO_TRANSCRIPT,
+        error: formatError(error, "Unable to fetch the video transcript."),
+      }))
+      return true
+    }
+  })
 }
 
 export async function fetchVideoTranscript(
   document: Document,
   locationLike: Location,
 ): Promise<ContentScriptResponseMessage> {
-  if (!isSupportedCurrentVideoPage(locationLike)) {
+  const adapter = resolvePlatformAdapter(locationLike.href)
+  if (!adapter) {
     return {
       ok: false,
       type: FETCH_VIDEO_TRANSCRIPT,
-      error: "Open a supported YouTube watch page before analyzing.",
+      error: "Open a supported video page before analyzing.",
     }
   }
 
-  const html = document.documentElement.outerHTML
-  const pageUrl = locationLike.href
-  const metadata = readPageMetadata(pageUrl, html)
-  const loggingEnabled = await isDiagnosticLoggingEnabled()
-  const collector = loggingEnabled
-    ? createLogCollector(metadata.videoId, pageUrl)
-    : null
-
-  // Step 1: In-page timedtext endpoints
-  const transcript = await runTranscriptStep({
-    stepName: "fetchVtt",
-    run: () => fetchVtt({ tracks: metadata.tracks, fetchImpl: (input, init) => fetch(input, init) }),
-    collector,
-    details: `${metadata.tracks.length} track(s) found`,
-  })
-
-  if (transcript.ok) {
-    collector?.finalize("success", "fetchVtt")
-    return {
-      ok: true,
-      type: FETCH_VIDEO_TRANSCRIPT,
-      metadata,
-      transcript,
-    }
+  const env = {
+    document,
+    location: new URL(locationLike.href),
+    fetch: (input: string | URL, init?: RequestInit) => fetch(input, init),
+    diagnosticLoggingEnabled: await isDiagnosticLoggingEnabled(),
   }
 
-  // Step 2: Innertube transcript panel API
-  const panelResult = await runTranscriptStep({
-    stepName: "fetchTranscriptPanel",
-    run: () => fetchTranscriptPanel({ metadata, pageUrl, fetchImpl: (input, init) => fetch(input, init) }),
-    collector,
-    details: metadata.transcriptPanel ? "panel bootstrap available" : "no panel bootstrap",
-  })
-
-  if (panelResult?.ok) {
-    collector?.finalize("success", "fetchTranscriptPanel")
-    return {
-      ok: true,
-      type: FETCH_VIDEO_TRANSCRIPT,
-      metadata,
-      transcript: panelResult,
-    }
-  }
-
-  // Step 3: Rendered DOM transcript
-  const transcriptDomResult = await runTranscriptStep({
-    stepName: "fetchTranscriptDom",
-    run: () => fetchTranscriptDom({ document, metadata }),
-    collector,
-  })
-
-  if (transcriptDomResult.ok) {
-    collector?.finalize("success", "fetchTranscriptDom")
-    return {
-      ok: true,
-      type: FETCH_VIDEO_TRANSCRIPT,
-      metadata,
-      transcript: transcriptDomResult,
-    }
-  }
-
-  // All browser transcript paths exhausted — collect error details from each step
-  const errors: string[] = []
-
-  if (transcript.ok === false) {
-    errors.push(transcript.error.details ?? transcript.error.message)
-  }
-  if (panelResult !== null && panelResult.ok === false) {
-    errors.push(`Panel: ${panelResult.error.details ?? panelResult.error.message}`)
-  }
-  if (transcriptDomResult.ok === false) {
-    errors.push(`DOM: ${transcriptDomResult.error.details ?? transcriptDomResult.error.message}`)
-  }
-  collector?.finalize("all_failed")
-
-  const details = errors.join("; ")
-
-  return {
-    ok: false,
-    type: FETCH_VIDEO_TRANSCRIPT,
-    error: details,
-  }
-}
-
-async function runTranscriptStep<T extends FetchVttResult | null>({
-  stepName,
-  run,
-  collector,
-  details,
-}: {
-  stepName: string
-  run: () => Promise<T>
-  collector: ReturnType<typeof createLogCollector> | null
-  details?: string
-}): Promise<T | FetchVttFailure> {
   try {
-    return collector
-      ? await collector.logStep(stepName, run, details)
-      : await run()
+    const [video, transcript] = await Promise.all([
+      adapter.readVideoInfo(env),
+      adapter.getTranscript(env),
+    ])
+    return { ok: true, type: FETCH_VIDEO_TRANSCRIPT, video, transcript }
   } catch (error) {
     return {
       ok: false,
-      error: new TranscriptUnsupportedError(
-        "transcript_request_failed",
-        `${stepName} failed: ${formatThrownError(error)}`,
-      ),
+      type: FETCH_VIDEO_TRANSCRIPT,
+      error: formatError(error, "Unable to fetch the video transcript."),
     }
   }
 }
 
-function formatThrownError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  if (typeof error === "string") {
-    return error
-  }
-
-  return "Unknown transcript fallback error"
+function formatError(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }

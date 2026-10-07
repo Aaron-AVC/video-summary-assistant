@@ -12,7 +12,7 @@ import {
 
 type CurrentVideoCardProps = {
   title: string
-  channelName: string | null
+  author: string | null
   canonicalUrl: string
   videoId: string
   timestampLabel: string
@@ -24,7 +24,7 @@ type CurrentVideoCardProps = {
 
 export function CurrentVideoCard({
   title,
-  channelName,
+  author,
   canonicalUrl,
   videoId,
   timestampLabel,
@@ -53,7 +53,7 @@ export function CurrentVideoCard({
         <div className="flex min-w-0 flex-col gap-2">
           <CardTitle className="line-clamp-2 text-base leading-snug sm:text-lg">{title}</CardTitle>
           <CardDescription className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
-            <span>{channelName ?? "Unknown channel"}</span>
+            <span>{author ?? "Unknown author"}</span>
             <span className="hidden text-border sm:inline">•</span>
             <span>{timestampLabel}</span>
           </CardDescription>

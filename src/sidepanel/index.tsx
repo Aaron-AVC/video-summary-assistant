@@ -28,12 +28,11 @@ import { askVideo } from "@/features/analysis/lib/ask-video"
 import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
 import { settingsStorage, type ProviderConfigRecord } from "@/features/settings/lib/settings-storage"
 import { downloadRawVtt } from "@/features/transcript/lib/download-vtt"
-import { normalizeCues } from "@/features/transcript/lib/normalize-cues"
-import { parseVtt } from "@/features/transcript/lib/parse-vtt"
-import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
+import type { TranscriptSegment } from "@/features/platform/types"
+import { projectPersistedVideoIdentity } from "@/features/platform/persistence-compat"
 import { ExtensionProviders } from "@/lib/providers/extension-providers"
 import { useRuntimeBridge } from "@/lib/providers/extension-providers"
-import { FETCH_VIDEO_TRANSCRIPT, sendRuntimeMessage } from "@/lib/runtime/messages"
+import { FETCH_VIDEO_TRANSCRIPT, RUNTIME_MESSAGE_NAMESPACE, sendRuntimeMessage } from "@/lib/runtime/messages"
 import { Sparkles } from "lucide-react"
 
 type AnalysisView = {
@@ -97,7 +96,7 @@ function SidepanelWorkspace() {
   const [analysisView, setAnalysisView] = useState<AnalysisView | null>(null)
   const [recentItems, setRecentItems] = useState<RecentAnalysisListItem[]>([])
   const [rawVtt, setRawVtt] = useState<string | null>(null)
-  const [transcriptCues, setTranscriptCues] = useState<TranscriptCue[]>([])
+  const [transcriptCues, setTranscriptCues] = useState<TranscriptSegment[]>([])
   const [askQuestion, setAskQuestion] = useState("")
   const [askAnswer, setAskAnswer] = useState<AskVideoAnswer | null>(null)
   const [askError, setAskError] = useState<string | null>(null)
@@ -111,8 +110,8 @@ function SidepanelWorkspace() {
   const activeAnalysisVideoIdRef = useRef<string | null>(null)
   const loadWorkspaceGenerationRef = useRef(0)
 
-  const title = videoContext.title ?? "Open a YouTube watch page to start"
-  const canonicalUrl = videoContext.canonicalUrl ?? videoContext.url ?? "No watch page detected"
+  const title = videoContext.title ?? "Open a supported video page to start"
+  const canonicalUrl = videoContext.canonicalUrl ?? videoContext.url ?? "No supported video page detected"
   // Loading state for analysis content only — separate from runtime context status.
   // Skeletons should NOT replace a rendered analysis when the runtime context is
   // merely refreshing (e.g. tab switch, yt-navigate-finish).
@@ -253,7 +252,7 @@ function SidepanelWorkspace() {
 
   const handleAnalyze = useCallback(async () => {
     if (!videoContext.isReady || !videoContext.videoId) {
-      toast.error("Open a supported YouTube watch page before analyzing.")
+      toast.error("Open a supported video page before analyzing.")
       return
     }
 
@@ -276,7 +275,7 @@ function SidepanelWorkspace() {
 
     try {
       const transcriptResponse = await sendRuntimeMessage({
-        channel: "yt-summarizer/runtime",
+        channel: RUNTIME_MESSAGE_NAMESPACE,
         type: FETCH_VIDEO_TRANSCRIPT,
       })
 
@@ -284,14 +283,14 @@ function SidepanelWorkspace() {
         throw new Error(
           transcriptResponse.ok === false
             ? transcriptResponse.error
-            : "The YouTube tab returned an unexpected transcript response.",
+            : "The active video tab returned an unexpected transcript response.",
         )
       }
 
-      const { metadata, transcript: transcriptResult } = transcriptResponse
-
-      const cues = normalizeCues(parseVtt(transcriptResult.rawVtt))
+      const { video, transcript } = transcriptResponse
+      const cues = transcript.segments
       setTranscriptCues(cues)
+      setRawVtt(transcript.raw?.text ?? null)
       const completed = await runAnalysis({
         provider: {
           baseUrl: provider.baseUrl,
@@ -299,8 +298,8 @@ function SidepanelWorkspace() {
           model: provider.model
         },
         transcript: {
-          videoId: metadata.videoId,
-          title: metadata.title,
+          videoId: video.videoId,
+          title: video.title,
           cues
         },
         signal: controller.signal
@@ -312,10 +311,10 @@ function SidepanelWorkspace() {
 
       await historyRepository.saveTranscriptSnapshot({
         id: transcriptSnapshotId,
-        videoId: metadata.videoId,
-        language: transcriptResult.track.languageCode,
-        sourceUrl: transcriptResult.sourceUrl,
-        rawVtt: transcriptResult.rawVtt,
+        videoId: video.videoId,
+        language: transcript.language ?? null,
+        sourceUrl: transcript.raw?.sourceUrl ?? null,
+        rawVtt: transcript.raw?.text ?? null,
         cues,
         createdAt: now,
         updatedAt: now
@@ -324,7 +323,7 @@ function SidepanelWorkspace() {
       await historyRepository.saveAnalysisRun({
         analysisRun: {
           id: analysisRunId,
-          videoId: metadata.videoId,
+          videoId: video.videoId,
           transcriptSnapshotId,
           providerConfigId: provider.id,
           status: "completed",
@@ -339,7 +338,7 @@ function SidepanelWorkspace() {
         segments: completed.analysis.moments.map((segment) => ({
           id: crypto.randomUUID(),
           analysisRunId,
-          videoId: metadata.videoId,
+          videoId: video.videoId,
           title: segment.title,
           summary: segment.summary,
           startSec: segment.startSec,
@@ -348,10 +347,10 @@ function SidepanelWorkspace() {
           updatedAt: now
         })),
         recentVideo: {
-          videoId: metadata.videoId,
-          title: metadata.title ?? videoContext.title ?? metadata.videoId,
-          channelTitle: videoContext.channelName,
-          thumbnailUrl: `https://i.ytimg.com/vi/${metadata.videoId}/hqdefault.jpg`,
+          videoId: video.videoId,
+          title: video.title ?? videoContext.title ?? video.videoId,
+          channelTitle: videoContext.author,
+          thumbnailUrl: video.thumbnailUrl ?? null,
           status: "completed",
           openedAt: now,
           analyzedAt: now,
@@ -529,7 +528,7 @@ function SidepanelWorkspace() {
         return
       }
 
-      const result = await jumpToTimestamp(videoId, timestampSeconds)
+      const result = await jumpToTimestamp(projectPersistedVideoIdentity(videoId), timestampSeconds)
       if (result.ok === true) {
         if (result.openedNewTab) {
           toast.success(`Opened video at ${formatTimestamp(timestampSeconds)} in a new tab.`)
@@ -548,7 +547,7 @@ function SidepanelWorkspace() {
       <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-3">
         <CurrentVideoCard
           title={title}
-          channelName={videoContext.channelName}
+          author={videoContext.author}
           canonicalUrl={canonicalUrl}
           videoId={videoContext.videoId ?? "Unavailable"}
           timestampLabel={`Current playback: ${formatTimestamp(videoContext.timestampSeconds)}`}

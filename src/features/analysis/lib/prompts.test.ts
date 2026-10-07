@@ -22,6 +22,7 @@ describe("analysis prompts", () => {
     })
 
     expect(prompt.systemPrompt).toContain("summarize")
+    expect(prompt.systemPrompt).not.toContain("YouTube")
     expect(prompt.userPrompt).toContain("Deep dive")
     expect(prompt.userPrompt).toContain("0s - 30s")
   })

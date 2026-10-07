@@ -1,3 +1,5 @@
+import type { TranscriptSegment } from "@/features/platform/types"
+
 export type TranscriptSource =
   | "in_page"
   | "transcript_panel"
@@ -39,11 +41,7 @@ export type TranscriptPageMetadata = {
   transcriptPanel: TranscriptPanelBootstrap | null
 }
 
-export type TranscriptCue = {
-  startSec: number
-  endSec: number
-  text: string
-}
+export type TranscriptCue = TranscriptSegment
 
 export type ParsedVttCue = TranscriptCue & {
   identifier?: string

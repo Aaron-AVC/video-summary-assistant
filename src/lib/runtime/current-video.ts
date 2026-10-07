@@ -1,152 +1,154 @@
-import {
-  getYouTubeWatchPage,
-  isYouTubeWatchPage,
-  normalizeWatchUrl
-} from "@/lib/runtime/page-detection"
+import { resolvePlatformAdapter } from "@/features/platform/registry"
+import type {
+  ActiveVideoContext,
+  VideoInfo,
+} from "@/features/platform/types"
+import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
 
-export const CURRENT_VIDEO_REQUEST = "YT_SUMMARIZER_REQUEST_CURRENT_VIDEO"
-export const CURRENT_VIDEO_EVENT = "yt-summarizer:current-video"
-export const CURRENT_VIDEO_RESPONSE = "YT_SUMMARIZER_CURRENT_VIDEO"
+export const ACTIVE_VIDEO_REQUEST = "VIDEO_SUMMARY_ASSISTANT_REQUEST_ACTIVE_VIDEO"
+export const ACTIVE_VIDEO_EVENT = "video-summary-assistant:active-video"
+export const ACTIVE_VIDEO_RESPONSE = "VIDEO_SUMMARY_ASSISTANT_ACTIVE_VIDEO"
 
-export type CurrentVideoContext = {
-  pageType: "watch" | "unsupported"
-  videoId: string | null
-  url: string
-  canonicalUrl: string | null
-  title: string | null
-  channelName: string | null
-  timestampSeconds: number
-  isReady: boolean
-}
-
-export type CurrentVideoRequestMessage = {
-  source: "yt-summarizer"
-  type: typeof CURRENT_VIDEO_REQUEST
+export type ActiveVideoRequestMessage = {
+  source: "video-summary-assistant"
+  type: typeof ACTIVE_VIDEO_REQUEST
   requestId: string
 }
 
-export type CurrentVideoResponseMessage = {
-  source: "yt-summarizer"
-  type: typeof CURRENT_VIDEO_RESPONSE
+export type ActiveVideoResponseMessage = {
+  source: "video-summary-assistant"
+  type: typeof ACTIVE_VIDEO_RESPONSE
   requestId: string
-  payload: CurrentVideoContext
+  payload: ActiveVideoContext
 }
 
-type CurrentVideoBridgeOptions = {
+type ActiveVideoBridgeOptions = {
   document: Document
   window: Window
 }
 
-export function readCurrentVideoContext(
-  document: Document,
-  locationLike: Location | URL
-): CurrentVideoContext {
-  const url = locationLike instanceof URL ? locationLike : new URL(locationLike.href)
-  const page = getYouTubeWatchPage(url)
-
-  if (!page.isWatchPage) {
-    return {
-      pageType: "unsupported",
-      videoId: null,
-      url: url.href,
-      canonicalUrl: null,
-      title: null,
-      channelName: null,
-      timestampSeconds: 0,
-      isReady: false
-    }
-  }
-
-  const videoElement = document.querySelector("video")
-  const title =
-    readText(document, "ytd-watch-metadata h1") ??
-    readText(document, "h1.ytd-watch-metadata") ??
-    (document.title.replace(/ - YouTube$/, "") || null)
-
+export function createUnsupportedVideoContext(url = ""): ActiveVideoContext {
   return {
-    pageType: "watch",
-    videoId: page.videoId,
-    url: url.href,
-    canonicalUrl: readCanonicalUrl(document) ?? normalizeWatchUrl(url),
-    title,
-    channelName:
-      readText(document, "#owner a.yt-simple-endpoint") ??
-      readText(document, "ytd-channel-name a") ??
-      null,
-    timestampSeconds: Math.floor(videoElement?.currentTime ?? 0),
-    isReady: Boolean(page.videoId && title)
+    pageType: "unsupported",
+    platform: null,
+    videoId: null,
+    partId: null,
+    contentKey: null,
+    url,
+    canonicalUrl: null,
+    title: null,
+    author: null,
+    timestampSeconds: 0,
+    isReady: false,
   }
 }
 
-export function createCurrentVideoBridge({
+export async function readActiveVideoContext(
+  document: Document,
+  locationLike: Location | URL,
+  fetchImpl: FetchLike = globalThis.fetch as FetchLike,
+): Promise<ActiveVideoContext> {
+  const url = locationLike instanceof URL ? locationLike : new URL(locationLike.href)
+  const adapter = resolvePlatformAdapter(url)
+  if (!adapter) {
+    return createUnsupportedVideoContext(url.href)
+  }
+
+  const env = { document, location: url, fetch: fetchImpl }
+  let video: VideoInfo
+  try {
+    video = await adapter.readVideoInfo(env)
+  } catch {
+    const identity = adapter.getVideoIdentity(url)
+    if (!identity) {
+      return createUnsupportedVideoContext(url.href)
+    }
+    return {
+      pageType: "video",
+      ...identity,
+      partId: identity.partId ?? null,
+      url: url.href,
+      canonicalUrl: url.href,
+      title: document.title.trim() || null,
+      author: null,
+      timestampSeconds: adapter.getCurrentTime(env),
+      isReady: false,
+    }
+  }
+
+  return {
+    pageType: "video",
+    platform: video.platform,
+    videoId: video.videoId,
+    partId: video.partId ?? null,
+    contentKey: video.contentKey,
+    url: url.href,
+    canonicalUrl: video.canonicalUrl,
+    title: video.title,
+    author: video.author ?? null,
+    timestampSeconds: adapter.getCurrentTime(env),
+    isReady: Boolean(video.videoId && video.title),
+  }
+}
+
+export function createActiveVideoBridge({
   document,
-  window
-}: CurrentVideoBridgeOptions) {
+  window,
+}: ActiveVideoBridgeOptions) {
   let previousSerialized = ""
 
   const publishContext = () => {
-    const snapshot = readCurrentVideoContext(document, window.location)
-    const serialized = JSON.stringify(snapshot)
-
-    if (serialized === previousSerialized) {
-      return
-    }
-
-    previousSerialized = serialized
-
-    window.dispatchEvent(
-      new CustomEvent<CurrentVideoContext>(CURRENT_VIDEO_EVENT, {
-        detail: snapshot
-      })
-    )
+    void readActiveVideoContext(document, window.location).then((snapshot) => {
+      const serialized = JSON.stringify(snapshot)
+      if (serialized === previousSerialized) return
+      previousSerialized = serialized
+      window.dispatchEvent(
+        new CustomEvent<ActiveVideoContext>(ACTIVE_VIDEO_EVENT, { detail: snapshot }),
+      )
+    })
   }
 
-  const respondToRequests = (event: MessageEvent<CurrentVideoRequestMessage>) => {
-    if (event.source !== window) {
-      return
-    }
+  const respondToRequests = (event: MessageEvent<ActiveVideoRequestMessage>) => {
+    if (event.source !== window) return
+    if (
+      event.data?.source !== "video-summary-assistant"
+      || event.data.type !== ACTIVE_VIDEO_REQUEST
+    ) return
 
-    if (event.data?.source !== "yt-summarizer" || event.data.type !== CURRENT_VIDEO_REQUEST) {
-      return
-    }
-
-    const message: CurrentVideoResponseMessage = {
-      source: "yt-summarizer",
-      type: CURRENT_VIDEO_RESPONSE,
-      requestId: event.data.requestId,
-      payload: readCurrentVideoContext(document, window.location)
-    }
-
-    window.postMessage(message, window.location.origin)
+    void readActiveVideoContext(document, window.location).then((payload) => {
+      const message: ActiveVideoResponseMessage = {
+        source: "video-summary-assistant",
+        type: ACTIVE_VIDEO_RESPONSE,
+        requestId: event.data.requestId,
+        payload,
+      }
+      window.postMessage(message, window.location.origin)
+    })
   }
 
-  const titleObserver = new MutationObserver(() => publishContext())
-  const pageObserver = new MutationObserver(() => publishContext())
+  const titleObserver = new MutationObserver(publishContext)
+  const pageObserver = new MutationObserver(publishContext)
+  const titleElement = document.querySelector("title")
+  if (titleElement) {
+    titleObserver.observe(titleElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
+  }
+  if (document.body) {
+    pageObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["href", "title"],
+    })
+  }
 
   window.addEventListener("message", respondToRequests)
   window.addEventListener("yt-navigate-finish", publishContext as EventListener)
   window.addEventListener("popstate", publishContext)
   window.addEventListener("hashchange", publishContext)
-
-  if (document.title) {
-    const titleElement = document.querySelector("title")
-
-    if (titleElement) {
-      titleObserver.observe(titleElement, {
-        childList: true,
-        subtree: true,
-        characterData: true
-      })
-    }
-  }
-
-  pageObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["href", "title"]
-  })
-
   publishContext()
 
   return () => {
@@ -157,35 +159,4 @@ export function createCurrentVideoBridge({
     titleObserver.disconnect()
     pageObserver.disconnect()
   }
-}
-
-export function isSupportedCurrentVideoPage(locationLike: Location | URL): boolean {
-  const url = locationLike instanceof URL ? locationLike : new URL(locationLike.href)
-
-  return isYouTubeWatchPage(url)
-}
-
-export function jumpToVideoTimestamp(
-  document: Document,
-  timestampSeconds: number
-): boolean {
-  const videoElement = document.querySelector<HTMLVideoElement>("video")
-
-  if (!videoElement || isNaN(timestampSeconds)) {
-    return false
-  }
-
-  videoElement.currentTime = Math.max(0, timestampSeconds)
-
-  return true
-}
-
-function readCanonicalUrl(document: Document): string | null {
-  return document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href ?? null
-}
-
-function readText(document: Document, selector: string): string | null {
-  const text = document.querySelector<HTMLElement>(selector)?.textContent?.trim()
-
-  return text ? text : null
 }

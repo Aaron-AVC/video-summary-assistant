@@ -54,7 +54,7 @@ describe("deriveJumpToTimestampResult", () => {
     const result = deriveJumpToTimestampResult(response)
     expect(result.ok).toBe(false)
     if (result.ok === false) {
-      expect(result.error).toMatch(/active YouTube tab/i)
+      expect(result.error).toMatch(/active video tab/i)
     }
   })
 
@@ -79,11 +79,14 @@ describe("deriveJumpToTimestampResult", () => {
       tabId: 1,
       context: {
         pageType: "unsupported",
+        platform: null,
+        partId: null,
+        contentKey: null,
         videoId: null,
         url: "",
         canonicalUrl: null,
         title: null,
-        channelName: null,
+        author: null,
         timestampSeconds: 0,
         isReady: false
       }

@@ -76,7 +76,7 @@ type SubtitleTrack = {
   order: number
 }
 
-const contextByEnvironment = new WeakMap<object, Promise<BilibiliPageContext>>()
+const metadataByDocument = new WeakMap<Document, Map<string, Promise<BilibiliMetadata>>>()
 const PLAYER_API_BASE = "https://api.bilibili.com/x/player"
 const MAX_BODY_LENGTH = 8 * 1024 * 1024
 
@@ -212,12 +212,7 @@ export const bilibiliAdapter: VideoPlatformAdapter = {
 export async function resolveBilibiliPageContext(
   env: PlatformPageEnvironment,
 ): Promise<BilibiliPageContext> {
-  let pending = contextByEnvironment.get(env)
-  if (!pending) {
-    pending = readPageContext(env)
-    contextByEnvironment.set(env, pending)
-  }
-  return pending
+  return readPageContext(env)
 }
 
 async function readPageContext(env: PlatformPageEnvironment): Promise<BilibiliPageContext> {
@@ -242,7 +237,7 @@ async function readPageContext(env: PlatformPageEnvironment): Promise<BilibiliPa
     throw new BilibiliAdapterError("unsupported_bilibili_url", "不支持此 Bilibili 页面。")
   }
 
-  const metadata = await fetchMetadata(env, identity.videoId)
+  const metadata = await getCachedMetadata(env, identity.videoId)
   const selectedPage = metadata.pages.find((page) => page.page === pageIndex)
 
   let cid = selectedPage?.cid ?? ""
@@ -266,6 +261,27 @@ async function readPageContext(env: PlatformPageEnvironment): Promise<BilibiliPa
   }
   assertCurrentPage(env, context)
   return context
+}
+
+function getCachedMetadata(
+  env: PlatformPageEnvironment,
+  bvid: string,
+): Promise<BilibiliMetadata> {
+  let metadataByBvid = metadataByDocument.get(env.document)
+  if (!metadataByBvid) {
+    metadataByBvid = new Map()
+    metadataByDocument.set(env.document, metadataByBvid)
+  }
+
+  const cached = metadataByBvid.get(bvid)
+  if (cached) return cached
+
+  const pending = fetchMetadata(env, bvid)
+  metadataByBvid.set(bvid, pending)
+  void pending.catch(() => {
+    if (metadataByBvid?.get(bvid) === pending) metadataByBvid.delete(bvid)
+  })
+  return pending
 }
 
 async function fetchMetadata(env: PlatformPageEnvironment, bvid: string): Promise<BilibiliMetadata> {

@@ -1,12 +1,18 @@
 import { describe, expect, it, mock } from "bun:test"
 
 import type { PlatformPageEnvironment } from "@/features/platform/adapter"
-import { bilibiliAdapter, BilibiliAdapterError } from "@/features/platform/bilibili/bilibili-adapter"
+import {
+  bilibiliAdapter,
+  BilibiliAdapterError,
+  resolveBilibiliPageContext,
+} from "@/features/platform/bilibili/bilibili-adapter"
 import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
 
 const BVID = "BV1xx411c7mD"
+const OTHER_BVID = "BV1yy411c7mD"
 const P1_URL = `https://www.bilibili.com/video/${BVID}/`
 const P2_URL = `${P1_URL}?p=2`
+const OTHER_P1_URL = `https://www.bilibili.com/video/${OTHER_BVID}/`
 
 const metadata = {
   code: 0,
@@ -26,6 +32,105 @@ const metadata = {
 }
 
 describe("BilibiliAdapter metadata and multi-part resolution", () => {
+  it("reuses successful metadata for repeated same-document reads", async () => {
+    const fetchImpl = jsonFetch([metadata])
+    const document = createDocument()
+
+    await bilibiliAdapter.readVideoInfo(createEnvironment(P1_URL, fetchImpl, undefined, undefined, document))
+    await bilibiliAdapter.readVideoInfo(createEnvironment(P1_URL, fetchImpl, undefined, undefined, document))
+
+    expect((fetchImpl as ReturnType<typeof mock>).mock.calls.filter(([input]) => String(input).includes("/x/web-interface/view")))
+      .toHaveLength(1)
+  })
+
+  it("deduplicates concurrent metadata reads for the same document and identity", async () => {
+    let releaseMetadata!: () => void
+    const metadataReady = new Promise<void>((resolve) => { releaseMetadata = resolve })
+    const fetchImpl = mock(async (input: string | URL) => {
+      const url = new URL(String(input))
+      if (url.pathname.endsWith("/view")) {
+        await metadataReady
+        return jsonResponse(metadata)
+      }
+      throw new Error("unexpected request")
+    })
+    const document = createDocument()
+    const first = bilibiliAdapter.readVideoInfo(createEnvironment(P1_URL, fetchImpl, undefined, undefined, document))
+    const second = bilibiliAdapter.readVideoInfo(createEnvironment(P1_URL, fetchImpl, undefined, undefined, document))
+
+    await Promise.resolve()
+    releaseMetadata()
+    await Promise.all([first, second])
+
+    expect((fetchImpl as ReturnType<typeof mock>).mock.calls.filter(([input]) => String(input).includes("/x/web-interface/view")))
+      .toHaveLength(1)
+  })
+
+  it("evicts rejected metadata so a later read can retry", async () => {
+    let attempts = 0
+    const fetchImpl = mock(async (input: string | URL) => {
+      const url = new URL(String(input))
+      if (!url.pathname.endsWith("/view")) throw new Error("unexpected request")
+      attempts += 1
+      if (attempts === 1) throw new Error("temporary failure")
+      return jsonResponse(metadata)
+    })
+    const document = createDocument()
+
+    await expect(bilibiliAdapter.readVideoInfo(
+      createEnvironment(P1_URL, fetchImpl, undefined, undefined, document),
+    )).rejects.toMatchObject({ code: "metadata_fetch_failed" })
+    await expect(bilibiliAdapter.readVideoInfo(
+      createEnvironment(P1_URL, fetchImpl, undefined, undefined, document),
+    )).resolves.toMatchObject({ contentKey: `bilibili:${BVID}:p:1` })
+
+    expect(attempts).toBe(2)
+  })
+
+  it("reuses BV metadata across parts but derives each part's cid", async () => {
+    const fetchImpl = jsonFetch([metadata])
+    const document = createDocument()
+
+    const p1 = await resolveBilibiliPageContext(
+      createEnvironment(P1_URL, fetchImpl, undefined, undefined, document),
+    )
+    const p2 = await resolveBilibiliPageContext(
+      createEnvironment(P2_URL, fetchImpl, undefined, undefined, document),
+    )
+
+    expect(p1.cid).toBe("111")
+    expect(p2.cid).toBe("222")
+    expect((fetchImpl as ReturnType<typeof mock>).mock.calls.filter(([input]) => String(input).includes("/x/web-interface/view")))
+      .toHaveLength(1)
+  })
+
+  it("does not reuse metadata between different BV identities", async () => {
+    const otherMetadata = {
+      ...metadata,
+      data: { ...metadata.data, bvid: OTHER_BVID, title: "Other collection" },
+    }
+    const requestedBvids: string[] = []
+    const fetchImpl = mock(async (input: string | URL) => {
+      const url = new URL(String(input))
+      if (!url.pathname.endsWith("/view")) throw new Error("unexpected request")
+      const requestedBvid = url.searchParams.get("bvid") ?? ""
+      requestedBvids.push(requestedBvid)
+      return jsonResponse(requestedBvid === OTHER_BVID ? otherMetadata : metadata)
+    })
+    const document = createDocument()
+
+    const first = await resolveBilibiliPageContext(
+      createEnvironment(P1_URL, fetchImpl, undefined, undefined, document),
+    )
+    const second = await resolveBilibiliPageContext(
+      createEnvironment(OTHER_P1_URL, fetchImpl, undefined, undefined, document),
+    )
+
+    expect(first.identity.videoId).toBe(BVID)
+    expect(second.identity.videoId).toBe(OTHER_BVID)
+    expect(requestedBvids).toEqual([BVID, OTHER_BVID])
+  })
+
   it("reads metadata and resolves the current part's cid and duration", async () => {
     const fetchImpl = jsonFetch([metadata])
     const env = createEnvironment(P2_URL, fetchImpl)
@@ -112,7 +217,7 @@ describe("BilibiliAdapter metadata and multi-part resolution", () => {
 
     expect(video.contentKey).toBe(`bilibili:${BVID}:p:2`)
     expect(transcript.segments[0]?.text).toBe("Caption")
-    expect(fetchImpl.mock.calls.filter(([input]) => String(input).includes("/x/web-interface/view")))
+    expect((fetchImpl as ReturnType<typeof mock>).mock.calls.filter(([input]) => String(input).includes("/x/web-interface/view")))
       .toHaveLength(1)
   })
 })
@@ -337,17 +442,21 @@ function createEnvironment(
   fetchImpl: FetchLike,
   video?: { currentTime: number },
   getCurrentUrl?: () => URL,
+  documentLike: Document = createDocument(video),
 ): PlatformPageEnvironment {
-  const document = {
-    title: "Bilibili page",
-    querySelector: (selector: string) => selector === "video" ? (video ?? null) : null,
-  } as unknown as Document
   return {
-    document,
+    document: documentLike,
     location: new URL(href),
     getCurrentUrl,
     fetch: fetchImpl,
   }
+}
+
+function createDocument(video?: { currentTime: number }): Document {
+  return {
+    title: "Bilibili page",
+    querySelector: (selector: string) => selector === "video" ? (video ?? null) : null,
+  } as unknown as Document
 }
 
 function jsonFetch(payloads: unknown[]): FetchLike {

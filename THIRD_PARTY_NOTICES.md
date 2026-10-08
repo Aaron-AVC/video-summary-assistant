@@ -56,7 +56,10 @@ native host file was imported into this repository.
 - License observed during Task 0: MIT
 - Copyright observed during Task 0: Copyright (c) 2026 haixiong1997
 - Status in this project: architectural reference only; no BiliScript code was
-  copied in Task 1.
+  copied or substantially rewritten in Task 1 or Task 3. The Task 3 Bilibili
+  adapter was independently implemented from public Bilibili API behavior and
+  general platform-architecture ideas; no BiliScript MIT notice is required for
+  the project's original adapter code.
 
 ### Video Digest
 

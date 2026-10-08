@@ -1,14 +1,15 @@
 # TASK_STATE
 
-- 最后完成：Task 2 — Platform abstraction
-- 当前任务：Task 2 — Platform abstraction / CR-02 re-review
-- 状态：PASS（CR-02 已修复并重新验证；follow-up 修复已准备发布）
+- 最后完成：Task 2 — Platform abstraction / CR-02 follow-up
+- 当前任务：Task 3 — Bilibili adapter（已完成，待提交发布）
+- Task 2 状态：CLOSED / PASS（含独立复审）
+- Task 3 状态：PASS（实现与最终门禁已通过；commit/push 待执行）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
 - Task 2 最终验证 commit：`daf41d7a2252df528f30202d3aa11beb3c74fc61` (`refactor: introduce platform adapter`)
-- CR-02 follow-up 修复 commit message：`fix: prevent stale YouTube transcript binding`
-- Task 2 CR-02 re-review：已基于最新工作树完成；下一步只发布上述 follow-up 原子修复。
+- CR-02 follow-up commit：`9222f1cc555ed4ccc0611247884d985ea13ac07a` (`fix: prevent stale YouTube transcript binding`)
+- Task 2 CR-02 独立复审：CLOSED / PASS；URL=B、stale bootstrap=A 时不会把 A 字幕绑定到 B。
 - Chrome smoke：NOT RUN — environment limitation。Computer Use 在本轮再次初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
-- Task 3 尚未开始；本轮停止于 Task 2。
+- Task 3 已接入 Bilibili adapter、registry、runtime/content bridge、background allowlisted transport 与 Side Panel session-only 分析路径；最终 gates 已完成。
 
 ## Task 1 — Clean baseline
 
@@ -62,6 +63,21 @@
 - Task 4+ Provider key storage migration、Provider Profile、`/models`、optional host permissions，以及 ASR/Vision/Whisper 均未开始。
 - Task 8 persistence contentKey migration 未开始。
 
+## Task 3 — Bilibili adapter
+
+- URL scope：仅 `https://www.bilibili.com/video/BV...`；支持单P、多P、`?p=N`，不支持移动端、bangumi、b23.tv、watchlater、AV-only 或 ASR。
+- Identity：同步生成 `bilibili:<BV>:p:<N>`；metadata 依据当前 `pages[].cid` 解析 `aid/cid`、标题、作者、当前分P时长与 thumbnail。
+- Transcript：WBI player API 优先，失败后才使用 player-v2；字幕轨按中文人工、中文 AI、英文人工、英文 AI、其他排序；body 标准化为 `TranscriptSegment[]`，无字幕明确返回不可用错误。
+- Chapters/seek/timestamp：读取官方 `view_points`，使用标准 HTML video seek，timestamp URL 保留当前分P。
+- Transport：background 仅允许受限 HTTPS GET API/CDN allowlist，禁止任意 URL proxy；不读取、复制、存储或记录 Cookie/SESSDATA。
+- Stale protection：异步 metadata/player/subtitle 结果校验 `contentKey`、当前分P和已解析 CID；P1→P2 旧响应丢弃。
+- Persistence compatibility：采用方案 A；Bilibili 分析只保留当前 Side Panel session，不写入旧 `videoId`-only history；YouTube history 保持兼容。
+- Final verification：`bun test` PASS（164 pass / 0 fail / 498 expect calls / 36 files）；`bun run typecheck` PASS；`bun run build` PASS（Plasmo chrome-mv3，普通权限曾因 `spawn EPERM` 失败，提升权限重跑通过）；`git diff --check` 与 `git diff --cached --check` PASS。
+- Final Manifest：Manifest V3；Side Panel 存在；仅 Bilibili video 与 YouTube watch content scripts；包含 Bilibili API/CDN host permissions；无 `<all_urls>`、`nativeMessaging`、localhost/helper host permissions。
+- Chrome smoke：NOT RUN — environment limitation。Computer Use 初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
+- Task 4 — Provider profiles：尚未开始。
+
 ## Completion gate
 
-- 本文件已记录 Task 2 基线 commit、CR-02 原因/修复/回归结果和最终验证；下一步仅为发布并 push CR-02 follow-up 原子修复，然后停止等待指令。
+- Task 2 已在 `9222f1cc555ed4ccc0611247884d985ea13ac07a` 完成 commit + push，并通过独立复审；不存在待发布的 CR-02 follow-up。
+- Task 3 — Bilibili adapter 的实现与验证已 PASS；当前仅待创建唯一 commit `feat: add bilibili adapter` 并 push `origin/main`。Task 4 — Provider profiles 尚未开始；发布完成后停止。

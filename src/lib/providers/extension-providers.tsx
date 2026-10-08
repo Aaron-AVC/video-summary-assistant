@@ -5,18 +5,21 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react"
 
 import type { ActiveVideoContext, VideoIdentity } from "@/features/platform/types"
 import { createUnsupportedVideoContext } from "@/lib/runtime/current-video"
 import {
+  ACTIVE_VIDEO_CONTEXT_CHANGED,
   ANALYZE_VIDEO,
   GET_ACTIVE_VIDEO_CONTEXT,
   JUMP_TO_TIMESTAMP,
   OPEN_SIDEPANEL,
   RUNTIME_MESSAGE_NAMESPACE,
   sendRuntimeMessage,
+  isActiveVideoContextChangedMessage,
   type RuntimeMessageParseError,
   type RuntimeResponseMessage,
 } from "@/lib/runtime/messages"
@@ -98,6 +101,7 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
   const value = useMemo(() => SURFACE_CONFIG[surface], [surface])
   const [status, setStatus] = useState<RuntimeStatus>(surface === "options" ? "idle" : "loading")
   const [videoContext, setVideoContext] = useState<ActiveVideoContext>(EMPTY_CONTEXT)
+  const videoContextGenerationRef = useRef(0)
   const [lastError, setLastError] = useState<string | null>(null)
 
   const handleResponse = useCallback((response: RuntimeResponseMessage | RuntimeMessageParseError) => {
@@ -116,11 +120,13 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
   }, [])
 
   const refreshCurrentVideo = useCallback(async () => {
+    const generation = ++videoContextGenerationRef.current
     setStatus("loading")
-    handleResponse(await sendRuntimeMessage({
+    const response = await sendRuntimeMessage({
       channel: RUNTIME_MESSAGE_NAMESPACE,
       type: GET_ACTIVE_VIDEO_CONTEXT,
-    }))
+    })
+    if (generation === videoContextGenerationRef.current) handleResponse(response)
   }, [handleResponse])
 
   const openSidepanel = useCallback(async () => {
@@ -153,6 +159,42 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
 
   useEffect(() => {
     if (surface !== "options") void refreshCurrentVideo()
+  }, [refreshCurrentVideo, surface])
+
+  useEffect(() => {
+    if (surface === "options") return
+
+    const applyContext = (context: ActiveVideoContext) => {
+      videoContextGenerationRef.current += 1
+      setVideoContext(context)
+      setStatus("ready")
+      setLastError(null)
+    }
+    const refreshIfActive = async (tabId?: number) => {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (tabId === undefined || activeTab?.id === tabId) await refreshCurrentVideo()
+    }
+    const handleRuntimeMessage = (message: unknown) => {
+      if (!isActiveVideoContextChangedMessage(message)) return
+      void chrome.tabs.query({ active: true, currentWindow: true }).then(([activeTab]) => {
+        if (activeTab?.id === message.tabId) applyContext(message.context)
+      })
+    }
+    const handleTabActivated = (activeInfo: { tabId: number }) => {
+      void refreshIfActive(activeInfo.tabId)
+    }
+    const handleTabUpdated = (tabId: number, changeInfo: { status?: string; url?: string }) => {
+      if (changeInfo.status === "complete" || changeInfo.url) void refreshIfActive(tabId)
+    }
+
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage)
+    chrome.tabs.onActivated.addListener(handleTabActivated)
+    chrome.tabs.onUpdated.addListener(handleTabUpdated)
+    return () => {
+      chrome.runtime.onMessage.removeListener(handleRuntimeMessage)
+      chrome.tabs.onActivated.removeListener(handleTabActivated)
+      chrome.tabs.onUpdated.removeListener(handleTabUpdated)
+    }
   }, [refreshCurrentVideo, surface])
 
   const runtimeValue = useMemo<RuntimeBridgeContextValue>(() => ({

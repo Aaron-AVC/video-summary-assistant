@@ -1,10 +1,15 @@
 import { resolvePlatformAdapter, resolvePlatformAdapterForIdentity } from "@/features/platform/registry"
+import { isAllowedBilibiliTransport } from "@/features/platform/bilibili/bilibili-transport-policy"
+import { readBilibiliResponseText } from "@/features/platform/bilibili/bilibili-transport"
 import type { ActiveVideoContext, VideoIdentity } from "@/features/platform/types"
 import { createUnsupportedVideoContext } from "@/lib/runtime/current-video"
 import { matchesManifestPattern } from "@/lib/runtime/manifest-pattern"
 import {
   ANALYZE_VIDEO,
+  ACTIVE_VIDEO_CONTEXT_CHANGED,
+  CONTENT_VIDEO_CONTEXT_CHANGED,
   FETCH_VIDEO_TRANSCRIPT,
+  FETCH_BILIBILI_RESOURCE,
   GET_ACTIVE_VIDEO_CONTEXT,
   JUMP_TO_TIMESTAMP,
   OPEN_SIDEPANEL,
@@ -14,22 +19,61 @@ import {
   type RuntimeRequestMessage,
   type RuntimeResponseMessage,
   isRuntimeRequestMessage,
+  isActiveVideoContextChangedMessage,
+  isContentVideoContextChangedMessage,
 } from "@/lib/runtime/messages"
 
 chrome.action.onClicked.addListener(async (tab) => {
   if (tab.id) await openSidepanel(tab.id)
 })
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isActiveVideoContextChangedMessage(message)) return
+  if (isContentVideoContextChangedMessage(message)) {
+    void relayActiveVideoContext(message.context, sender)
+    return
+  }
   if (!isRuntimeRequestMessage(message)) return
-  void handleRuntimeMessage(message).then(sendResponse)
+  void handleRuntimeMessage(message, sender).then(sendResponse)
   return true
 })
 
+async function relayActiveVideoContext(context: ActiveVideoContext, sender: chrome.runtime.MessageSender) {
+  const tabId = sender.tab?.id
+  const senderUrl = sender.url ?? sender.tab?.url ?? ""
+  let senderPageUrl: URL
+  try {
+    senderPageUrl = new URL(senderUrl)
+  } catch {
+    return
+  }
+  const adapter = resolvePlatformAdapter(senderPageUrl)
+  const identity = adapter?.getVideoIdentity(senderPageUrl)
+  if (
+    tabId === undefined
+    || !identity
+    || context.contentKey !== identity.contentKey
+    || context.url !== senderUrl
+  ) return
+  try {
+    await chrome.runtime.sendMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: ACTIVE_VIDEO_CONTEXT_CHANGED,
+      tabId,
+      context,
+    })
+  } catch {
+    // The side panel may not be open; the next explicit context read is authoritative.
+  }
+}
+
 async function handleRuntimeMessage(
   message: RuntimeRequestMessage,
+  sender?: chrome.runtime.MessageSender,
 ): Promise<RuntimeResponseMessage> {
-  const tabId = await resolveTabId(getRequestedTabId(message))
+  const tabId = message.type === FETCH_BILIBILI_RESOURCE
+    ? sender?.tab?.id ?? null
+    : await resolveTabId(getRequestedTabId(message))
 
   try {
     switch (message.type) {
@@ -86,6 +130,35 @@ async function handleRuntimeMessage(
           tabId,
           video: result.video,
           transcript: result.transcript,
+        }
+      }
+      case FETCH_BILIBILI_RESOURCE: {
+        const senderUrl = sender?.url ?? sender?.tab?.url ?? ""
+        if (!isAllowedBilibiliTransport(message.url, senderUrl)) {
+          throw new Error("Bilibili resource request is not allowed from this page.")
+        }
+
+        let response: Response
+        try {
+          response = await fetch(message.url, {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            redirect: "error",
+            referrer: "https://www.bilibili.com/",
+            referrerPolicy: "strict-origin-when-cross-origin",
+            headers: { Accept: "application/json, text/plain, */*" },
+          })
+        } catch {
+          throw new Error("Bilibili resource request failed.")
+        }
+        const body = await readBilibiliResponseText(response)
+        return {
+          ok: true,
+          type: FETCH_BILIBILI_RESOURCE,
+          tabId,
+          status: response.status,
+          body,
         }
       }
     }

@@ -1,4 +1,4 @@
-export type VideoPlatform = "youtube"
+export type VideoPlatform = "youtube" | "bilibili"
 
 export type VideoIdentity = {
   platform: VideoPlatform

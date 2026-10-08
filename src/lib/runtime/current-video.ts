@@ -25,6 +25,7 @@ export type ActiveVideoResponseMessage = {
 type ActiveVideoBridgeOptions = {
   document: Document
   window: Window
+  fetch?: FetchLike
 }
 
 export function createUnsupportedVideoContext(url = ""): ActiveVideoContext {
@@ -47,6 +48,7 @@ export async function readActiveVideoContext(
   document: Document,
   locationLike: Location | URL,
   fetchImpl: FetchLike = globalThis.fetch as FetchLike,
+  getCurrentUrl?: () => URL,
 ): Promise<ActiveVideoContext> {
   const url = locationLike instanceof URL ? locationLike : new URL(locationLike.href)
   const adapter = resolvePlatformAdapter(url)
@@ -54,7 +56,7 @@ export async function readActiveVideoContext(
     return createUnsupportedVideoContext(url.href)
   }
 
-  const env = { document, location: url, fetch: fetchImpl }
+  const env = { document, location: url, fetch: fetchImpl, getCurrentUrl }
   let video: VideoInfo
   try {
     video = await adapter.readVideoInfo(env)
@@ -94,11 +96,21 @@ export async function readActiveVideoContext(
 export function createActiveVideoBridge({
   document,
   window,
+  fetch: fetchImpl = globalThis.fetch as FetchLike,
 }: ActiveVideoBridgeOptions) {
   let previousSerialized = ""
+  let publishGeneration = 0
+  let lastObservedUrl = window.location.href
 
   const publishContext = () => {
-    void readActiveVideoContext(document, window.location).then((snapshot) => {
+    const generation = ++publishGeneration
+    void readActiveVideoContext(
+      document,
+      window.location,
+      fetchImpl,
+      () => new URL(window.location.href),
+    ).then((snapshot) => {
+      if (generation !== publishGeneration) return
       const serialized = JSON.stringify(snapshot)
       if (serialized === previousSerialized) return
       previousSerialized = serialized
@@ -115,7 +127,12 @@ export function createActiveVideoBridge({
       || event.data.type !== ACTIVE_VIDEO_REQUEST
     ) return
 
-    void readActiveVideoContext(document, window.location).then((payload) => {
+    void readActiveVideoContext(
+      document,
+      window.location,
+      fetchImpl,
+      () => new URL(window.location.href),
+    ).then((payload) => {
       const message: ActiveVideoResponseMessage = {
         source: "video-summary-assistant",
         type: ACTIVE_VIDEO_RESPONSE,
@@ -149,6 +166,11 @@ export function createActiveVideoBridge({
   window.addEventListener("yt-navigate-finish", publishContext as EventListener)
   window.addEventListener("popstate", publishContext)
   window.addEventListener("hashchange", publishContext)
+  const urlPoll = window.setInterval(() => {
+    if (window.location.href === lastObservedUrl) return
+    lastObservedUrl = window.location.href
+    publishContext()
+  }, 500)
   publishContext()
 
   return () => {
@@ -156,6 +178,7 @@ export function createActiveVideoBridge({
     window.removeEventListener("yt-navigate-finish", publishContext as EventListener)
     window.removeEventListener("popstate", publishContext)
     window.removeEventListener("hashchange", publishContext)
+    window.clearInterval(urlPoll)
     titleObserver.disconnect()
     pageObserver.disconnect()
   }

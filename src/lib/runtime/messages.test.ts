@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, mock } from "bun:test"
 
 import {
+  ACTIVE_VIDEO_CONTEXT_CHANGED,
+  CONTENT_VIDEO_CONTEXT_CHANGED,
+  FETCH_BILIBILI_RESOURCE,
   GET_ACTIVE_VIDEO_CONTEXT,
   RUNTIME_MESSAGE_NAMESPACE,
+  isActiveVideoContextChangedMessage,
+  isContentVideoContextChangedMessage,
   isContentScriptRequestMessage,
+  isRuntimeRequestMessage,
   isRuntimeMessageParseError,
   sendRuntimeMessage,
 } from "@/lib/runtime/messages"
@@ -36,6 +42,23 @@ function createNeutralContext() {
   }
 }
 
+function createBilibiliContext(partId = "2") {
+  const bvid = "BV1xx411c7mD"
+  return {
+    pageType: "video",
+    platform: "bilibili",
+    videoId: bvid,
+    partId,
+    contentKey: `bilibili:${bvid}:p:${partId}`,
+    url: `https://www.bilibili.com/video/${bvid}/?p=${partId}`,
+    canonicalUrl: `https://www.bilibili.com/video/${bvid}/?p=${partId}`,
+    title: `Part ${partId}`,
+    author: "Uploader",
+    timestampSeconds: 0,
+    isReady: true,
+  }
+}
+
 describe("runtime message boundaries", () => {
   it("does not route background-only messages into the content script", () => {
     expect(isContentScriptRequestMessage({
@@ -47,6 +70,46 @@ describe("runtime message boundaries", () => {
       channel: RUNTIME_MESSAGE_NAMESPACE,
       type: GET_ACTIVE_VIDEO_CONTEXT,
     })).toBe(true)
+  })
+
+  it("accepts only allowlisted Bilibili resource requests", () => {
+    const base = { channel: RUNTIME_MESSAGE_NAMESPACE, type: FETCH_BILIBILI_RESOURCE }
+    expect(isRuntimeRequestMessage({
+      ...base,
+      url: "https://api.bilibili.com/x/player/wbi/v2?aid=1&cid=2&bvid=BV1xx411c7mD",
+    })).toBe(true)
+    for (const url of [
+      "https://example.com/private",
+      "https://api.bilibili.com/x/player/v2?cid=2&url=https://example.com",
+      "http://api.bilibili.com/x/player/v2?aid=1&cid=2&bvid=BV1xx411c7mD",
+    ]) {
+      expect(isRuntimeRequestMessage({ ...base, url })).toBe(false)
+    }
+  })
+
+  it("validates content context announcements for extension relay", () => {
+    expect(isContentVideoContextChangedMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: CONTENT_VIDEO_CONTEXT_CHANGED,
+      context: createBilibiliContext(),
+    })).toBe(true)
+    expect(isContentVideoContextChangedMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: CONTENT_VIDEO_CONTEXT_CHANGED,
+      context: { ...createBilibiliContext(), contentKey: "bilibili:wrong:p:2" },
+    })).toBe(false)
+    expect(isActiveVideoContextChangedMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: ACTIVE_VIDEO_CONTEXT_CHANGED,
+      tabId: 7,
+      context: createBilibiliContext(),
+    })).toBe(true)
+    expect(isActiveVideoContextChangedMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: ACTIVE_VIDEO_CONTEXT_CHANGED,
+      tabId: -1,
+      context: createBilibiliContext(),
+    })).toBe(false)
   })
 })
 describe("sendRuntimeMessage validation", () => {
@@ -129,6 +192,33 @@ describe("sendRuntimeMessage validation", () => {
     expect(isRuntimeMessageParseError(response)).toBe(true)
     if (isRuntimeMessageParseError(response)) {
       expect(response.error).toContain("Could not establish connection")
+    }
+  })
+
+  it("rejects normalized transcripts with reversed ranges or blank text", async () => {
+    for (const segment of [
+      { startSec: 2, endSec: 1, text: "reversed" },
+      { startSec: 0, endSec: 1, text: "  " },
+    ]) {
+      installChromeRuntime(async () => ({
+        ok: true,
+        type: "fetch-video-transcript",
+        tabId: 7,
+        video: {
+          platform: "bilibili",
+          videoId: "BV1xx411c7mD",
+          partId: "2",
+          contentKey: "bilibili:BV1xx411c7mD:p:2",
+          title: "Part 2",
+          canonicalUrl: "https://www.bilibili.com/video/BV1xx411c7mD/?p=2",
+        },
+        transcript: { segments: [segment], source: "manual" },
+      }))
+      const response = await sendRuntimeMessage({
+        channel: RUNTIME_MESSAGE_NAMESPACE,
+        type: GET_ACTIVE_VIDEO_CONTEXT,
+      })
+      expect(isRuntimeMessageParseError(response)).toBe(true)
     }
   })
 })

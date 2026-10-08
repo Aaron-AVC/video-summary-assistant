@@ -6,6 +6,7 @@ import type {
   VideoInfo,
   VideoTranscript,
 } from "@/features/platform/types"
+import { isAllowedBilibiliResourceUrl } from "@/features/platform/bilibili/bilibili-transport-policy"
 
 export const RUNTIME_MESSAGE_NAMESPACE = "video-summary-assistant/runtime"
 
@@ -14,6 +15,22 @@ export const OPEN_SIDEPANEL = "open-sidepanel"
 export const ANALYZE_VIDEO = "analyze-video"
 export const JUMP_TO_TIMESTAMP = "jump-to-timestamp"
 export const FETCH_VIDEO_TRANSCRIPT = "fetch-video-transcript"
+export const FETCH_BILIBILI_RESOURCE = "fetch-bilibili-resource"
+export const CONTENT_VIDEO_CONTEXT_CHANGED = "content-video-context-changed"
+export const ACTIVE_VIDEO_CONTEXT_CHANGED = "active-video-context-changed"
+
+export type ContentVideoContextChangedMessage = {
+  channel: typeof RUNTIME_MESSAGE_NAMESPACE
+  type: typeof CONTENT_VIDEO_CONTEXT_CHANGED
+  context: ActiveVideoContext
+}
+
+export type ActiveVideoContextChangedMessage = {
+  channel: typeof RUNTIME_MESSAGE_NAMESPACE
+  type: typeof ACTIVE_VIDEO_CONTEXT_CHANGED
+  tabId: number
+  context: ActiveVideoContext
+}
 
 export type RuntimeRequestMessage =
   | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof GET_ACTIVE_VIDEO_CONTEXT }
@@ -27,6 +44,11 @@ export type RuntimeRequestMessage =
       timestampSeconds: number
     }
   | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof FETCH_VIDEO_TRANSCRIPT; tabId?: number }
+  | {
+      channel: typeof RUNTIME_MESSAGE_NAMESPACE
+      type: typeof FETCH_BILIBILI_RESOURCE
+      url: string
+    }
 
 export type RuntimeResponseMessage =
   | { ok: true; type: typeof GET_ACTIVE_VIDEO_CONTEXT; tabId: number | null; context: ActiveVideoContext }
@@ -54,6 +76,13 @@ export type RuntimeResponseMessage =
       transcript: VideoTranscript
     }
   | {
+      ok: true
+      type: typeof FETCH_BILIBILI_RESOURCE
+      tabId: number | null
+      status: number
+      body: string
+    }
+  | {
       ok: false
       type:
         | typeof GET_ACTIVE_VIDEO_CONTEXT
@@ -61,6 +90,7 @@ export type RuntimeResponseMessage =
         | typeof ANALYZE_VIDEO
         | typeof JUMP_TO_TIMESTAMP
         | typeof FETCH_VIDEO_TRANSCRIPT
+        | typeof FETCH_BILIBILI_RESOURCE
       error: string
       tabId: number | null
     }
@@ -95,14 +125,65 @@ const requestTypeSchema = z.enum([
   ANALYZE_VIDEO,
   JUMP_TO_TIMESTAMP,
   FETCH_VIDEO_TRANSCRIPT,
+  FETCH_BILIBILI_RESOURCE,
 ])
 
 export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequestMessage {
-  return (
+  if (!(
     isRecord(value)
     && value.channel === RUNTIME_MESSAGE_NAMESPACE
     && requestTypeSchema.safeParse(value.type).success
-  )
+  )) return false
+  return value.type !== FETCH_BILIBILI_RESOURCE || isAllowedBilibiliResourceUrl(value.url)
+}
+
+const activeVideoContextSchema = z.object({
+  pageType: z.enum(["video", "unsupported"]),
+  platform: z.enum(["youtube", "bilibili"]).nullable(),
+  videoId: z.string().min(1).nullable(),
+  partId: z.string().min(1).nullable(),
+  contentKey: z.string().min(1).nullable(),
+  url: z.string(),
+  canonicalUrl: z.string().url().nullable(),
+  title: z.string().min(1).nullable(),
+  author: z.string().nullable(),
+  timestampSeconds: z.number().finite().nonnegative(),
+  isReady: z.boolean(),
+}).superRefine((context, issueContext) => {
+  if (context.platform === "bilibili") {
+    const expected = context.videoId && context.partId
+      ? `bilibili:${context.videoId}:p:${context.partId}`
+      : null
+    if (!expected || context.contentKey !== expected) {
+      issueContext.addIssue({ code: "custom", path: ["contentKey"], message: "Bilibili context identity is inconsistent." })
+    }
+  } else if (context.platform === "youtube" && context.videoId && context.contentKey !== `youtube:${context.videoId}`) {
+    issueContext.addIssue({ code: "custom", path: ["contentKey"], message: "YouTube context identity is inconsistent." })
+  }
+})
+
+const contentVideoContextChangedSchema = z.object({
+  channel: z.literal(RUNTIME_MESSAGE_NAMESPACE),
+  type: z.literal(CONTENT_VIDEO_CONTEXT_CHANGED),
+  context: activeVideoContextSchema,
+})
+const activeVideoContextChangedSchema = z.object({
+  channel: z.literal(RUNTIME_MESSAGE_NAMESPACE),
+  type: z.literal(ACTIVE_VIDEO_CONTEXT_CHANGED),
+  tabId: z.number().int().nonnegative(),
+  context: activeVideoContextSchema,
+})
+
+export function isContentVideoContextChangedMessage(
+  value: unknown,
+): value is ContentVideoContextChangedMessage {
+  return contentVideoContextChangedSchema.safeParse(value).success
+}
+
+export function isActiveVideoContextChangedMessage(
+  value: unknown,
+): value is ActiveVideoContextChangedMessage {
+  return activeVideoContextChangedSchema.safeParse(value).success
 }
 
 export function isContentScriptRequestMessage(value: unknown): value is ContentScriptRequestMessage {
@@ -116,7 +197,7 @@ export function isContentScriptRequestMessage(value: unknown): value is ContentS
 }
 
 const tabIdSchema = z.number().int().nonnegative().nullable()
-const videoPlatformSchema = z.literal("youtube")
+const videoPlatformSchema = z.enum(["youtube", "bilibili"])
 const videoIdentitySchema = z.object({
   platform: videoPlatformSchema,
   videoId: z.string().min(1),
@@ -133,7 +214,10 @@ const videoInfoSchema = videoIdentitySchema.extend({
 const transcriptSegmentSchema = z.object({
   startSec: z.number().finite().nonnegative(),
   endSec: z.number().finite().nonnegative(),
-  text: z.string(),
+  text: z.string().trim().min(1),
+}).refine((segment) => segment.endSec >= segment.startSec, {
+  path: ["endSec"],
+  message: "Transcript segment end must not precede its start.",
 })
 const videoTranscriptSchema = z.object({
   segments: z.array(transcriptSegmentSchema),
@@ -145,20 +229,6 @@ const videoTranscriptSchema = z.object({
     sourceUrl: z.string().url().nullable().optional(),
   }).optional(),
 })
-const activeVideoContextSchema = z.object({
-  pageType: z.enum(["video", "unsupported"]),
-  platform: videoPlatformSchema.nullable(),
-  videoId: z.string().min(1).nullable(),
-  partId: z.string().min(1).nullable(),
-  contentKey: z.string().min(1).nullable(),
-  url: z.string(),
-  canonicalUrl: z.string().url().nullable(),
-  title: z.string().min(1).nullable(),
-  author: z.string().nullable(),
-  timestampSeconds: z.number().finite().nonnegative(),
-  isReady: z.boolean(),
-})
-
 const runtimeResponseSuccessSchema = z.discriminatedUnion("type", [
   z.object({
     ok: z.literal(true), type: z.literal(GET_ACTIVE_VIDEO_CONTEXT), tabId: tabIdSchema,
@@ -179,6 +249,10 @@ const runtimeResponseSuccessSchema = z.discriminatedUnion("type", [
   z.object({
     ok: z.literal(true), type: z.literal(FETCH_VIDEO_TRANSCRIPT), tabId: tabIdSchema,
     video: videoInfoSchema, transcript: videoTranscriptSchema,
+  }),
+  z.object({
+    ok: z.literal(true), type: z.literal(FETCH_BILIBILI_RESOURCE), tabId: tabIdSchema,
+    status: z.number().int().min(100).max(599), body: z.string().max(8 * 1024 * 1024),
   }),
 ])
 const runtimeResponseFailureSchema = z.object({

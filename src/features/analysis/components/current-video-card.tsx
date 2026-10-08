@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/card"
 
 type CurrentVideoCardProps = {
+  platform: "youtube" | "bilibili" | null
+  partId: string | null
   title: string
   author: string | null
   canonicalUrl: string
@@ -23,6 +25,8 @@ type CurrentVideoCardProps = {
 }
 
 export function CurrentVideoCard({
+  platform,
+  partId,
   title,
   author,
   canonicalUrl,
@@ -45,6 +49,11 @@ export function CurrentVideoCard({
             <Badge variant={isReady ? "default" : "outline"} className="rounded-full px-3 py-1">
               {isReady ? "Watch page ready" : "Unsupported tab"}
             </Badge>
+            {platform ? (
+              <Badge variant="outline" className="rounded-full px-3 py-1">
+                {platform === "bilibili" ? `Bilibili${partId ? ` · P${partId}` : ""}` : "YouTube"}
+              </Badge>
+            ) : null}
           </div>
           <Button variant="ghost" size="icon" onClick={onRefresh} aria-label="Refresh video context">
             <RefreshCcw data-icon="inline-start" />

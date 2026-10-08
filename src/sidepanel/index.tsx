@@ -29,14 +29,21 @@ import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-a
 import { settingsStorage, type ProviderConfigRecord } from "@/features/settings/lib/settings-storage"
 import { downloadRawVtt } from "@/features/transcript/lib/download-vtt"
 import type { TranscriptSegment } from "@/features/platform/types"
-import { projectPersistedVideoIdentity } from "@/features/platform/persistence-compat"
+import {
+  analysisMatchesActiveIdentity,
+  persistIfSupportedPlatform,
+  projectPersistedVideoIdentity,
+} from "@/features/platform/persistence-compat"
 import { ExtensionProviders } from "@/lib/providers/extension-providers"
 import { useRuntimeBridge } from "@/lib/providers/extension-providers"
 import { FETCH_VIDEO_TRANSCRIPT, RUNTIME_MESSAGE_NAMESPACE, sendRuntimeMessage } from "@/lib/runtime/messages"
 import { Sparkles } from "lucide-react"
 
 type AnalysisView = {
+  platform: "youtube" | "bilibili"
   videoId: string
+  partId: string | null
+  contentKey: string
   title: string
   summary: string
   keyPoints: AnalysisKeyPoint[]
@@ -92,6 +99,8 @@ function createAnalysisContext(view: AnalysisView): AnalysisResult {
 
 function SidepanelWorkspace() {
   const { jumpToTimestamp, refreshCurrentVideo, status, videoContext } = useRuntimeBridge()
+  const videoContextRef = useRef(videoContext)
+  videoContextRef.current = videoContext
   const [provider, setProvider] = useState<ProviderConfigRecord | null>(null)
   const [analysisView, setAnalysisView] = useState<AnalysisView | null>(null)
   const [recentItems, setRecentItems] = useState<RecentAnalysisListItem[]>([])
@@ -106,8 +115,9 @@ function SidepanelWorkspace() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isCancellingAnalysis, setIsCancellingAnalysis] = useState(false)
   const analysisAbortRef = useRef<AbortController | null>(null)
+  const analysisGenerationRef = useRef(0)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
-  const activeAnalysisVideoIdRef = useRef<string | null>(null)
+  const activeAnalysisContentKeyRef = useRef<string | null>(null)
   const loadWorkspaceGenerationRef = useRef(0)
 
   const title = videoContext.title ?? "Open a supported video page to start"
@@ -169,7 +179,10 @@ function SidepanelWorkspace() {
       }
 
       setAnalysisView({
+        platform: "youtube",
         videoId,
+        partId: null,
+        contentKey: `youtube:${videoId}`,
         title: recent?.title ?? videoId,
         summary: analysis.summary,
         keyPoints: analysis.keyPoints,
@@ -219,15 +232,21 @@ function SidepanelWorkspace() {
           }))
       )
 
-      if (videoContext.videoId) {
+      if (videoContext.videoId && videoContext.platform === "youtube") {
         await loadSavedAnalysis(videoContext.videoId, generation)
+      } else if (videoContext.platform === "bilibili") {
+        setAnalysisView(null)
+        setTranscriptCues([])
+        setRawVtt(null)
+        setAskAnswer(null)
+        setAskError(null)
       }
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) {
         setIsBootstrapping(false)
       }
     }
-  }, [loadSavedAnalysis, videoContext.videoId])
+  }, [loadSavedAnalysis, videoContext.contentKey, videoContext.platform, videoContext.videoId])
 
   useEffect(() => {
     void loadWorkspace()
@@ -239,16 +258,29 @@ function SidepanelWorkspace() {
   // Reanalyze button + Saved-at line linger from the prior analysis.
   useEffect(() => {
     setAnalysisView((current) => {
-      if (current && current.videoId !== videoContext.videoId) {
+      if (current && !analysisMatchesActiveIdentity(current, videoContext)) {
         return null
       }
       return current
     })
-  }, [videoContext.videoId])
+  }, [videoContext.contentKey, videoContext.platform, videoContext.videoId])
 
   useEffect(() => {
-    activeAnalysisVideoIdRef.current = analysisView?.videoId ?? null
-  }, [analysisView?.videoId])
+    activeAnalysisContentKeyRef.current = analysisView?.contentKey ?? null
+  }, [analysisView?.contentKey])
+
+  useEffect(() => {
+    analysisGenerationRef.current += 1
+    analysisAbortRef.current?.abort()
+    setAnalysisError(null)
+    setAskAnswer(null)
+    setAskError(null)
+    setTranscriptCues([])
+    setRawVtt(null)
+    setIsAsking(false)
+    setIsAnalysisFetching(false)
+    setIsAnalyzing(false)
+  }, [videoContext.contentKey])
 
   const handleAnalyze = useCallback(async () => {
     if (!videoContext.isReady || !videoContext.videoId) {
@@ -260,6 +292,13 @@ function SidepanelWorkspace() {
       toast.error("Configure a default provider in Settings before analyzing.")
       return
     }
+
+    const requestedContentKey = videoContext.contentKey
+    const analysisGeneration = ++analysisGenerationRef.current
+    const isCurrentAnalysis = () => (
+      analysisGenerationRef.current === analysisGeneration
+      && videoContextRef.current.contentKey === requestedContentKey
+    )
 
     // Replace any prior controller (defensive — should never happen
     // because the Analyze button is disabled while isAnalyzing is true).
@@ -288,6 +327,9 @@ function SidepanelWorkspace() {
       }
 
       const { video, transcript } = transcriptResponse
+      if (video.contentKey !== requestedContentKey || !isCurrentAnalysis()) {
+        throw new Error("The video part changed while captions were loading. Retry the current part.")
+      }
       const cues = transcript.segments
       setTranscriptCues(cues)
       setRawVtt(transcript.raw?.text ?? null)
@@ -305,62 +347,96 @@ function SidepanelWorkspace() {
         signal: controller.signal
       })
 
-      const now = new Date().toISOString()
-      const transcriptSnapshotId = crypto.randomUUID()
-      const analysisRunId = crypto.randomUUID()
+      if (!isCurrentAnalysis()) {
+        throw new Error("The video part changed while analysis was running. Its result was discarded.")
+      }
 
-      await historyRepository.saveTranscriptSnapshot({
-        id: transcriptSnapshotId,
-        videoId: video.videoId,
-        language: transcript.language ?? null,
-        sourceUrl: transcript.raw?.sourceUrl ?? null,
-        rawVtt: transcript.raw?.text ?? null,
-        cues,
-        createdAt: now,
-        updatedAt: now
+      const now = new Date().toISOString()
+      const wasPersisted = await persistIfSupportedPlatform(video, async () => {
+        const transcriptSnapshotId = crypto.randomUUID()
+        const analysisRunId = crypto.randomUUID()
+
+        await historyRepository.saveTranscriptSnapshot({
+          id: transcriptSnapshotId,
+          videoId: video.videoId,
+          language: transcript.language ?? null,
+          sourceUrl: transcript.raw?.sourceUrl ?? null,
+          rawVtt: transcript.raw?.text ?? null,
+          cues,
+          createdAt: now,
+          updatedAt: now
+        })
+
+        await historyRepository.saveAnalysisRun({
+          analysisRun: {
+            id: analysisRunId,
+            videoId: video.videoId,
+            transcriptSnapshotId,
+            providerConfigId: provider.id,
+            status: "completed",
+            summary: completed.analysis.summary,
+            keyPoints: completed.analysis.keyPoints,
+            topics: completed.analysis.topics,
+            errorMessage: null,
+            createdAt: now,
+            updatedAt: now,
+            completedAt: now
+          },
+          segments: completed.analysis.moments.map((segment) => ({
+            id: crypto.randomUUID(),
+            analysisRunId,
+            videoId: video.videoId,
+            title: segment.title,
+            summary: segment.summary,
+            startSec: segment.startSec,
+            endSec: segment.endSec,
+            createdAt: now,
+            updatedAt: now
+          })),
+          recentVideo: {
+            videoId: video.videoId,
+            title: video.title ?? videoContext.title ?? video.videoId,
+            channelTitle: videoContext.author,
+            thumbnailUrl: video.thumbnailUrl ?? null,
+            status: "completed",
+            openedAt: now,
+            analyzedAt: now,
+            updatedAt: now
+          }
+        })
       })
 
-      await historyRepository.saveAnalysisRun({
-        analysisRun: {
-          id: analysisRunId,
+      if (!isCurrentAnalysis()) {
+        throw new Error("The active video changed before the analysis could be finalized.")
+      }
+
+      if (wasPersisted) {
+        await loadWorkspace()
+        toast.success("Analysis saved locally.")
+      } else {
+        setAnalysisView({
+          platform: "bilibili",
           videoId: video.videoId,
-          transcriptSnapshotId,
-          providerConfigId: provider.id,
-          status: "completed",
+          partId: video.partId ?? null,
+          contentKey: video.contentKey,
+          title: video.title,
           summary: completed.analysis.summary,
           keyPoints: completed.analysis.keyPoints,
           topics: completed.analysis.topics,
+          segments: completed.analysis.moments.map((segment) => ({
+            id: segment.id,
+            title: segment.title,
+            summary: segment.summary,
+            startSec: segment.startSec,
+            endSec: segment.endSec,
+          })),
+          lastAnalyzedAt: now,
           errorMessage: null,
-          createdAt: now,
-          updatedAt: now,
-          completedAt: now
-        },
-        segments: completed.analysis.moments.map((segment) => ({
-          id: crypto.randomUUID(),
-          analysisRunId,
-          videoId: video.videoId,
-          title: segment.title,
-          summary: segment.summary,
-          startSec: segment.startSec,
-          endSec: segment.endSec,
-          createdAt: now,
-          updatedAt: now
-        })),
-        recentVideo: {
-          videoId: video.videoId,
-          title: video.title ?? videoContext.title ?? video.videoId,
-          channelTitle: videoContext.author,
-          thumbnailUrl: video.thumbnailUrl ?? null,
-          status: "completed",
-          openedAt: now,
-          analyzedAt: now,
-          updatedAt: now
-        }
-      })
-
-      await loadWorkspace()
-      toast.success("Analysis saved locally.")
+        })
+        toast.success("Analysis ready for this session; Bilibili history is not saved.")
+      }
     } catch (error) {
+      if (!isCurrentAnalysis()) return
       const isAbort =
         error instanceof AnalysisAbortedError ||
         (error instanceof DOMException && error.name === "AbortError")
@@ -384,8 +460,10 @@ function SidepanelWorkspace() {
       if (analysisAbortRef.current === controller) {
         analysisAbortRef.current = null
       }
-      setIsAnalyzing(false)
-      setIsCancellingAnalysis(false)
+      if (isCurrentAnalysis()) {
+        setIsAnalyzing(false)
+        setIsCancellingAnalysis(false)
+      }
     }
   }, [loadWorkspace, provider, videoContext])
 
@@ -479,7 +557,7 @@ function SidepanelWorkspace() {
       return
     }
 
-    const requestedVideoId = analysisView.videoId
+    const requestedContentKey = analysisView.contentKey
 
     setIsAsking(true)
     setAskAnswer(null)
@@ -501,14 +579,14 @@ function SidepanelWorkspace() {
         analysis: createAnalysisContext(analysisView)
       })
 
-      if (activeAnalysisVideoIdRef.current !== requestedVideoId) {
+      if (activeAnalysisContentKeyRef.current !== requestedContentKey) {
         return
       }
 
       setAskAnswer(result.answer)
       toast.success("Ask AI answer ready.")
     } catch (error) {
-      if (activeAnalysisVideoIdRef.current !== requestedVideoId) {
+      if (activeAnalysisContentKeyRef.current !== requestedContentKey) {
         return
       }
 
@@ -528,7 +606,15 @@ function SidepanelWorkspace() {
         return
       }
 
-      const result = await jumpToTimestamp(projectPersistedVideoIdentity(videoId), timestampSeconds)
+      const identity = analysisView?.platform === "bilibili"
+        ? {
+            platform: "bilibili" as const,
+            videoId,
+            partId: analysisView.partId ?? "1",
+            contentKey: analysisView.contentKey,
+          }
+        : projectPersistedVideoIdentity(videoId)
+      const result = await jumpToTimestamp(identity, timestampSeconds)
       if (result.ok === true) {
         if (result.openedNewTab) {
           toast.success(`Opened video at ${formatTimestamp(timestampSeconds)} in a new tab.`)
@@ -539,13 +625,15 @@ function SidepanelWorkspace() {
         toast.error(result.error)
       }
     },
-    [jumpToTimestamp, analysisView?.videoId]
+    [jumpToTimestamp, analysisView]
   )
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-background px-3 py-3 text-foreground sm:px-4">
       <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-3">
         <CurrentVideoCard
+          platform={videoContext.platform}
+          partId={videoContext.partId}
           title={title}
           author={videoContext.author}
           canonicalUrl={canonicalUrl}
@@ -563,7 +651,7 @@ function SidepanelWorkspace() {
           isCancelling={isCancellingAnalysis}
           lastAnalyzedAt={
             analysisView?.lastAnalyzedAt &&
-            analysisView.videoId === videoContext.videoId
+            analysisView.contentKey === videoContext.contentKey
               ? new Date(analysisView.lastAnalyzedAt).toLocaleString()
               : null
           }

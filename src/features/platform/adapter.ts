@@ -11,6 +11,8 @@ export type PlatformPageEnvironment = {
   document: Document
   location: URL
   fetch: FetchLike
+  /** Live URL probe used to reject asynchronous results after an SPA/part switch. */
+  getCurrentUrl?: () => URL
   diagnosticLoggingEnabled?: boolean
 }
 

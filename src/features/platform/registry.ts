@@ -1,8 +1,9 @@
 import type { VideoPlatformAdapter } from "@/features/platform/adapter"
 import type { VideoIdentity } from "@/features/platform/types"
 import { youtubeAdapter } from "@/features/platform/youtube/youtube-adapter"
+import { bilibiliAdapter } from "@/features/platform/bilibili/bilibili-adapter"
 
-export const PLATFORM_ADAPTERS: readonly VideoPlatformAdapter[] = [youtubeAdapter]
+export const PLATFORM_ADAPTERS: readonly VideoPlatformAdapter[] = [youtubeAdapter, bilibiliAdapter]
 
 export function resolvePlatformAdapter(
   urlLike: URL | string,

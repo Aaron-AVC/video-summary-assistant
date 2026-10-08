@@ -3,7 +3,7 @@
   "displayName": "Video Summary Assistant",
   "version": "2026.8.22",
   "private": true,
-  "description": "Local-first Chromium extension that turns captioned YouTube videos into structured, jumpable summaries using any OpenAI-compatible API.",
+  "description": "Local-first Chromium extension that turns captioned YouTube and Bilibili videos into structured, jumpable summaries using any OpenAI-compatible API.",
   "homepage": "https://github.com/Aaron-AVC/video-summary-assistant#readme",
   "repository": {
     "type": "git",
@@ -81,7 +81,10 @@
     ],
     "host_permissions": [
       "https://www.youtube.com/*",
-      "https://youtube.com/*"
+      "https://youtube.com/*",
+      "https://www.bilibili.com/*",
+      "https://api.bilibili.com/*",
+      "https://*.hdslb.com/*"
     ]
   }
 }

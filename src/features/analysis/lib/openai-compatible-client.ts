@@ -1,4 +1,11 @@
-import { parseProviderConnectionInput, type ProviderConnectionInput } from "@/features/settings/lib/provider-schema"
+import {
+  hasProviderHostPermission
+} from "@/features/settings/lib/provider-permissions"
+import {
+  normalizeProviderBaseUrl,
+  parseProviderConnectionInput,
+  type ProviderConnectionInput
+} from "@/features/settings/lib/provider-schema"
 
 type ChatCompletionMessage = {
   role: "system" | "user" | "assistant"
@@ -9,6 +16,7 @@ type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<
 
 type OpenAICompatibleClientOptions = {
   fetchImpl?: FetchLike
+  timeoutMs?: number
 }
 
 type ChatCompletionOptions = {
@@ -18,7 +26,7 @@ type ChatCompletionOptions = {
   signal?: AbortSignal
 }
 
-type ConnectionTestResult =
+export type ConnectionTestResult =
   | {
       ok: true
       model: string
@@ -32,6 +40,14 @@ type ConnectionTestResult =
       latencyMs: number
       error: string
     }
+
+export type ProviderModelsResult = {
+  models: string[]
+  error?: string
+}
+
+const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000
+const MANUAL_MODEL_FALLBACK_MESSAGE = "Model list unavailable — enter a model ID manually."
 
 type OpenAICompatibleResponse = {
   error?: {
@@ -51,12 +67,118 @@ export class OpenAICompatibleClientError extends Error {
   }
 }
 
+export function buildProviderEndpoint(baseUrl: string, suffix: "models" | "chat/completions"): string {
+  return `${normalizeProviderBaseUrl(baseUrl)}/${suffix}`
+}
+
+export function redactProviderError(value: unknown, apiKey?: string): string {
+  let message = value instanceof Error ? value.message : String(value ?? "Unknown provider error.")
+  const secret = apiKey?.trim()
+  if (secret) message = message.split(secret).join("[REDACTED]")
+  return message
+    .replace(/Bearer\s+[^\s,;"']+/gi, "Bearer [REDACTED]")
+    .replace(/(authorization|api[-_ ]?key)\s*[:=]\s*[^\s,;"']+/gi, "$1: [REDACTED]")
+    .replace(/\bheaders?\s*[:=]\s*\{[^}]*\}/gi, "headers: [REDACTED]")
+}
+
+function createRequestSignal(parentSignal: AbortSignal | undefined, timeoutMs: number) {
+  const controller = new AbortController()
+  let timedOut = false
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+
+  const abortFromParent = () => controller.abort(parentSignal?.reason)
+  if (parentSignal) {
+    if (parentSignal.aborted) abortFromParent()
+    else parentSignal.addEventListener("abort", abortFromParent, { once: true })
+  }
+
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, timeoutMs)
+  }
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => timedOut,
+    cleanup: () => {
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+      parentSignal?.removeEventListener("abort", abortFromParent)
+    },
+  }
+}
+
+export async function assertProviderHostPermission(baseUrl: string): Promise<void> {
+  if (!(await hasProviderHostPermission(baseUrl))) {
+    throw new OpenAICompatibleClientError(
+      "Provider host permission is not granted. Return to Settings to authorize this provider."
+    )
+  }
+}
+
+export async function fetchProviderModels(
+  input: ProviderConnectionInput,
+  options: OpenAICompatibleClientOptions = {},
+): Promise<ProviderModelsResult> {
+  const provider = parseProviderConnectionInput(input)
+  const fetchImpl = options.fetchImpl ?? fetch
+  const request = createRequestSignal(undefined, options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
+  try {
+    await assertProviderHostPermission(provider.baseUrl)
+    const response = await fetchImpl(buildProviderEndpoint(provider.baseUrl, "models"), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${provider.apiKey}` },
+      signal: request.signal,
+    })
+    let payload: unknown = null
+    try {
+      payload = await response.json()
+    } catch {
+      throw new Error("Model list response was not valid JSON.")
+    }
+    if (!response.ok) {
+      const message = (payload as OpenAICompatibleResponse | null)?.error?.message
+      throw new Error(message || `Model list request failed with status ${response.status}.`)
+    }
+    const entries = (payload as { data?: unknown } | null)?.data
+    if (!Array.isArray(entries)) {
+      throw new Error("Model list response did not include a model data array.")
+    }
+    const models: string[] = []
+    const seen = new Set<string>()
+    for (const entry of entries) {
+      const id = typeof entry === "string" ? entry.trim() : (
+        entry && typeof entry === "object" && typeof (entry as { id?: unknown }).id === "string"
+          ? (entry as { id: string }).id.trim()
+          : ""
+      )
+      if (id && !seen.has(id)) {
+        seen.add(id)
+        models.push(id)
+      }
+    }
+    if (models.length === 0) {
+      return { models, error: `${MANUAL_MODEL_FALLBACK_MESSAGE} No model IDs were returned.` }
+    }
+    return { models }
+  } catch (error) {
+    return {
+      models: [],
+      error: `${MANUAL_MODEL_FALLBACK_MESSAGE} ${request.didTimeout() ? "The request timed out." : redactProviderError(error, provider.apiKey)}`
+    }
+  } finally {
+    request.cleanup()
+  }
+}
+
 export function createOpenAICompatibleClient(
   input: ProviderConnectionInput,
   options: OpenAICompatibleClientOptions = {}
 ) {
   const provider = parseProviderConnectionInput(input)
   const fetchImpl = options.fetchImpl ?? fetch
+  const timeoutMs = options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS
 
   async function createChatCompletion({
     messages,
@@ -64,109 +186,84 @@ export function createOpenAICompatibleClient(
     responseFormat = "text",
     signal
   }: ChatCompletionOptions): Promise<string> {
-    const response = await fetchImpl(buildEndpoint(provider.baseUrl), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${provider.apiKey}`
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        temperature,
-        messages,
-        ...(responseFormat === "json_object"
-          ? {
-              response_format: {
-                type: "json_object"
-              }
-            }
-          : {})
-      }),
-      signal
-    })
-
-    const payload = (await response.json()) as OpenAICompatibleResponse
+    await assertProviderHostPermission(provider.baseUrl)
+    let response: Response
+    let payload: OpenAICompatibleResponse
+    const request = createRequestSignal(signal, timeoutMs)
+    try {
+      response = await fetchImpl(buildProviderEndpoint(provider.baseUrl, "chat/completions"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${provider.apiKey}`
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          temperature,
+          messages,
+          ...(responseFormat === "json_object" ? { response_format: { type: "json_object" } } : {})
+        }),
+        signal: request.signal
+      })
+      payload = (await response.json()) as OpenAICompatibleResponse
+    } catch (error) {
+      if (request.didTimeout()) {
+        throw new OpenAICompatibleClientError("Provider request timed out.")
+      }
+      throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))
+    } finally {
+      request.cleanup()
+    }
 
     if (!response.ok) {
-      throw new OpenAICompatibleClientError(
-        payload.error?.message ?? `Provider request failed with status ${response.status}.`
-      )
+      throw new OpenAICompatibleClientError(redactProviderError(
+        payload.error?.message ?? `Provider request failed with status ${response.status}.`,
+        provider.apiKey,
+      ))
     }
 
-    const content = payload.choices?.[0]?.message?.content
-    const text = extractMessageText(content)
-
-    if (!text) {
-      throw new OpenAICompatibleClientError("Provider response did not include assistant content.")
-    }
-
+    const text = extractMessageText(payload.choices?.[0]?.message?.content)
+    if (!text) throw new OpenAICompatibleClientError("Provider response did not include assistant content.")
     return text
   }
 
   async function testConnection(): Promise<ConnectionTestResult> {
     const startedAt = Date.now()
-
     try {
       await createChatCompletion({
         messages: [
-          {
-            role: "system",
-            content: "You validate API connectivity."
-          },
-          {
-            role: "user",
-            content: 'Reply with the single word "pong".'
-          }
+          { role: "system", content: "You validate API connectivity." },
+          { role: "user", content: 'Reply with the single word "pong".' }
         ],
         temperature: 0,
         responseFormat: "text"
       })
-
-      return {
-        ok: true,
-        model: provider.model,
-        baseUrl: provider.baseUrl,
-        latencyMs: Date.now() - startedAt
-      }
+      return { ok: true, model: provider.model, baseUrl: provider.baseUrl, latencyMs: Date.now() - startedAt }
     } catch (error) {
       return {
         ok: false,
         model: provider.model,
         baseUrl: provider.baseUrl,
         latencyMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : "Unknown provider error."
+        error: redactProviderError(error, provider.apiKey)
       }
     }
   }
 
-  return {
-    provider,
-    createChatCompletion,
-    testConnection
-  }
+  return { provider, createChatCompletion, testConnection }
 }
 
-function buildEndpoint(baseUrl: string) {
-  return `${baseUrl}/chat/completions`
-}
-
-function extractMessageText(
-  content: OpenAICompatibleResponse["choices"] extends Array<infer T>
-    ? T extends { message?: { content?: infer TContent } }
-      ? TContent
-      : never
-    : never
-) {
-  if (typeof content === "string") {
-    return content.trim()
-  }
-
+function extractMessageText(content: OpenAICompatibleResponse["choices"] extends Array<infer T>
+  ? T extends { message?: { content?: infer TContent } } ? TContent : never
+  : never) {
+  if (typeof content === "string") return content.trim()
   if (Array.isArray(content)) {
     return content
       .map((item) => (item.type === "text" && typeof item.text === "string" ? item.text : ""))
       .join("\n")
       .trim()
   }
-
   return ""
 }
+
+export type { FetchLike, ProviderConnectionInput }

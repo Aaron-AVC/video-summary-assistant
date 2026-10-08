@@ -27,7 +27,6 @@ export const providerConfigSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1),
   baseUrl: z.string().trim().url(),
-  apiKey: z.string().trim().min(1),
   model: z.string().trim().min(1),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema

@@ -333,11 +333,12 @@ function SidepanelWorkspace() {
       const cues = transcript.segments
       setTranscriptCues(cues)
       setRawVtt(transcript.raw?.text ?? null)
+      const resolvedProvider = await settingsStorage.resolveProvider(provider.id)
       const completed = await runAnalysis({
         provider: {
-          baseUrl: provider.baseUrl,
-          apiKey: provider.apiKey,
-          model: provider.model
+          baseUrl: resolvedProvider.profile.baseUrl,
+          apiKey: resolvedProvider.apiKey,
+          model: resolvedProvider.profile.model
         },
         transcript: {
           videoId: video.videoId,
@@ -564,11 +565,12 @@ function SidepanelWorkspace() {
     setAskError(null)
 
     try {
+      const resolvedProvider = await settingsStorage.resolveProvider(provider.id)
       const result = await askVideo({
         provider: {
-          baseUrl: provider.baseUrl,
-          apiKey: provider.apiKey,
-          model: provider.model
+          baseUrl: resolvedProvider.profile.baseUrl,
+          apiKey: resolvedProvider.apiKey,
+          model: resolvedProvider.profile.model
         },
         question: askQuestion,
         transcript: {

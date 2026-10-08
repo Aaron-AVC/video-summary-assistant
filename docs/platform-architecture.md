@@ -39,3 +39,9 @@ The runtime namespace is `video-summary-assistant/runtime`; active contexts use 
 YouTube runtime identity is `youtube:<videoId>`. Existing Dexie/history tables remain `videoId`-based in this task so Task 1 local data and migrations remain compatible. `src/features/platform/persistence-compat.ts` provides the narrow projection needed by existing history/jump paths.
 
 Persistence has **not** been fully migrated to multi-platform `contentKey`; that hardening is deferred to Task 8. YouTube keeps the existing `videoId`-keyed history path. Bilibili analysis is intentionally session-only in Task 3, so P1/P2 cannot overwrite one another in the legacy history tables; the Side Panel makes this limitation explicit. Task 3 does not rename the database, rebuild Dexie migrations, or migrate provider keys.
+
+## Provider boundary
+
+Task 4 keeps provider metadata and secrets on separate paths. Profile metadata contains only `id`, `name`, `baseUrl`, `model`, timestamps, `isDefault`, and `hasApiKey`; API keys live in a dedicated local-only secret map. Options and Side Panel state receive metadata projections, while `resolveProvider()` is the short-lived privileged boundary used immediately before an AI request.
+
+Provider hosts are never required permissions. The manifest declares only the optional host capability; an explicit Save, Fetch models, or Test connection action requests the concrete provider origin. Analyze and Ask AI never request permissions silently and return a clear permission error when the user has not authorized the selected host. HTTPS providers are supported at arbitrary path prefixes; HTTP is limited to loopback. `/models` is best-effort and manual model IDs remain valid when discovery fails. All chat, model discovery, and connection requests share endpoint joining, explicit model selection, permission checks, timeouts/error handling, and secret redaction.

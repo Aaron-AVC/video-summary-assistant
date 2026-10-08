@@ -44,6 +44,21 @@ export const MIGRATION_BLOCKS: MigrationBlock[] = [
       segmentSummaries: "id, analysisRunId, videoId, [videoId+startSec]",
       recentVideos: "videoId, updatedAt, status"
     }
+  },
+  {
+    version: 2,
+    stores: {
+      providerConfigs: "id, name, updatedAt",
+      transcriptSnapshots: "id, videoId, updatedAt, [videoId+updatedAt]",
+      analysisRuns: "id, videoId, status, updatedAt, [videoId+updatedAt]",
+      segmentSummaries: "id, analysisRunId, videoId, [videoId+startSec]",
+      recentVideos: "videoId, updatedAt, status"
+    },
+    upgrade: (transaction) => transaction.table("providerConfigs").toCollection().modify((row) => {
+      if (row && typeof row === "object" && "apiKey" in row) {
+        delete (row as { apiKey?: unknown }).apiKey
+      }
+    })
   }
 ]
 

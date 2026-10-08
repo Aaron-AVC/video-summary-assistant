@@ -4,6 +4,7 @@ import {
   classifyProviderUrlSafety,
   isLoopbackProviderHost,
   parseProviderConfigInput,
+  parseProviderProfileInput,
   parseProviderConnectionInput
 } from "@/features/settings/lib/provider-schema"
 
@@ -46,6 +47,7 @@ describe("provider URL safety classifier", () => {
     expect(classifyProviderUrlSafety("http://127.0.0.1:11434/v1").kind).toBe("ok")
     expect(classifyProviderUrlSafety("http://localhost:1234/v1").kind).toBe("ok")
     expect(classifyProviderUrlSafety("http://LOCALHOST:8080/v1").kind).toBe("ok")
+    expect(classifyProviderUrlSafety("http://[::1]:8000/v1").kind).toBe("ok")
   })
 
   it("flags http URLs aimed at non-loopback hosts as untrusted-http", () => {
@@ -57,6 +59,34 @@ describe("provider URL safety classifier", () => {
     expect(classifyProviderUrlSafety("").kind).toBe("invalid")
     expect(classifyProviderUrlSafety("not a url").kind).toBe("invalid")
     expect(classifyProviderUrlSafety("ftp://example.com").kind).toBe("invalid")
+  })
+
+  it("rejects credentials, query strings, fragments, and non-loopback http in saved profiles", () => {
+    for (const baseUrl of [
+      "http://example.com/v1",
+      "https://user:pass@example.com/v1",
+      "https://api.example.com/v1?tenant=1",
+      "https://api.example.com/v1#fragment",
+      "ftp://api.example.com/v1",
+      "file:///tmp/provider",
+      "data:text/plain,provider",
+      "javascript:alert(1)",
+    ]) {
+      expect(() => parseProviderProfileInput({ name: "Provider", baseUrl, model: "model" })).toThrow()
+    }
+  })
+
+  it("accepts arbitrary https prefixes and loopback http prefixes without adding /v1", () => {
+    expect(parseProviderProfileInput({
+      name: "Relay",
+      baseUrl: " https://relay.example.com/openai/v1/ ",
+      model: "model",
+    }).baseUrl).toBe("https://relay.example.com/openai/v1")
+    expect(parseProviderProfileInput({
+      name: "Local",
+      baseUrl: "http://127.0.0.1:8000/v1/",
+      model: "model",
+    }).baseUrl).toBe("http://127.0.0.1:8000/v1")
   })
 
   it("identifies loopback hosts case-insensitively", () => {

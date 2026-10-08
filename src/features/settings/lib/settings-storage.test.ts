@@ -78,4 +78,125 @@ describe("createSettingsStorage", () => {
       diagnosticLogging: false,
     })
   })
+
+  it("migrates legacy secret-bearing records idempotently and keeps secrets out of profile metadata", async () => {
+    const store = new Map<string, unknown>([
+      ["yt-summarizer.provider.configs", [{
+        id: "legacy-a",
+        name: "Legacy",
+        baseUrl: "https://relay.example.com/v1",
+        apiKey: "sk-legacy-secret",
+        model: "legacy-model",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z"
+      }]],
+      ["yt-summarizer.provider.default", "legacy-a"]
+    ])
+    const adapter: SettingsStorageAdapter = {
+      async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
+        return keys.reduce<Partial<Record<string, T>>>((result, key) => {
+          if (store.has(key)) result[key] = store.get(key) as T
+          return result
+        }, {})
+      },
+      async set(values) {
+        for (const [key, value] of Object.entries(values)) store.set(key, value)
+      },
+      async remove(keys) {
+        for (const key of keys) store.delete(key)
+      }
+    }
+    const storage = createSettingsStorage(adapter)
+
+    const first = await storage.getSettingsSnapshot()
+    const second = await storage.getSettingsSnapshot()
+
+    expect(first.providerConfigs).toEqual([expect.objectContaining({
+      id: "legacy-a",
+      isDefault: true,
+      hasApiKey: true,
+    })])
+    expect(first.providerConfigs[0]).not.toHaveProperty("apiKey")
+    expect(second.providerConfigs).toEqual(first.providerConfigs)
+    expect(store.get("yt-summarizer.provider.configs")).toBeUndefined()
+    await expect(storage.resolveProvider("legacy-a")).resolves.toMatchObject({ apiKey: "sk-legacy-secret" })
+    expect(JSON.stringify(await storage.exportSettings())).not.toContain("sk-legacy-secret")
+  })
+
+  it("keeps an existing secret when an edited profile omits a replacement key", async () => {
+    const storage = createSettingsStorage(createAdapter())
+    await storage.saveProviderProfile({
+      id: "provider-1",
+      name: "Provider",
+      baseUrl: "https://api.example.com/v1",
+      model: "model-a",
+    }, "sk-original")
+    await storage.saveProviderProfile({
+      id: "provider-1",
+      name: "Renamed",
+      baseUrl: "https://api.example.com/v1",
+      model: "model-b",
+    })
+
+    await expect(storage.resolveProvider("provider-1")).resolves.toMatchObject({
+      apiKey: "sk-original",
+      profile: { name: "Renamed", model: "model-b" },
+    })
+  })
+
+  it("keeps the legacy secret-bearing record when migration writes fail", async () => {
+    const legacyKey = "yt-summarizer.provider.configs"
+    const store = new Map<string, unknown>([
+      [legacyKey, [{
+        id: "legacy-failure",
+        name: "Legacy",
+        baseUrl: "https://relay.example.com/v1",
+        apiKey: "sk-legacy-failure",
+        model: "legacy-model",
+      }]],
+    ])
+    let failWrites = true
+    let removeCalls = 0
+    const adapter: SettingsStorageAdapter = {
+      async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
+        return keys.reduce<Partial<Record<string, T>>>((result, key) => {
+          if (store.has(key)) result[key] = store.get(key) as T
+          return result
+        }, {})
+      },
+      async set(values) {
+        if (failWrites) throw new Error("migration write failed")
+        for (const [key, value] of Object.entries(values)) store.set(key, value)
+      },
+      async remove(keys) {
+        removeCalls += 1
+        for (const key of keys) store.delete(key)
+      },
+    }
+    const storage = createSettingsStorage(adapter)
+
+    await expect(storage.getSettingsSnapshot()).rejects.toThrow("migration write failed")
+    expect(removeCalls).toBe(0)
+    expect(store.get(legacyKey)).toBeDefined()
+
+    failWrites = false
+    await expect(storage.getSettingsSnapshot()).resolves.toMatchObject({
+      providerConfigs: [expect.objectContaining({ id: "legacy-failure", hasApiKey: true })],
+    })
+    expect(store.get(legacyKey)).toBeUndefined()
+  })
+
+  it("removes the corresponding secret when a provider is deleted or all data is cleared", async () => {
+    const storage = createSettingsStorage(createAdapter())
+    await storage.saveProviderProfile({
+      id: "provider-1", name: "Provider", baseUrl: "https://api.example.com", model: "model"
+    }, "sk-delete")
+    await storage.removeProviderProfile("provider-1")
+    await expect(storage.resolveProvider("provider-1")).rejects.toThrow()
+    await storage.saveProviderProfile({
+      id: "provider-2", name: "Provider 2", baseUrl: "https://api.example.com", model: "model"
+    }, "sk-clear")
+    await storage.clearSettings()
+    await expect(storage.resolveProvider("provider-2")).rejects.toThrow()
+  })
 })

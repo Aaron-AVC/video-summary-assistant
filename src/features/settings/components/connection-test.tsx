@@ -1,5 +1,5 @@
 import { CheckCircle2, Loader2, PlugZap, ShieldAlert } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useState } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -12,19 +12,12 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldLabel
-} from "@/components/ui/field"
-import { Switch } from "@/components/ui/switch"
-import {
   SettingsSection,
   StatusBadge
 } from "@/features/common/components/settings-ui"
 import { createOpenAICompatibleClient } from "@/features/analysis/lib/openai-compatible-client"
-import { classifyProviderUrlSafety } from "@/features/settings/lib/provider-schema"
-import type { ProviderConfigRecord } from "@/features/settings/lib/settings-storage"
+import { requestProviderHostPermission } from "@/features/settings/lib/provider-permissions"
+import { settingsStorage, type ProviderConfigRecord } from "@/features/settings/lib/settings-storage"
 
 export type ProviderConnectionStatus = {
   providerId: string | null
@@ -45,24 +38,6 @@ export function ConnectionTest({
   onStatusChange
 }: ConnectionTestProps) {
   const [isTesting, setIsTesting] = useState(false)
-  // Host the user has explicitly confirmed for plain-http delivery.
-  // Stored per host so changing the saved provider revokes the green light.
-  const [confirmedHttpHost, setConfirmedHttpHost] = useState<string | null>(null)
-
-  const urlSafety = useMemo(
-    () => (provider ? classifyProviderUrlSafety(provider.baseUrl) : null),
-    [provider]
-  )
-  const isUntrustedHttp = urlSafety?.kind === "untrusted-http"
-  const untrustedHttpHost = urlSafety?.kind === "untrusted-http" ? urlSafety.host : null
-  const isUntrustedHttpConfirmed =
-    isUntrustedHttp && untrustedHttpHost === confirmedHttpHost
-
-  // Whenever the user switches to a different provider, drop any prior
-  // confirmation so a green light never carries across distinct hosts.
-  useEffect(() => {
-    setConfirmedHttpHost(null)
-  }, [provider?.id])
 
   async function handleTestConnection() {
     if (!provider) {
@@ -76,16 +51,6 @@ export function ConnectionTest({
       return
     }
 
-    if (isUntrustedHttp && !isUntrustedHttpConfirmed) {
-      onStatusChange({
-        providerId: provider.id,
-        state: "error",
-        title: "Confirm plain-http delivery",
-        message: `${provider.baseUrl} is http and outside the loopback allowlist. Toggle the confirmation switch to acknowledge sending your API key in clear text before testing.`
-      })
-      return
-    }
-
     setIsTesting(true)
     onStatusChange({
       providerId: provider.id,
@@ -95,7 +60,14 @@ export function ConnectionTest({
     })
 
     try {
-      const client = createOpenAICompatibleClient(provider)
+      const granted = await requestProviderHostPermission(provider.baseUrl)
+      if (!granted) throw new Error("Provider host permission was not granted.")
+      const resolved = await settingsStorage.resolveProvider(provider.id)
+      const client = createOpenAICompatibleClient({
+        baseUrl: resolved.profile.baseUrl,
+        apiKey: resolved.apiKey,
+        model: resolved.profile.model,
+      })
       const result = await client.testConnection()
 
       if (result.ok) {
@@ -175,7 +147,7 @@ export function ConnectionTest({
             </div>
             <Button
               className="rounded-xl"
-              disabled={isTesting || (isUntrustedHttp && !isUntrustedHttpConfirmed)}
+              disabled={isTesting}
               onClick={handleTestConnection}
               type="button">
               {isTesting ? (
@@ -187,40 +159,6 @@ export function ConnectionTest({
             </Button>
           </div>
         </SettingsSection>
-
-        {isUntrustedHttp && untrustedHttpHost ? (
-          <Alert variant="destructive">
-            <ShieldAlert className="h-4 w-4" />
-            <AlertTitle>Plain http delivery to a non-loopback host</AlertTitle>
-            <AlertDescription className="space-y-3">
-              <p>
-                <code className="font-mono text-xs">{untrustedHttpHost}</code>{" "}
-                is not on the loopback allowlist. Testing this provider sends
-                the saved API key over clear text.
-              </p>
-              <Field
-                orientation="horizontal"
-                className="rounded-lg border bg-background/80 px-4 py-3">
-                <FieldContent>
-                  <FieldLabel htmlFor="connection-test-untrusted-http-confirm">
-                    I understand and want to send the API key over plain http
-                  </FieldLabel>
-                  <FieldDescription className="text-xs leading-5">
-                    Required before this provider can be tested. Resets when
-                    you switch to a different saved provider.
-                  </FieldDescription>
-                </FieldContent>
-                <Switch
-                  checked={isUntrustedHttpConfirmed}
-                  id="connection-test-untrusted-http-confirm"
-                  onCheckedChange={(checked) =>
-                    setConfirmedHttpHost(checked ? untrustedHttpHost : null)
-                  }
-                />
-              </Field>
-            </AlertDescription>
-          </Alert>
-        ) : null}
 
         {status ? (
           <Alert

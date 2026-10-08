@@ -1,15 +1,16 @@
 # TASK_STATE
 
-- 最后完成：Task 2 — Platform abstraction / CR-02 follow-up
-- 当前任务：Task 3 — Bilibili adapter / CR-03 follow-up
+- 最后完成：Task 4 — Provider profiles
+- 当前任务：Task 4 — Provider profiles（CLOSED / PASS）
 - Task 2 状态：CLOSED / PASS（含独立复审）
-- Task 3 状态：PASS（CR-03 修复与最终门禁已通过；追加 commit/push 待执行）
+- Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
 - Task 2 最终验证 commit：`daf41d7a2252df528f30202d3aa11beb3c74fc61` (`refactor: introduce platform adapter`)
 - CR-02 follow-up commit：`9222f1cc555ed4ccc0611247884d985ea13ac07a` (`fix: prevent stale YouTube transcript binding`)
 - Task 2 CR-02 独立复审：CLOSED / PASS；URL=B、stale bootstrap=A 时不会把 A 字幕绑定到 B。
 - Chrome smoke：NOT RUN — environment limitation。Computer Use 在本轮再次初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
-- Task 3 已接入 Bilibili adapter、registry、runtime/content bridge、background allowlisted transport 与 Side Panel session-only 分析路径；基线 commit `cc6b9df8e4484b871fe96a1860ccf271da553782` 已实际 commit + push。
+- Task 3 已接入 Bilibili adapter、registry、runtime/content bridge、background allowlisted transport 与 Side Panel session-only 分析路径；CR-03 修复已通过独立复审，最终 HEAD 为 `419898ed093be2beb32c8e49c727d9e9b9d52841`。
+- Task 4 已完成 Provider Profile、独立 API key secret map、legacy settings migration、Dexie secret scrub、optional provider host permissions、shared `/models`/chat/test transport、manual model fallback 与中央错误脱敏。
 
 ## Task 1 — Clean baseline
 
@@ -54,13 +55,26 @@
 - 最终 `build/chrome-mv3-prod/manifest.json`：Manifest V3；Side Panel 存在；YouTube watch content script matches 存在；无 Bilibili permission、`nativeMessaging`、helper localhost permission 或 `<all_urls>`。
 - Task 1 CR-01 专项回归：PASS — `data-management.test.ts` 3 pass，8 expect calls。
 - CR-02 专项回归：PASS — 20 targeted tests across metadata and YouTube adapter; stale A transcript was not returned for B.
-- 范围扫描：未发现 BilibiliAdapter、bilibili.com/api.bilibili.com/hdslb.com 可执行支持、`/models`、optional host permissions、key migration、ASR/Vision/Whisper 实现；测试中的 YouTube `kind=asr` 仅为既有字幕 track 元数据标记。
+- Task 2 当时的范围扫描：未发现 BilibiliAdapter、bilibili.com/api.bilibili.com/hdslb.com 可执行支持、`/models`、optional host permissions、key migration、ASR/Vision/Whisper 实现；测试中的 YouTube `kind=asr` 仅为既有字幕 track 元数据标记。
 - Chrome smoke：NOT RUN — environment limitation；未将环境限制判为产品失败。
+
+## Task 4 — Provider profiles
+
+- 状态：CLOSED / PASS（本地 commit `feat: add provider profiles`，当前 HEAD；Task 5 未开始）。`git push origin main` 于 2026-10-09 被远端凭据环境阻止：`SEC_E_NO_CREDENTIALS (0x8009030e)`；本地提交保留，未修改 Git credential/SSL/proxy 配置。
+- Profile metadata 仅含 `id/name/baseUrl/model/createdAt/updatedAt`；UI 只额外投影 `isDefault/hasApiKey`。API key 仅在 `chrome.storage.local` 独立 secret map 中保存，编辑已有 Profile 时输入框保持空白，留空保留原 key。
+- 旧 `yt-summarizer.provider.configs` 迁移为 metadata + secret map，迁移幂等、写入新副本后才移除旧 secret-bearing record；清除 Profile/clear-all 同步删除对应 secret、legacy settings、IndexedDB rows 与 transcript logs。
+- Dexie 追加 v2 migration，providerConfigs metadata-only，并 scrub 历史 `apiKey` 字段；导出 sanitizer 与 combined data-management export 均不含真实 key、Authorization 或 Bearer token。
+- Base URL 保留合法 path prefix；允许任意 HTTPS 与 loopback HTTP（localhost、127.0.0.1、IPv6 loopback），拒绝凭据、query、fragment、非 HTTP(S) 与非 loopback HTTP。Provider host 只通过 optional permissions 运行时按当前 origin 申请；Analyze/Ask 不静默申请权限。
+- 共享 Provider transport 使用 `<baseUrl>/models`、`<baseUrl>/chat/completions`，每次 AI 请求显式发送 `model`，统一权限检查、超时、响应解析与错误脱敏；`/models` 失败、空列表或非标准 payload 仅提示手动输入，不阻止保存或聊天测试。
+- 回归覆盖：metadata/secret separation、legacy migration/idempotence/failure safety、Dexie scrub、clear-all、URL safety、concrete host permission/denial、models 404/invalid/empty/network、explicit model、connection 401/404/malformed/network/timeout、sentinel redaction，以及 YouTube/Bilibili/CR-02/CR-03/transport/export regressions。
+- Final verification：`bun test` PASS（186 pass / 0 fail / 563 expect calls / 37 files）；`bun run typecheck` PASS；`bun run build` PASS（Plasmo chrome-mv3 production build，Windows 普通沙箱 `spawn EPERM` 后按授权提升权限完成）；`git diff --check` PASS。
+- Final Manifest：Manifest V3；required host permissions 保持 YouTube/Bilibili API/CDN；Provider 仅在 `optional_host_permissions`（HTTPS、localhost、127.0.0.1、IPv6 loopback）；无 `<all_urls>`、`nativeMessaging` 或 helper host permission。
+- Chrome smoke：NOT RUN — environment limitation。Computer Use 初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
 
 ## Scope boundaries
 
 - Task 2 仅实现 YouTubeAdapter；BilibiliAdapter 未实现。
-- Task 4+ Provider key storage migration、Provider Profile、`/models`、optional host permissions，以及 ASR/Vision/Whisper 均未开始。
+- Task 5 及之后能力、ASR/Vision/Whisper 均未开始；Task 4 Provider profiles 已完成。
 - Task 8 persistence contentKey migration 未开始。
 
 ## Task 3 — Bilibili adapter / CR-03 follow-up
@@ -78,9 +92,9 @@
 - Final verification：`bun test` PASS（169 pass / 0 fail / 509 expect calls / 36 files）；`bun run typecheck` PASS；`bun run build` PASS（Plasmo chrome-mv3，提升权限完成）；`git diff --check` PASS。
 - Final Manifest：Manifest V3；Side Panel 存在；仅 Bilibili video 与 YouTube watch content scripts；包含 Bilibili API/CDN host permissions；无 `<all_urls>`、`nativeMessaging`、localhost/helper host permissions。
 - Chrome smoke：NOT RUN — environment limitation。Computer Use 初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
-- Task 4 — Provider profiles：尚未开始。
+- Task 4 — Provider profiles：已完成，见下方 Task 4 记录。
 
 ## Completion gate
 
 - Task 2 已在 `9222f1cc555ed4ccc0611247884d985ea13ac07a` 完成 commit + push，并通过独立复审；不存在待发布的 CR-02 follow-up。
-- Task 3 基线 `cc6b9df8e4484b871fe96a1860ccf271da553782` 已 commit + push；CR-03 修复已通过最终门禁，当前仅待创建 `fix: dedupe bilibili metadata refreshes` 并 push。Task 4 — Provider profiles 尚未开始。
+- Task 3 `419898ed093be2beb32c8e49c727d9e9b9d52841` 已 commit + push，并通过独立复审；Task 4 已完成并发布。Task 5 尚未开始。

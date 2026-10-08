@@ -4,15 +4,17 @@ type ProviderConfigExportSource = {
   id: string
   name: string
   baseUrl: string
-  apiKey: string
   model: string
   createdAt: string
   updatedAt: string
   isDefault?: boolean
+  hasApiKey?: boolean
+  /** Legacy rows may still contain this field at runtime; it is never returned. */
+  apiKey?: unknown
 }
 
 export function sanitizeProviderConfigForExport(
-  provider: ProviderConfigExportSource
+  provider: ProviderConfigExportSource,
 ): ProviderConfigExportEntity {
   const metadata: ProviderConfigExportEntity = {
     id: provider.id,
@@ -21,12 +23,11 @@ export function sanitizeProviderConfigForExport(
     model: provider.model,
     createdAt: provider.createdAt,
     updatedAt: provider.updatedAt,
-    hasApiKey: provider.apiKey.trim().length > 0
+    hasApiKey: typeof provider.hasApiKey === "boolean"
+      ? provider.hasApiKey
+      : typeof provider.apiKey === "string" && provider.apiKey.trim().length > 0,
   }
 
-  if (typeof provider.isDefault === "boolean") {
-    metadata.isDefault = provider.isDefault
-  }
-
+  if (typeof provider.isDefault === "boolean") metadata.isDefault = provider.isDefault
   return metadata
 }

@@ -1,4 +1,4 @@
-import { Loader2, PlusCircle, Save, ShieldAlert, Sparkles, Star, Trash2 } from "lucide-react"
+import { Loader2, PlusCircle, Save, Sparkles, Star, Trash2 } from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { z } from "zod"
 
@@ -33,10 +33,11 @@ import { Switch } from "@/components/ui/switch"
 import { type ProviderConnectionStatus } from "@/features/settings/components/connection-test"
 import { SettingsSection } from "@/features/common/components/settings-ui"
 import {
-  classifyProviderUrlSafety,
-  parseProviderConfigInput,
-  type ProviderConfigInput
+  parseProviderProfileInput,
+  type ProviderProfileInput
 } from "@/features/settings/lib/provider-schema"
+import { fetchProviderModels } from "@/features/analysis/lib/openai-compatible-client"
+import { requestProviderHostPermission } from "@/features/settings/lib/provider-permissions"
 import {
   settingsStorage,
   type ProviderConfigRecord
@@ -48,12 +49,15 @@ type ProviderFormProps = {
   refreshToken?: number
 }
 
-type ProviderDraft = ProviderConfigInput & {
+type ProviderDraft = ProviderProfileInput & {
   id: string | null
+  apiKey: string
   isDefault: boolean
+  hasApiKey: boolean
+  modelOptions: string[]
 }
 
-type ProviderFieldErrors = Partial<Record<keyof ProviderConfigInput, string>>
+type ProviderFieldErrors = Partial<Record<keyof ProviderProfileInput | "apiKey", string>>
 
 const EMPTY_DRAFT: ProviderDraft = {
   id: null,
@@ -61,7 +65,9 @@ const EMPTY_DRAFT: ProviderDraft = {
   baseUrl: "",
   apiKey: "",
   model: "",
-  isDefault: false
+  isDefault: false,
+  hasApiKey: false,
+  modelOptions: []
 }
 
 function createEmptyState(defaultSelected = false): ProviderDraft {
@@ -83,10 +89,8 @@ export function ProviderForm({
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  // Host the user has explicitly acknowledged for http-non-loopback delivery.
-  // Cleared whenever baseUrl changes, so a fresh attacker URL never inherits
-  // confirmation from a previous one.
-  const [confirmedHttpHost, setConfirmedHttpHost] = useState<string | null>(null)
+  const [isFetchingModels, setIsFetchingModels] = useState(false)
+  const [modelSearch, setModelSearch] = useState("")
   const [feedback, setFeedback] = useState<{
     state: "idle" | "success" | "error"
     title: string
@@ -134,14 +138,12 @@ export function ProviderForm({
         : createEmptyState(nextProviders.length === 0)
     )
     setFieldErrors({})
-    setConfirmedHttpHost(null)
     setIsLoading(false)
   }
 
   function handleProviderSelection(value: string) {
     setFeedback({ state: "idle", title: "", message: "" })
     setFieldErrors({})
-    setConfirmedHttpHost(null)
     setSelectedProviderId(value)
 
     if (value === "new") {
@@ -165,48 +167,29 @@ export function ProviderForm({
       ...current,
       [key]: undefined
     }))
-    if (key === "baseUrl") {
-      // Editing the base URL invalidates any prior http-host confirmation —
-      // otherwise an attacker-controlled URL could inherit a green light from
-      // a legitimate localhost confirmation.
-      setConfirmedHttpHost(null)
-    }
   }
 
-  const urlSafety = useMemo(
-    () => classifyProviderUrlSafety(draft.baseUrl),
-    [draft.baseUrl]
-  )
-  const isUntrustedHttp = urlSafety.kind === "untrusted-http"
-  const isUntrustedHttpConfirmed =
-    isUntrustedHttp && confirmedHttpHost === urlSafety.host
-  const blockSaveOnUntrustedHttp = isUntrustedHttp && !isUntrustedHttpConfirmed
-
   async function handleSave() {
-    if (blockSaveOnUntrustedHttp) {
-      setFeedback({
-        state: "error",
-        title: "Confirm http-only delivery",
-        message:
-          "This base URL would send your API key over plain http to a host outside the loopback allowlist. Tick the confirmation switch above to acknowledge the risk before saving."
-      })
-      return
-    }
-
     setIsSaving(true)
     setFeedback({ state: "idle", title: "", message: "" })
 
     try {
-      const parsed = parseProviderConfigInput(draft)
+      const parsed = parseProviderProfileInput(draft)
       const providerId = draft.id ?? globalThis.crypto.randomUUID()
+      if (!draft.id && !draft.apiKey.trim()) {
+        setFieldErrors({ apiKey: "API key is required for a new provider." })
+        throw new Error("API key is required for a new provider.")
+      }
 
-      await settingsStorage.saveProviderConfig({
+      const permissionGranted = await requestProviderHostPermission(parsed.baseUrl)
+      if (!permissionGranted) throw new Error("Provider host permission was not granted.")
+
+      await settingsStorage.saveProviderProfile({
         id: providerId,
         name: parsed.name,
         baseUrl: parsed.baseUrl,
-        apiKey: parsed.apiKey,
         model: parsed.model
-      })
+      }, draft.apiKey.trim() || undefined)
 
       if (draft.isDefault) {
         await settingsStorage.setDefaultProviderConfig(providerId)
@@ -230,10 +213,7 @@ export function ProviderForm({
           const fieldName = issue.path[0]
 
           if (
-            (fieldName === "name" ||
-              fieldName === "baseUrl" ||
-              fieldName === "apiKey" ||
-              fieldName === "model") &&
+            (fieldName === "name" || fieldName === "baseUrl" || fieldName === "apiKey" || fieldName === "model") &&
             !nextFieldErrors[fieldName]
           ) {
             nextFieldErrors[fieldName] = issue.message
@@ -283,6 +263,36 @@ export function ProviderForm({
       })
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  async function handleFetchModels() {
+    setIsFetchingModels(true)
+    setFeedback({ state: "idle", title: "", message: "" })
+    try {
+      const parsed = parseProviderProfileInput(draft)
+      const providerId = draft.id
+      const apiKey = draft.apiKey.trim() || (providerId
+        ? (await settingsStorage.resolveProvider(providerId)).apiKey
+        : "")
+      if (!apiKey) throw new Error("Enter an API key before fetching models.")
+      const permissionGranted = await requestProviderHostPermission(parsed.baseUrl)
+      if (!permissionGranted) throw new Error("Provider host permission was not granted.")
+      const result = await fetchProviderModels({
+        baseUrl: parsed.baseUrl,
+        apiKey,
+        model: parsed.model,
+      })
+      setDraft((current) => ({ ...current, modelOptions: result.models }))
+      if (result.error) {
+        setFeedback({ state: "error", title: "Models unavailable", message: result.error })
+      } else {
+        setFeedback({ state: "success", title: "Models loaded", message: `${result.models.length} model IDs found.` })
+      }
+    } catch (error) {
+      setFeedback({ state: "error", title: "Could not fetch models", message: error instanceof Error ? error.message : "Unknown models error." })
+    } finally {
+      setIsFetchingModels(false)
     }
   }
 
@@ -353,43 +363,6 @@ export function ProviderForm({
           </Alert>
         ) : null}
 
-        {isUntrustedHttp ? (
-          <Alert variant="destructive">
-            <ShieldAlert className="h-4 w-4" />
-            <AlertTitle>Plain http delivery to a non-loopback host</AlertTitle>
-            <AlertDescription className="space-y-3">
-              <p>
-                <code className="font-mono text-xs">{urlSafety.host}</code> is
-                not on the loopback allowlist (<code className="font-mono text-xs">127.0.0.1</code>,{" "}
-                <code className="font-mono text-xs">localhost</code>). Saving and
-                testing this provider will send your API key over plain http
-                where any network observer can read it. Prefer https or a
-                local provider like Ollama / LM Studio.
-              </p>
-              <Field
-                orientation="horizontal"
-                className="rounded-lg border bg-background/80 px-4 py-3">
-                <FieldContent>
-                  <FieldLabel htmlFor="provider-untrusted-http-confirm">
-                    I understand and want to send the API key over plain http
-                  </FieldLabel>
-                  <FieldDescription className="text-xs leading-5">
-                    Required before this provider can be saved or tested.
-                    Resets if you edit the base URL.
-                  </FieldDescription>
-                </FieldContent>
-                <Switch
-                  checked={isUntrustedHttpConfirmed}
-                  id="provider-untrusted-http-confirm"
-                  onCheckedChange={(checked) =>
-                    setConfirmedHttpHost(checked ? urlSafety.host : null)
-                  }
-                />
-              </Field>
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
         <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
           <SettingsSection className="bg-background/70 p-5">
             <FieldGroup>
@@ -449,7 +422,7 @@ export function ProviderForm({
               </div>
 
               <ProviderField
-                description="Stored locally only. Keep this secret scoped to your provider."
+                description={draft.hasApiKey ? "Saved key available; leave blank to keep it." : "Stored locally only. Required for a new provider."}
                 error={fieldErrors.apiKey}
                 id="provider-api-key"
                 label="API key"
@@ -461,11 +434,42 @@ export function ProviderForm({
                   disabled={isLoading || isSaving}
                   id="provider-api-key"
                   onChange={(event) => updateDraft("apiKey", event.target.value)}
-                  placeholder="sk-..."
+                  placeholder={draft.hasApiKey ? "Saved key available" : "sk-..."}
                   type="password"
                   value={draft.apiKey}
                 />
               </ProviderField>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  className="rounded-xl"
+                  disabled={isLoading || isSaving || isFetchingModels}
+                  onClick={handleFetchModels}
+                  type="button"
+                  variant="outline">
+                  {isFetchingModels ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
+                  Fetch models
+                </Button>
+                {draft.modelOptions.length > 0 ? (
+                  <Input
+                    aria-label="Search models"
+                    className="h-10 max-w-xs rounded-xl"
+                    onChange={(event) => setModelSearch(event.target.value)}
+                    placeholder="Search model IDs"
+                    value={modelSearch}
+                  />
+                ) : null}
+              </div>
+              {draft.modelOptions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {draft.modelOptions
+                    .filter((model) => model.toLowerCase().includes(modelSearch.trim().toLowerCase()))
+                    .map((model) => (
+                      <Button key={model} onClick={() => updateDraft("model", model)} type="button" variant="secondary">
+                        {model}
+                      </Button>
+                    ))}
+                </div>
+              ) : null}
             </FieldGroup>
           </SettingsSection>
 
@@ -518,7 +522,7 @@ export function ProviderForm({
             <div className="flex flex-wrap gap-3">
               <Button
                 className="flex-1 rounded-xl"
-                disabled={isLoading || isSaving || blockSaveOnUntrustedHttp}
+                disabled={isLoading || isSaving}
                 onClick={handleSave}>
                 {isSaving ? (
                   <Loader2 data-icon="inline-start" className="animate-spin" />
@@ -596,8 +600,10 @@ function mapProviderToDraft(provider: ProviderConfigRecord | null): ProviderDraf
     id: provider.id,
     name: provider.name,
     baseUrl: provider.baseUrl,
-    apiKey: provider.apiKey,
+    apiKey: "",
     model: provider.model,
-    isDefault: provider.isDefault
+    isDefault: provider.isDefault,
+    hasApiKey: provider.hasApiKey,
+    modelOptions: []
   }
 }

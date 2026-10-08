@@ -143,4 +143,29 @@ describe("registerMigrations", () => {
     })
     expect(upgradeRan).toBe(true)
   })
+
+  it("appends a metadata-only provider migration that scrubs legacy apiKey fields", async () => {
+    const v2 = MIGRATION_BLOCKS.find((block) => block.version === 2)
+    expect(v2).toBeDefined()
+    expect(v2?.stores.providerConfigs).toBe("id, name, updatedAt")
+
+    const row: Record<string, unknown> = {
+      id: "legacy",
+      name: "Legacy",
+      baseUrl: "https://example.com/v1",
+      model: "model",
+      apiKey: "sk-secret",
+    }
+    await v2?.upgrade?.({
+      table: (name) => ({
+        toCollection: () => ({
+          modify: async (mutator) => {
+            expect(name).toBe("providerConfigs")
+            mutator(row)
+          }
+        })
+      })
+    })
+    expect(row).not.toHaveProperty("apiKey")
+  })
 })

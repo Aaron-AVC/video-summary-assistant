@@ -17,6 +17,7 @@ export type SegmentTimelineItem = {
   id: string
   title: string
   summary: string
+  detail: string
   startSec: number
   endSec: number
 }
@@ -39,11 +40,11 @@ export function SegmentTimeline({
   formatTimestamp
 }: SegmentTimelineProps) {
   return (
-    <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95" data-layout-check="moments-panel">
+    <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95" data-layout-check="chapters-panel">
       <CardHeader className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <CardTitle className="text-base">Moments</CardTitle>
-          <CardDescription className="text-xs">Jump to the strongest transcript-backed sections.</CardDescription>
+          <CardTitle className="text-base">Chapters</CardTitle>
+          <CardDescription className="text-xs">Jump to transcript-backed sections.</CardDescription>
         </div>
         <Button variant="outline" size="sm" className="shrink-0 gap-2" disabled={!canDownload} onClick={onDownload}>
           <Download data-icon="inline-start" />
@@ -80,6 +81,9 @@ export function SegmentTimeline({
                     <p className="mt-3 max-w-full text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
                       {segment.summary}
                     </p>
+                    <p className="mt-2 max-w-full text-sm leading-6 text-foreground/80 [overflow-wrap:anywhere]">
+                      {segment.detail}
+                    </p>
                   </div>
                   {index < segments.length - 1 ? <Separator /> : null}
                 </div>
@@ -88,7 +92,7 @@ export function SegmentTimeline({
           </ScrollArea>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Segment highlights will appear here after a completed analysis.
+            Chapters will appear here after a completed analysis.
           </p>
         )}
       </CardContent>

@@ -1,7 +1,7 @@
 # TASK_STATE
 
-- 最后完成：Task 4 — Provider profiles
-- 当前任务：Task 4 — CR-04 follow-up（已修复，待独立复审；Task 5 未开始）
+- 最后完成：Task 5 — Structured video analysis
+- 当前任务：Task 5 — PASS；完成后停止，Task 6 未开始
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
@@ -60,7 +60,7 @@
 
 ## Task 4 — Provider profiles
 
-- 状态：CR-04 follow-up 处理中。原始 Task 4 commit `07c61fd139104b830f3fb41db9f9c4bd5370a864`（`feat: add provider profiles`）已实际 push；之前的“push blocked / local-only”描述不准确，现已更正。Task 4 在 CR-04 修复通过验证并推送前不标记 CLOSED；Task 5 未开始。
+- 状态：CLOSED / PASS。原始 Task 4 commit `07c61fd139104b830f3fb41db9f9c4bd5370a864` 与 CR-04 follow-up 均已实际 commit + push；最终复审通过，最终 HEAD 为 `a4fb2a9a5daf82550294a477ce459dd4a637ccf3`。
 - Profile metadata 仅含 `id/name/baseUrl/model/createdAt/updatedAt`；UI 只额外投影 `isDefault/hasApiKey`。API key 仅在 `chrome.storage.local` 独立 secret map 中保存，编辑已有 Profile 时输入框保持空白，留空保留原 key。
 - 旧 `yt-summarizer.provider.configs` 迁移为 metadata + secret map，迁移幂等、写入新副本后才移除旧 secret-bearing record；清除 Profile/clear-all 同步删除对应 secret、legacy settings、IndexedDB rows 与 transcript logs。
 - Dexie 追加 v2 migration，providerConfigs metadata-only，并 scrub 历史 `apiKey` 字段；导出 sanitizer 与 combined data-management export 均不含真实 key、Authorization 或 Bearer token。
@@ -77,12 +77,23 @@
 - CR-04A 修复：permission pattern 现在只由 scheme + host 构成，Base URL 和实际 fetch 仍保留配置端口；回归覆盖 localhost、IPv4、HTTPS host、IPv6 loopback，以及 `permissions.contains()` / `permissions.request()` 不含端口。
 - CR-04B 原因：Fetch models 路径复用了要求非空 `model` 的完整连接输入，导致新 Provider 必须先手填 model 才能发现列表。
 - CR-04B 修复：新增只要求 `baseUrl` + `apiKey` 的模型发现输入；Fetch models 允许 model 为空。Profile 保存、Test connection、Analyze、Ask 的 model 必填边界不变。
-- 本次修复验证与 Manifest 检查：已通过（`bun test` 188 pass、`bun run typecheck`、提升权限后的 `bun run build`、`git diff --check`）。CR-04 修复按追加原子提交 `fix: correct provider discovery permissions` 发布；Task 4 仍待独立复审，不标记 CLOSED。
+- 本次修复验证与 Manifest 检查：已通过（`bun test` 188 pass、`bun run typecheck`、提升权限后的 `bun run build`、`git diff --check`）。CR-04 修复按追加原子提交 `fix: correct provider discovery permissions` 发布，并已通过独立复审。
 
 ## Scope boundaries
 
+## Task 5 — Structured video analysis
+
+- 状态：PASS。
+- Canonical fresh-analysis domain is strict `VideoAnalysis` with `summary`, grounded optional-timestamp `keyPoints`, and `chapters` containing `title`, `startSec`, `endSec`, `summary`, and `detail`.
+- Added schema/prompt versions (`VIDEO_ANALYSIS_SCHEMA_VERSION = 1`, `VIDEO_ANALYSIS_PROMPT_VERSION = "video-analysis-v1"`), strict JSON object parsing, transcript/duration normalization, cue-boundary snap, sorting, deterministic dedupe, and no silent fake repair.
+- Analysis and Ask AI each perform at most one same-provider/same-model structured repair retry; retry responses re-enter the same parse/validation/grounding pipeline. Abort and second-failure behavior are covered by tests.
+- Legacy persisted `topics`/`segments`/`moments` remain behind an explicit compatibility projection; new chapter `detail` is persisted as a bounded optional field, with old rows reading `detail = summary`.
+- Side Panel minimally renders Chapters with summary/detail and no fresh Topics dependency.
+- `docs/analysis-architecture.md` records the contract and Task 6 boundary.
+- Task 6/7/8 capabilities were not started.
+
 - Task 2 仅实现 YouTubeAdapter；BilibiliAdapter 未实现。
-- Task 5 及之后能力、ASR/Vision/Whisper 均未开始；Task 4 Provider profiles 已完成。
+- Task 6/7/8 及 ASR/Vision/Whisper 均未开始；Task 4 Provider profiles 与 Task 5 Structured video analysis 已完成。
 - Task 8 persistence contentKey migration 未开始。
 
 ## Task 3 — Bilibili adapter / CR-03 follow-up
@@ -105,4 +116,4 @@
 ## Completion gate
 
 - Task 2 已在 `9222f1cc555ed4ccc0611247884d985ea13ac07a` 完成 commit + push，并通过独立复审；不存在待发布的 CR-02 follow-up。
-- Task 3 `419898ed093be2beb32c8e49c727d9e9b9d52841` 已 commit + push，并通过独立复审；Task 4 已完成并发布。Task 5 尚未开始。
+- Task 3 `419898ed093be2beb32c8e49c727d9e9b9d52841` 已 commit + push，并通过独立复审；Task 4 已完成并发布；Task 5 已完成并发布。

@@ -1,8 +1,8 @@
 import { z } from "zod"
 
 import {
-  analysisKeyPointSchema,
-  analysisTopicSchema
+  persistedKeyPointSchema,
+  persistedTopicSchema
 } from "@/features/analysis/lib/analysis-schema"
 
 export const persistedRunStatusSchema = z.enum([
@@ -59,6 +59,7 @@ export const segmentSummarySchema = z.object({
   videoId: z.string().trim().min(1),
   title: z.string().trim().min(1),
   summary: z.string().trim().min(1),
+  detail: z.string().trim().min(1).optional(),
   startSec: z.number().min(0),
   endSec: z.number().min(0),
   createdAt: isoDateTimeSchema,
@@ -75,8 +76,8 @@ export const analysisRunSchema = z.object({
   providerConfigId: z.string().min(1).nullable(),
   status: persistedRunStatusSchema,
   summary: z.string(),
-  keyPoints: z.array(analysisKeyPointSchema),
-  topics: z.array(analysisTopicSchema),
+  keyPoints: z.array(persistedKeyPointSchema),
+  topics: z.array(persistedTopicSchema),
   errorMessage: z.string().nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,

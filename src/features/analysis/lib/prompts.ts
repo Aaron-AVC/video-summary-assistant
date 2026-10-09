@@ -1,4 +1,5 @@
 import type { TranscriptChunk } from "@/features/analysis/lib/chunk-transcript"
+import { VIDEO_ANALYSIS_PROMPT_VERSION } from "@/features/analysis/lib/analysis-schema"
 
 export const TRANSCRIPT_BEGIN_MARKER = "<<<TRANSCRIPT_BEGIN>>>"
 export const TRANSCRIPT_END_MARKER = "<<<TRANSCRIPT_END>>>"
@@ -59,7 +60,8 @@ export function buildFinalAnalysisPrompt({
 }: FinalAnalysisPromptInput): AnalysisPrompt {
   return {
     systemPrompt: [
-      "You combine transcript chunk summaries into a structured JSON analysis. Reply with JSON only.",
+      `You produce ${VIDEO_ANALYSIS_PROMPT_VERSION} structured video analysis. Reply with JSON only.`,
+      "Use only transcript/chunk evidence.",
       UNTRUSTED_TRANSCRIPT_DIRECTIVE
     ].join(" "),
     userPrompt: [
@@ -72,14 +74,13 @@ export function buildFinalAnalysisPrompt({
       ),
       TRANSCRIPT_END_MARKER,
       "",
-      "Return JSON only with keys summary, keyPoints, topics, segments, and moments.",
+      "Return JSON only with exactly these keys: summary, keyPoints, chapters.",
       "summary must be a string.",
-      "keyPoints must be an array of objects with text, startSec, and endSec.",
-      "topics must be an array of objects with label and optional startSec/endSec.",
-      "segments must be an array of objects with title, summary, startSec, and endSec.",
-      "moments must be an array of objects with title, summary, startSec, and endSec.",
+      "keyPoints must be a non-empty array of objects with non-empty text; startSec/endSec are optional but must be provided together when present.",
+      "chapters must be a non-empty array of objects with title, startSec, endSec, summary, and detail.",
+      "title is a short chapter title; summary is a brief synopsis; detail is a fuller explanation and must not be a mechanical copy of summary.",
       "All startSec and endSec values must be transcript-grounded seconds from the chunk ranges.",
-      "Use endSec values greater than or equal to startSec so every item can drive a Jump action."
+      "Use endSec values greater than or equal to startSec. Do not include ids or legacy fields."
     ].join("\n")
   }
 }

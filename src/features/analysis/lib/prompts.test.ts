@@ -70,8 +70,11 @@ describe("analysis prompts", () => {
     expect(prompt.systemPrompt).toContain("JSON only")
     expect(prompt.userPrompt).toContain("keyPoints")
     expect(prompt.userPrompt).toContain("startSec")
-    expect(prompt.userPrompt).toContain("moments")
-    expect(prompt.userPrompt).toContain("segments")
+    expect(prompt.userPrompt).toContain("chapters")
+    expect(prompt.userPrompt).toContain("detail")
+    expect(prompt.userPrompt).not.toContain("topics")
+    expect(prompt.userPrompt).not.toContain("segments")
+    expect(prompt.userPrompt).not.toContain("moments")
   })
 
   it("wraps final-prompt chunk summaries inside untrusted-data fences", () => {

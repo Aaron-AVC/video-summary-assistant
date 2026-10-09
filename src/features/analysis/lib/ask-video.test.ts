@@ -13,6 +13,51 @@ const TRANSCRIPT_CUES = [
 ]
 
 describe("ask video", () => {
+  const validAnswer = JSON.stringify({
+    answer: "The demo starts after setup.",
+    citations: [{ text: "Demo begins", startSec: 10, endSec: 20 }],
+    suggestedJumps: [],
+    followUps: []
+  })
+
+  it("repairs invalid structured output exactly once", async () => {
+    const calls: string[] = []
+    const responses = ["not json", validAnswer]
+    const client = {
+      provider: { baseUrl: "https://api.example.com/v1", apiKey: "sk-test-placeholder", model: "gpt-4.1-mini" },
+      testConnection: async () => ({ ok: true as const, baseUrl: "https://api.example.com/v1", model: "gpt-4.1-mini", latencyMs: 1 }),
+      createChatCompletion: async ({ responseFormat }: { responseFormat?: string }) => {
+        calls.push(responseFormat ?? "text")
+        return responses.shift() ?? "unexpected"
+      }
+    }
+    const result = await askVideo({
+      provider: client.provider,
+      question: "Where does the demo start?",
+      transcript: { videoId: "video-1", cues: TRANSCRIPT_CUES },
+      client: client as never
+    })
+    expect(result.repairAttempted).toBe(true)
+    expect(calls).toEqual(["json_object", "json_object"])
+  })
+
+  it("repairs citation grounding failures and errors after the second invalid response", async () => {
+    const responses = [
+      JSON.stringify({ answer: "Outside", citations: [{ startSec: 50, endSec: 60 }] }),
+      JSON.stringify({ answer: "Still outside", citations: [{ startSec: 50, endSec: 60 }] })
+    ]
+    const client = {
+      provider: { baseUrl: "https://api.example.com/v1", apiKey: "sk-test-placeholder", model: "gpt-4.1-mini" },
+      testConnection: async () => ({ ok: true as const, baseUrl: "https://api.example.com/v1", model: "gpt-4.1-mini", latencyMs: 1 }),
+      createChatCompletion: async () => responses.shift() ?? "unexpected"
+    }
+    await expect(askVideo({
+      provider: client.provider,
+      question: "Where?",
+      transcript: { videoId: "video-1", cues: TRANSCRIPT_CUES },
+      client: client as never
+    })).rejects.toThrow("after one repair attempt")
+  })
   it("builds prompts with transcript context and JSON instructions", () => {
     const prompt = buildAskVideoPrompt({
       question: "Where does the demo start?",

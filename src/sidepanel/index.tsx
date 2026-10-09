@@ -5,9 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import type {
-  AnalysisKeyPoint,
-  AnalysisResult,
-  AnalysisTopic,
+  VideoAnalysis,
+  VideoAnalysisKeyPoint,
   AskVideoAnswer
 } from "@/features/analysis/lib/analysis-schema"
 import { AnalysisToolbar } from "@/features/analysis/components/analysis-toolbar"
@@ -16,7 +15,6 @@ import { CurrentVideoCard } from "@/features/analysis/components/current-video-c
 import { KeyPointsList } from "@/features/analysis/components/key-points-list"
 import { SegmentTimeline, type SegmentTimelineItem } from "@/features/analysis/components/segment-timeline"
 import { SummaryCard } from "@/features/analysis/components/summary-card"
-import { TopicsPanel } from "@/features/analysis/components/topics-panel"
 import { EmptyState } from "@/features/common/components/empty-state"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import { RecentAnalysisList, type RecentAnalysisListItem } from "@/features/history/components/recent-analysis-list"
@@ -25,6 +23,7 @@ import {
   isPendingHistoryOpenPayload
 } from "@/features/history/lib/pending-history-open"
 import { askVideo } from "@/features/analysis/lib/ask-video"
+import { persistedLegacyAnalysisToVideoAnalysis } from "@/features/analysis/lib/analysis-compat"
 import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
 import { settingsStorage, type ProviderConfigRecord } from "@/features/settings/lib/settings-storage"
 import { downloadRawVtt } from "@/features/transcript/lib/download-vtt"
@@ -46,8 +45,7 @@ type AnalysisView = {
   contentKey: string
   title: string
   summary: string
-  keyPoints: AnalysisKeyPoint[]
-  topics: AnalysisTopic[]
+  keyPoints: VideoAnalysisKeyPoint[]
   segments: SegmentTimelineItem[]
   lastAnalyzedAt: string | null
   errorMessage: string | null
@@ -79,21 +77,17 @@ function formatTimestamp(timestampSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`
 }
 
-function createAnalysisContext(view: AnalysisView): AnalysisResult {
-  const segments = view.segments.map((segment) => ({
-    id: segment.id,
-    title: segment.title,
-    summary: segment.summary,
-    startSec: segment.startSec,
-    endSec: segment.endSec
-  }))
-
+function createAnalysisContext(view: AnalysisView): VideoAnalysis {
   return {
     summary: view.summary,
     keyPoints: view.keyPoints,
-    topics: view.topics,
-    segments,
-    moments: segments
+    chapters: view.segments.map((segment) => ({
+      title: segment.title,
+      summary: segment.summary,
+      detail: segment.detail,
+      startSec: segment.startSec,
+      endSec: segment.endSec
+    }))
   }
 }
 
@@ -178,19 +172,20 @@ function SidepanelWorkspace() {
         return
       }
 
+      const canonical = persistedLegacyAnalysisToVideoAnalysis(analysis, analysis.segments)
       setAnalysisView({
         platform: "youtube",
         videoId,
         partId: null,
         contentKey: `youtube:${videoId}`,
         title: recent?.title ?? videoId,
-        summary: analysis.summary,
-        keyPoints: analysis.keyPoints,
-        topics: analysis.topics,
-        segments: analysis.segments.map((segment) => ({
-          id: segment.id,
+        summary: canonical.summary,
+        keyPoints: canonical.keyPoints,
+        segments: canonical.chapters.map((segment, index) => ({
+          id: analysis.segments[index]?.id ?? `chapter-${index}`,
           title: segment.title,
           summary: segment.summary,
+          detail: segment.detail,
           startSec: segment.startSec,
           endSec: segment.endSec
         })),
@@ -343,7 +338,8 @@ function SidepanelWorkspace() {
         transcript: {
           videoId: video.videoId,
           title: video.title,
-          cues
+          cues,
+          durationSec: video.durationSec
         },
         signal: controller.signal
       })
@@ -377,18 +373,19 @@ function SidepanelWorkspace() {
             status: "completed",
             summary: completed.analysis.summary,
             keyPoints: completed.analysis.keyPoints,
-            topics: completed.analysis.topics,
+            topics: [],
             errorMessage: null,
             createdAt: now,
             updatedAt: now,
             completedAt: now
           },
-          segments: completed.analysis.moments.map((segment) => ({
+          segments: completed.analysis.chapters.map((segment, index) => ({
             id: crypto.randomUUID(),
             analysisRunId,
             videoId: video.videoId,
             title: segment.title,
             summary: segment.summary,
+            detail: segment.detail,
             startSec: segment.startSec,
             endSec: segment.endSec,
             createdAt: now,
@@ -423,11 +420,11 @@ function SidepanelWorkspace() {
           title: video.title,
           summary: completed.analysis.summary,
           keyPoints: completed.analysis.keyPoints,
-          topics: completed.analysis.topics,
-          segments: completed.analysis.moments.map((segment) => ({
-            id: segment.id,
+          segments: completed.analysis.chapters.map((segment, index) => ({
+            id: `chapter-${index}`,
             title: segment.title,
             summary: segment.summary,
+            detail: segment.detail,
             startSec: segment.startSec,
             endSec: segment.endSec,
           })),
@@ -674,7 +671,6 @@ function SidepanelWorkspace() {
               onJump={handleJump}
               formatTimestamp={formatTimestamp}
             />
-            <TopicsPanel topics={analysisView?.topics ?? []} isLoading={showAnalysisSkeletons} />
           </div>
         </div>
         <div className="grid min-w-0 gap-3 xl:grid-cols-[1.05fr,0.95fr]">

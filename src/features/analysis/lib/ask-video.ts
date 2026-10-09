@@ -1,6 +1,6 @@
 import {
   parseAskVideoAnswer,
-  type AnalysisResult,
+  type VideoAnalysis,
   type AskVideoAnswer,
   type TimestampRange
 } from "@/features/analysis/lib/analysis-schema"
@@ -11,6 +11,8 @@ import {
 } from "@/features/analysis/lib/prompts"
 import type { ProviderConnectionInput } from "@/features/settings/lib/provider-schema"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
+import { parseStructuredJsonObject, conciseStructuredIssues } from "@/features/analysis/lib/parse-video-analysis"
+import { buildAskRepairPrompt } from "@/features/analysis/lib/structured-output-repair"
 
 type AskVideoClient = ReturnType<typeof createOpenAICompatibleClient>
 
@@ -19,7 +21,7 @@ export type AskVideoPromptInput = {
   videoId: string
   videoTitle?: string | null
   transcriptCues: TranscriptCue[]
-  analysis?: AnalysisResult | null
+  analysis?: VideoAnalysis | null
 }
 
 export type AskVideoOptions = {
@@ -30,7 +32,7 @@ export type AskVideoOptions = {
     title?: string | null
     cues: TranscriptCue[]
   }
-  analysis?: AnalysisResult | null
+  analysis?: VideoAnalysis | null
   client?: AskVideoClient
 }
 
@@ -38,6 +40,7 @@ export type AskVideoResult = {
   videoId: string
   answer: AskVideoAnswer
   rawResponse: string
+  repairAttempted: boolean
 }
 
 export function buildAskVideoPrompt({
@@ -88,7 +91,15 @@ export function parseAskVideoAnswerPayload(
   input: unknown,
   transcriptCues: TranscriptCue[]
 ): AskVideoAnswer {
-  const parsed = parseAskVideoAnswer(parseJsonObject(input))
+  let parsed
+  try {
+    parsed = parseAskVideoAnswer(parseStructuredJsonObject(input))
+  } catch (error) {
+    if (error instanceof Error && error.message === "Structured output was not valid JSON.") {
+      throw new Error("Ask AI returned invalid JSON.")
+    }
+    throw error
+  }
 
   // Models occasionally hallucinate citations or suggested jumps a few
   // tenths of a second outside the transcript bounds, or over a stretch
@@ -138,7 +149,7 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
     analysis: options.analysis
   })
 
-  const rawResponse = await client.createChatCompletion({
+  let rawResponse = await client.createChatCompletion({
     messages: [
       {
         role: "system",
@@ -152,22 +163,37 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
     responseFormat: "json_object"
   })
 
+  let repairAttempted = false
+  let answer: AskVideoAnswer
+  try {
+    answer = parseAskVideoAnswerPayload(rawResponse, options.transcript.cues)
+  } catch (initialError) {
+    repairAttempted = true
+    const repairPrompt = buildAskRepairPrompt({
+      originalTask: prompt.userPrompt,
+      validationError: initialError,
+      previousResponse: rawResponse
+    })
+    try {
+      rawResponse = await client.createChatCompletion({
+        messages: [
+          { role: "system", content: repairPrompt.systemPrompt },
+          { role: "user", content: repairPrompt.userPrompt }
+        ],
+        responseFormat: "json_object"
+      })
+      answer = parseAskVideoAnswerPayload(rawResponse, options.transcript.cues)
+    } catch (repairError) {
+      const issue = repairError instanceof Error ? repairError.message : conciseStructuredIssues(repairError)
+      throw new Error(`Provider returned invalid Ask AI response after one repair attempt. ${issue}`)
+    }
+  }
+
   return {
     videoId: options.transcript.videoId,
-    answer: parseAskVideoAnswerPayload(rawResponse, options.transcript.cues),
-    rawResponse
-  }
-}
-
-function parseJsonObject(input: unknown) {
-  if (typeof input !== "string") {
-    return input
-  }
-
-  try {
-    return JSON.parse(input) as unknown
-  } catch {
-    throw new Error("Ask AI returned invalid JSON.")
+    answer,
+    rawResponse,
+    repairAttempted
   }
 }
 
@@ -229,11 +255,10 @@ function clampRangeToTranscript<T extends TimestampRange>(
   }
 }
 
-function summarizeAnalysisForPrompt(analysis: AnalysisResult) {
+function summarizeAnalysisForPrompt(analysis: VideoAnalysis) {
   return {
     summary: analysis.summary,
     keyPoints: analysis.keyPoints,
-    topics: analysis.topics,
-    moments: analysis.moments
+    chapters: analysis.chapters
   }
 }

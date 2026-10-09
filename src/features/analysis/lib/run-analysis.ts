@@ -1,10 +1,12 @@
-import type { AnalysisResult } from "@/features/analysis/lib/analysis-schema"
+import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
 import { chunkTranscript, type ChunkTranscriptOptions } from "@/features/analysis/lib/chunk-transcript"
 import {
   buildChunkAnalysisPrompt,
   buildFinalAnalysisPrompt
 } from "@/features/analysis/lib/prompts"
-import { repairAnalysisResult } from "@/features/analysis/lib/repair-analysis"
+import { normalizeVideoAnalysis } from "@/features/analysis/lib/normalize-video-analysis"
+import { parseVideoAnalysisPayload } from "@/features/analysis/lib/parse-video-analysis"
+import { buildVideoAnalysisRepairPrompt } from "@/features/analysis/lib/structured-output-repair"
 import { createOpenAICompatibleClient } from "@/features/analysis/lib/openai-compatible-client"
 import type { ProviderConnectionInput } from "@/features/settings/lib/provider-schema"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
@@ -17,6 +19,7 @@ export type RunAnalysisOptions = {
     videoId: string
     title?: string | null
     cues: TranscriptCue[]
+    durationSec?: number | null
   }
   chunking?: ChunkTranscriptOptions
   client?: AnalysisClient
@@ -46,8 +49,9 @@ export type ChunkAnalysisResult = {
 export type RunAnalysisResult = {
   videoId: string
   chunkSummaries: ChunkAnalysisResult[]
-  analysis: AnalysisResult
+  analysis: VideoAnalysis
   rawResponse: string
+  repairAttempted: boolean
 }
 
 export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnalysisResult> {
@@ -96,7 +100,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     chunkSummaries
   })
 
-  const rawResponse = await client.createChatCompletion({
+  let rawResponse = await client.createChatCompletion({
     messages: [
       {
         role: "system",
@@ -110,14 +114,46 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     responseFormat: "json_object",
     signal
   })
-  const analysis = repairAnalysisResult(rawResponse, {
-    transcriptCues: options.transcript.cues
-  })
+  let repairAttempted = false
+  let analysis: VideoAnalysis
+  try {
+    analysis = normalizeVideoAnalysis(parseVideoAnalysisPayload(rawResponse), {
+      transcriptCues: options.transcript.cues,
+      durationSec: options.transcript.durationSec
+    })
+  } catch (initialError) {
+    throwIfAborted(signal)
+    repairAttempted = true
+    const repairPrompt = buildVideoAnalysisRepairPrompt({
+      originalTask: finalPrompt.userPrompt,
+      validationError: initialError,
+      previousResponse: rawResponse
+    })
+    try {
+      rawResponse = await client.createChatCompletion({
+        messages: [
+          { role: "system", content: repairPrompt.systemPrompt },
+          { role: "user", content: repairPrompt.userPrompt }
+        ],
+        responseFormat: "json_object",
+        signal
+      })
+      analysis = normalizeVideoAnalysis(parseVideoAnalysisPayload(rawResponse), {
+        transcriptCues: options.transcript.cues,
+        durationSec: options.transcript.durationSec
+      })
+    } catch (repairError) {
+      if (repairError instanceof AnalysisAbortedError || signal?.aborted) throw repairError
+      const issue = repairError instanceof Error ? repairError.message : "invalid schema"
+      throw new Error(`Provider returned invalid structured video analysis after one repair attempt. ${issue}`)
+    }
+  }
 
   return {
     videoId: options.transcript.videoId,
     chunkSummaries,
     analysis,
-    rawResponse
+    rawResponse,
+    repairAttempted
   }
 }

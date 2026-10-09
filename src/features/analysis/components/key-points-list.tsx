@@ -52,7 +52,7 @@ export function KeyPointsList({
           <ul className="flex flex-col gap-2">
             {keyPoints.map((point, index) => (
               <li
-                key={"id" in point && point.id ? point.id : `kp-${index}`}
+                key={`kp-${index}`}
                 className="flex min-w-0 gap-3 rounded-lg border border-border/70 bg-background/80 p-3">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">

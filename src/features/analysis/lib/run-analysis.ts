@@ -1,13 +1,31 @@
-import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
-import { chunkTranscript, type ChunkTranscriptOptions } from "@/features/analysis/lib/chunk-transcript"
 import {
-  buildChunkAnalysisPrompt,
-  buildFinalAnalysisPrompt
-} from "@/features/analysis/lib/prompts"
+  DEFAULT_ANALYSIS_BUDGET_POLICY,
+  AnalysisInputBudgetExceededError,
+  validateAnalysisBudgetPolicy,
+  type AnalysisBudgetPolicy
+} from "@/features/analysis/lib/analysis-budget"
+import {
+  finalAnalysisPromptFits,
+  planReductionGroups,
+  planTranscriptChunks,
+  promptMessages,
+  repairPromptFitsBudget,
+  selectAnalysisStrategy,
+  type AnalysisStrategy
+} from "@/features/analysis/lib/analysis-plan"
+import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
+import { createOpenAICompatibleClient } from "@/features/analysis/lib/openai-compatible-client"
 import { normalizeVideoAnalysis } from "@/features/analysis/lib/normalize-video-analysis"
 import { parseVideoAnalysisPayload } from "@/features/analysis/lib/parse-video-analysis"
+import {
+  buildChunkAnalysisPrompt,
+  buildDirectAnalysisPrompt,
+  buildFinalAnalysisPrompt,
+  buildSummaryReductionPrompt,
+  type AnalysisPrompt,
+  type EvidenceSummary
+} from "@/features/analysis/lib/prompts"
 import { buildVideoAnalysisRepairPrompt } from "@/features/analysis/lib/structured-output-repair"
-import { createOpenAICompatibleClient } from "@/features/analysis/lib/openai-compatible-client"
 import type { ProviderConnectionInput } from "@/features/settings/lib/provider-schema"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
@@ -21,7 +39,7 @@ export type RunAnalysisOptions = {
     cues: TranscriptCue[]
     durationSec?: number | null
   }
-  chunking?: ChunkTranscriptOptions
+  budgetPolicy?: AnalysisBudgetPolicy
   client?: AnalysisClient
   signal?: AbortSignal
 }
@@ -34,20 +52,16 @@ export class AnalysisAbortedError extends Error {
 }
 
 function throwIfAborted(signal: AbortSignal | undefined) {
-  if (signal?.aborted) {
-    throw new AnalysisAbortedError()
-  }
+  if (signal?.aborted) throw new AnalysisAbortedError()
 }
 
-export type ChunkAnalysisResult = {
-  chunkId: string
-  startSec: number
-  endSec: number
-  summary: string
-}
+export type ChunkAnalysisResult = EvidenceSummary
 
 export type RunAnalysisResult = {
   videoId: string
+  strategy: AnalysisStrategy
+  initialChunkCount: number
+  reductionLevels: number
   chunkSummaries: ChunkAnalysisResult[]
   analysis: VideoAnalysis
   rawResponse: string
@@ -59,10 +73,39 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     throw new Error("Transcript cues are required to run analysis.")
   }
 
+  const budgetPolicy = options.budgetPolicy ?? DEFAULT_ANALYSIS_BUDGET_POLICY
+  validateAnalysisBudgetPolicy(budgetPolicy)
+  const strategy = selectAnalysisStrategy({
+    videoTitle: options.transcript.title,
+    cues: options.transcript.cues,
+    budgetPolicy
+  })
   const client = options.client ?? createOpenAICompatibleClient(options.provider)
-  const chunks = chunkTranscript(options.transcript.cues, options.chunking)
-  const chunkSummaries: ChunkAnalysisResult[] = []
   const { signal } = options
+  throwIfAborted(signal)
+
+  if (strategy === "single-pass") {
+    const prompt = buildDirectAnalysisPrompt({
+      videoTitle: options.transcript.title,
+      cues: options.transcript.cues
+    })
+    const structured = await requestStructuredAnalysis({ client, prompt, options })
+    return {
+      videoId: options.transcript.videoId,
+      strategy,
+      initialChunkCount: 0,
+      reductionLevels: 0,
+      chunkSummaries: [],
+      ...structured
+    }
+  }
+
+  const chunks = planTranscriptChunks({
+    videoTitle: options.transcript.title,
+    cues: options.transcript.cues,
+    budgetPolicy
+  })
+  const chunkSummaries: ChunkAnalysisResult[] = []
 
   for (const chunk of chunks) {
     throwIfAborted(signal)
@@ -70,21 +113,11 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
       chunk,
       videoTitle: options.transcript.title
     })
-
-    const summary = await client.createChatCompletion({
-      messages: [
-        {
-          role: "system",
-          content: prompt.systemPrompt
-        },
-        {
-          role: "user",
-          content: prompt.userPrompt
-        }
-      ],
+    const summary = await requestCompletion(client, {
+      messages: promptMessages(prompt),
+      responseFormat: "text",
       signal
-    })
-
+    }, signal)
     chunkSummaries.push({
       chunkId: chunk.id,
       startSec: chunk.startSec,
@@ -93,67 +126,135 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     })
   }
 
-  throwIfAborted(signal)
+  let survivingSummaries: EvidenceSummary[] = chunkSummaries
+  let reductionLevels = 0
+  while (!finalAnalysisPromptFits({
+    videoTitle: options.transcript.title,
+    summaries: survivingSummaries,
+    budgetPolicy
+  })) {
+    const nextLevel = reductionLevels + 1
+    const groups = planReductionGroups({
+      level: nextLevel,
+      summaries: survivingSummaries,
+      budgetPolicy
+    })
+    const reduced: EvidenceSummary[] = []
+    for (const [groupIndex, group] of groups.entries()) {
+      throwIfAborted(signal)
+      if (group.length === 1) {
+        reduced.push(group[0])
+        continue
+      }
+
+      const prompt = buildSummaryReductionPrompt({ level: nextLevel, summaries: group })
+      const summary = await requestCompletion(client, {
+        messages: promptMessages(prompt),
+        responseFormat: "text",
+        signal
+      }, signal)
+      reduced.push({
+        chunkId: `reduction-${nextLevel}-${groupIndex + 1}`,
+        startSec: Math.min(...group.map((node) => node.startSec)),
+        endSec: Math.max(...group.map((node) => node.endSec)),
+        summary
+      })
+    }
+    if (reduced.length >= survivingSummaries.length) {
+      throw new Error("Reduction budget is too small to make progress safely.")
+    }
+    survivingSummaries = reduced
+    reductionLevels = nextLevel
+  }
 
   const finalPrompt = buildFinalAnalysisPrompt({
     videoTitle: options.transcript.title,
-    chunkSummaries
+    chunkSummaries: survivingSummaries
   })
+  const structured = await requestStructuredAnalysis({ client, prompt: finalPrompt, options })
+  return {
+    videoId: options.transcript.videoId,
+    strategy,
+    initialChunkCount: chunks.length,
+    reductionLevels,
+    chunkSummaries,
+    ...structured
+  }
+}
 
-  let rawResponse = await client.createChatCompletion({
-    messages: [
-      {
-        role: "system",
-        content: finalPrompt.systemPrompt
-      },
-      {
-        role: "user",
-        content: finalPrompt.userPrompt
-      }
-    ],
+async function requestStructuredAnalysis(input: {
+  client: AnalysisClient
+  prompt: AnalysisPrompt
+  options: RunAnalysisOptions
+}): Promise<Pick<RunAnalysisResult, "analysis" | "rawResponse" | "repairAttempted">> {
+  const { signal } = input.options
+  throwIfAborted(signal)
+  let rawResponse = await requestCompletion(input.client, {
+    messages: promptMessages(input.prompt),
     responseFormat: "json_object",
     signal
-  })
+  }, signal)
   let repairAttempted = false
-  let analysis: VideoAnalysis
   try {
-    analysis = normalizeVideoAnalysis(parseVideoAnalysisPayload(rawResponse), {
-      transcriptCues: options.transcript.cues,
-      durationSec: options.transcript.durationSec
-    })
+    return {
+      analysis: parseAndNormalize(rawResponse, input.options),
+      rawResponse,
+      repairAttempted
+    }
   } catch (initialError) {
     throwIfAborted(signal)
     repairAttempted = true
     const repairPrompt = buildVideoAnalysisRepairPrompt({
-      originalTask: finalPrompt.userPrompt,
+      originalTask: input.prompt.userPrompt,
       validationError: initialError,
       previousResponse: rawResponse
     })
+    const budgetPolicy = input.options.budgetPolicy ?? DEFAULT_ANALYSIS_BUDGET_POLICY
+    if (!repairPromptFitsBudget(repairPrompt, budgetPolicy)) {
+      throw new AnalysisInputBudgetExceededError(
+        "Structured repair exceeds the safe analysis input budget."
+      )
+    }
     try {
-      rawResponse = await client.createChatCompletion({
-        messages: [
-          { role: "system", content: repairPrompt.systemPrompt },
-          { role: "user", content: repairPrompt.userPrompt }
-        ],
+      throwIfAborted(signal)
+      rawResponse = await requestCompletion(input.client, {
+        messages: promptMessages(repairPrompt),
         responseFormat: "json_object",
         signal
-      })
-      analysis = normalizeVideoAnalysis(parseVideoAnalysisPayload(rawResponse), {
-        transcriptCues: options.transcript.cues,
-        durationSec: options.transcript.durationSec
-      })
+      }, signal)
+      return {
+        analysis: parseAndNormalize(rawResponse, input.options),
+        rawResponse,
+        repairAttempted
+      }
     } catch (repairError) {
-      if (repairError instanceof AnalysisAbortedError || signal?.aborted) throw repairError
+      if (repairError instanceof AnalysisAbortedError || signal?.aborted) {
+        throw new AnalysisAbortedError()
+      }
       const issue = repairError instanceof Error ? repairError.message : "invalid schema"
-      throw new Error(`Provider returned invalid structured video analysis after one repair attempt. ${issue}`)
+      throw new Error(
+        `Provider returned invalid structured video analysis after one repair attempt. ${issue}`
+      )
     }
   }
+}
 
-  return {
-    videoId: options.transcript.videoId,
-    chunkSummaries,
-    analysis,
-    rawResponse,
-    repairAttempted
+function parseAndNormalize(rawResponse: string, options: RunAnalysisOptions) {
+  return normalizeVideoAnalysis(parseVideoAnalysisPayload(rawResponse), {
+    transcriptCues: options.transcript.cues,
+    durationSec: options.transcript.durationSec
+  })
+}
+
+async function requestCompletion(
+  client: AnalysisClient,
+  request: Parameters<AnalysisClient["createChatCompletion"]>[0],
+  signal: AbortSignal | undefined
+) {
+  try {
+    return await client.createChatCompletion(request)
+  } catch (error) {
+    if (signal?.aborted) throw new AnalysisAbortedError()
+    throw error
   }
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test"
 
-import { parseVideoAnalysis, parseAskVideoAnswer } from "@/features/analysis/lib/analysis-schema"
+import {
+  parseVideoAnalysis,
+  parseAskVideoAnswer,
+  VIDEO_ANALYSIS_PROMPT_VERSION,
+  VIDEO_ANALYSIS_SCHEMA_VERSION
+} from "@/features/analysis/lib/analysis-schema"
 
 describe("VideoAnalysis schema", () => {
   const valid = {
@@ -17,6 +22,11 @@ describe("VideoAnalysis schema", () => {
 
   it("accepts valid structured analysis payloads", () => {
     expect(parseVideoAnalysis(valid)).toEqual(valid)
+  })
+
+  it("keeps schema v1 while versioning the Task 6 prompt/runtime", () => {
+    expect(VIDEO_ANALYSIS_SCHEMA_VERSION).toBe(1)
+    expect(VIDEO_ANALYSIS_PROMPT_VERSION).toBe("video-analysis-v2")
   })
 
   it("allows untimed key points but requires paired timestamps", () => {

@@ -2,7 +2,7 @@ import { z } from "zod"
 
 /** Bumped whenever the persisted/model-facing analysis contract changes. */
 export const VIDEO_ANALYSIS_SCHEMA_VERSION = 1
-export const VIDEO_ANALYSIS_PROMPT_VERSION = "video-analysis-v1"
+export const VIDEO_ANALYSIS_PROMPT_VERSION = "video-analysis-v2"
 
 export const timestampRangeSchema = z.object({
   startSec: z.number().finite().min(0),

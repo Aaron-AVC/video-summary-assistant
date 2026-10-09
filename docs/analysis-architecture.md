@@ -1,6 +1,6 @@
-# Structured video analysis architecture
+# Video analysis architecture
 
-Task 5 defines `VideoAnalysis` as the only fresh-analysis domain contract:
+Task 6 keeps `VideoAnalysis` as the only fresh-analysis domain contract:
 
 ```ts
 interface VideoAnalysis {
@@ -16,47 +16,100 @@ interface VideoAnalysis {
 }
 ```
 
-The model-facing versions are `VIDEO_ANALYSIS_SCHEMA_VERSION = 1` and
-`VIDEO_ANALYSIS_PROMPT_VERSION = "video-analysis-v1"`. The model never supplies
-IDs; UI and persistence create local identities.
+The model-facing schema remains `VIDEO_ANALYSIS_SCHEMA_VERSION = 1`. The prompt
+and runtime version is `VIDEO_ANALYSIS_PROMPT_VERSION = "video-analysis-v2"`
+because Task 6 changes direct, map, reduction, and final prompts. The model never
+supplies local IDs or reduction metadata.
 
-## Processing pipeline
+## Central budget and estimator
 
-1. The provider returns JSON with `response_format: { type: "json_object" }`.
-2. `parse-video-analysis.ts` trims input, removes at most one Markdown fence,
-   parses one JSON object, and rejects arrays, fragments, JSON5, and guessed
-   repairs.
-3. Zod validates the strict `summary`/`keyPoints`/`chapters` schema.
-4. `normalize-video-analysis.ts` clamps to transcript and finite duration
-   bounds, snaps ranges to deterministic cue boundaries, sorts chapters,
-   deduplicates exact normalized ranges, and preserves untimed key points.
-5. If any step fails, exactly one repair request is made with the same provider
-   client and explicit model. The repair response follows the same pipeline.
-   A second failure is surfaced as a structured-analysis error; no fallback
-   chapter or fake key point is generated.
+`token-estimate.ts` provides a deterministic, provider-agnostic heuristic. ASCII
+text uses a conservative characters-per-token estimate; non-ASCII code points
+are charged approximately one token each before a safety multiplier. Chat and
+message overhead are included. This estimate is not an exact tokenizer count and
+does not claim a provider/model context size.
 
-Transcript text, chunk summaries, and the previous invalid model response are
-always marked as untrusted evidence. The repair prompt never treats them as
-instructions.
+`analysis-budget.ts` is the single runtime policy. The default planning target is
+a conservative 16,000-token context estimate with 2,000 tokens reserved for the
+completion and 2,000 more reserved for a possible repair. Tests inject smaller
+policies to force each strategy. Invalid or non-positive policies fail before a
+provider request.
 
-## Ask AI
+## Strategy selection
 
-Ask AI uses its own strict answer/citation schema. Parse, transcript-ground,
-and drop invalid citations first; then make at most one repair request. The
-repair response is parsed and grounded again before it reaches the UI. Both
-attempts use the same provider client and model.
+The runtime first constructs the actual direct prompt, including title,
+instructions, cue timestamps, and transcript text, and estimates its complete
+system/user message pair.
 
-## Persistence compatibility
+- If it fits, `single-pass` sends one structured request. Invalid structured
+  output may make exactly one repair request.
+- If it does not fit, `map-reduce` plans deterministic chunks, creates prose map
+  summaries, hierarchically consolidates them only when necessary, and sends one
+  final structured request. That final output may also make exactly one repair
+  request.
 
-Existing rows may still contain `topics`, `segments`, and `moments`. Those fields
-are accepted only by the persistence compatibility adapter and projected into
-`VideoAnalysis.chapters`; missing historical `detail` becomes the old segment
-`summary`. Fresh model output never accepts these legacy fields. New chapter
-rows persist `title`, `summary`, `detail`, `startSec`, and `endSec`; `topics: []`
-is retained only as a bounded storage compatibility field.
+`RunAnalysisResult` reports the strategy, initial chunk count, reduction-level
+count, and initial map summaries. Intermediate reduction nodes remain in memory
+and are not persisted as chunk summaries. `rawResponse` is the final accepted
+structured response.
 
-## Scope boundary
+## Long-video map and reduction
 
-The existing chunk-summary/final-merge orchestration remains the baseline. Token
-estimation, long-video thresholds, map/reduce budgets, parallel scheduling,
-cache migration, and the full Side Panel redesign remain deferred to Tasks 6–8.
+Chunk planning greedily adds transcript cues while the actual map prompt fits the
+central input budget. Boundaries occur only between `TranscriptSegment` entries;
+cues are never split, duplicated, omitted, or silently truncated. A cue whose
+single-cue map prompt is oversized fails before any provider call.
+
+Each map prompt includes every cue's start/end time and treats transcript text as
+untrusted evidence. Map calls are sequential and return concise prose, not JSON.
+Each result is bound to the chunk's locally computed source range.
+
+Before the final request, the runtime estimates the actual final prompt. If it is
+oversized, adjacent summaries are greedily grouped into sequential prose
+reduction calls. A reduction node's range is the local minimum start and maximum
+end of its children; the model never chooses the range. Each level must reduce
+the node count. If no adjacent pair can fit, processing fails with a clear
+no-progress error instead of looping or rewriting single nodes indefinitely.
+Actual generated summaries are re-estimated at every level, so unexpectedly
+large output fails safely rather than being sliced.
+
+Transcript blocks use dedicated untrusted transcript markers. Map outputs use
+separate untrusted partial-analysis markers in reduction, final, and repair
+prompts. Instructions appearing inside either evidence block are never promoted
+to system instructions.
+
+## Structured validation and repair
+
+Direct and long-video final requests share the same canonical JSON instructions
+and the same parse/validation/normalization helper:
+
+1. parse exactly one JSON object;
+2. validate strict `summary` / `keyPoints` / `chapters` fields with Zod;
+3. require every timestamped chapter/key point to overlap the complete original
+   transcript evidence inside the effective video duration (CR-05);
+4. clamp/snap, sort, and deterministically deduplicate;
+5. on failure, make at most one same-provider/same-model structured repair and
+   run the repaired response through the same pipeline.
+
+No fallback chapter, key point, silent JSON repair, or map/reduce retry is
+generated. The repair prompt is also estimated against the central budget.
+
+## Provider, cancellation, and execution order
+
+One resolved client and explicit model are reused for every map, reduction,
+final, and repair call. All calls receive the same abort signal. The runtime
+checks cancellation before every stage and converts in-flight provider aborts to
+`AnalysisAbortedError`, preventing later calls. Map and reduction calls are
+strictly sequential; Task 6 adds no parallel scheduling.
+
+Provider permissions remain the existing optional host capability. Analyze does
+not request permissions. Provider errors continue through the central redaction
+boundary.
+
+## Compatibility and deferred scope
+
+Legacy persisted `topics`, `segments`, and `moments` remain behind the existing
+compatibility adapter. Fresh output accepts only canonical `VideoAnalysis`, and
+new chapter `detail` persistence is unchanged. Ask AI, platform-native chapter
+fusion, cache/content-key migration, transcript fingerprints, progress UI, and
+the Side Panel redesign remain outside Task 6 (Tasks 7-8 where applicable).

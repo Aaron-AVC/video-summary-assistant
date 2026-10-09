@@ -1,233 +1,431 @@
 import { describe, expect, it } from "bun:test"
 
+import {
+  finalAnalysisPromptFits,
+  planReductionGroups,
+  planTranscriptChunks,
+  selectAnalysisStrategy
+} from "@/features/analysis/lib/analysis-plan"
+import {
+  AnalysisInputBudgetExceededError,
+  ReductionCannotProgressError,
+  type AnalysisBudgetPolicy
+} from "@/features/analysis/lib/analysis-budget"
+import type { EvidenceSummary } from "@/features/analysis/lib/prompts"
 import { runAnalysis } from "@/features/analysis/lib/run-analysis"
+import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
-describe("runAnalysis", () => {
-  function providerClient(responses: string[], calls: string[]) {
-    return {
-      provider: {
-        baseUrl: "https://api.example.com/v1",
-        apiKey: "sk-test-placeholder",
-        model: "gpt-4.1-mini"
-      },
-      testConnection: async () => ({ ok: true as const, baseUrl: "https://api.example.com/v1", model: "gpt-4.1-mini", latencyMs: 1 }),
-      createChatCompletion: async ({ responseFormat, messages }: { responseFormat?: string, messages: Array<{ content?: string }> }) => {
-        calls.push(responseFormat ?? "text")
-        if (responseFormat === "json_object") {
-          const response = responses.shift()
-          if (!response) throw new Error("unexpected structured call")
-          return response
-        }
-        return "chunk summary"
+type Call = {
+  responseFormat?: "json_object" | "text"
+  system: string
+  user: string
+  signal?: AbortSignal
+}
+
+const provider = {
+  baseUrl: "https://api.example.com/v1",
+  apiKey: "sk-test-placeholder",
+  model: "test-model"
+}
+
+const shortTranscript = {
+  videoId: "video-1",
+  title: "Video",
+  cues: [{ startSec: 0, endSec: 10, text: "Transcript" }]
+}
+
+function validResponse(endSec = 10) {
+  return JSON.stringify({
+    summary: "Summary",
+    keyPoints: [{ text: "Point", startSec: 0, endSec }],
+    chapters: [{
+      title: "Opening",
+      summary: "Short",
+      detail: "Longer detail",
+      startSec: 0,
+      endSec
+    }]
+  })
+}
+
+function createClient(
+  calls: Call[],
+  respond: (call: Call, callIndex: number) => string | Promise<string>
+) {
+  return {
+    provider,
+    testConnection: async () => ({
+      ok: true as const,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
+      latencyMs: 1
+    }),
+    createChatCompletion: async ({ messages, responseFormat, signal }: {
+      messages: Array<{ role: string, content: string }>
+      responseFormat?: "json_object" | "text"
+      signal?: AbortSignal
+    }) => {
+      const call: Call = {
+        responseFormat,
+        system: messages[0]?.content ?? "",
+        user: messages[1]?.content ?? "",
+        signal
       }
+      calls.push(call)
+      return respond(call, calls.length - 1)
     }
   }
+}
 
-  const transcript = {
-    videoId: "video-1",
-    title: "Video",
-    cues: [{ startSec: 0, endSec: 10, text: "Transcript" }]
-  }
+describe("runAnalysis", () => {
+  it("uses one structured request for a valid short transcript", async () => {
+    const calls: Call[] = []
+    const client = createClient(calls, () => validResponse())
+    const result = await runAnalysis({ provider, transcript: shortTranscript, client: client as never })
 
-  const validResponse = JSON.stringify({
-    summary: "Summary",
-    keyPoints: [{ text: "Point", startSec: 0, endSec: 10 }],
-    chapters: [{ title: "Opening", summary: "Short", detail: "Longer detail", startSec: 0, endSec: 10 }]
+    expect(result.strategy).toBe("single-pass")
+    expect(result.initialChunkCount).toBe(0)
+    expect(result.reductionLevels).toBe(0)
+    expect(result.chunkSummaries).toEqual([])
+    expect(result.repairAttempted).toBe(false)
+    expect(calls.map((call) => call.responseFormat)).toEqual(["json_object"])
+    expect(calls[0].user).toContain("1. 0s-10s: Transcript")
   })
 
-  it("repairs invalid first output exactly once", async () => {
-    const calls: string[] = []
-    const result = await runAnalysis({
-      provider: providerClient(["not json", validResponse], calls).provider,
-      transcript,
-      client: providerClient(["not json", validResponse], calls) as never
-    })
+  it("repairs one schema-invalid short response exactly once", async () => {
+    const calls: Call[] = []
+    const responses = [
+      JSON.stringify({
+        summary: "Summary",
+        keyPoints: [{ text: "Point" }],
+        chapters: [{ title: "Opening", summary: "Short", startSec: 0, endSec: 10 }]
+      }),
+      validResponse()
+    ]
+    const client = createClient(calls, () => responses.shift() ?? "unexpected")
+    const result = await runAnalysis({ provider, transcript: shortTranscript, client: client as never })
+    expect(result.strategy).toBe("single-pass")
     expect(result.repairAttempted).toBe(true)
-    expect(calls.filter((call) => call === "json_object")).toHaveLength(2)
+    expect(calls.map((call) => call.responseFormat)).toEqual(["json_object", "json_object"])
+    expect(calls[1].user).toContain("chapters.0.detail")
   })
 
-  it("repairs a schema-valid but ungrounded first response", async () => {
-    const calls: string[] = []
+  it("repairs CR-05 grounding failures and fails after the second invalid response", async () => {
     const ungrounded = JSON.stringify({
       summary: "Summary",
       keyPoints: [{ text: "Point", startSec: 100, endSec: 110 }],
-      chapters: [{ title: "Opening", summary: "Short", detail: "Longer detail", startSec: 100, endSec: 110 }]
+      chapters: [{
+        title: "Opening",
+        summary: "Short",
+        detail: "Longer detail",
+        startSec: 100,
+        endSec: 110
+      }]
     })
-    const valid = JSON.stringify({
-      summary: "Summary",
-      keyPoints: [{ text: "Point", startSec: 20, endSec: 30 }],
-      chapters: [{ title: "Closing", summary: "Short", detail: "Longer detail", startSec: 20, endSec: 30 }]
+    const repairedCalls: Call[] = []
+    const repairedResponses = [ungrounded, validResponse()]
+    const repairedClient = createClient(repairedCalls, () => repairedResponses.shift()!)
+    const repaired = await runAnalysis({
+      provider,
+      transcript: shortTranscript,
+      client: repairedClient as never
     })
-    const client = providerClient([ungrounded, valid], calls)
-    const result = await runAnalysis({
-      provider: client.provider,
-      transcript: { ...transcript, cues: [{ startSec: 0, endSec: 10, text: "one" }, { startSec: 20, endSec: 30, text: "two" }] },
-      client: client as never
-    })
-    expect(result.repairAttempted).toBe(true)
-    expect(result.analysis.chapters[0].startSec).toBe(20)
-    expect(calls.filter((call) => call === "json_object")).toHaveLength(2)
-  })
+    expect(repaired.repairAttempted).toBe(true)
+    expect(repairedCalls).toHaveLength(2)
+    expect(repairedCalls[1].user).toContain("does not overlap transcript evidence")
 
-  it("fails after one retry when both ranges remain ungrounded", async () => {
-    const calls: string[] = []
-    const ungrounded = JSON.stringify({
-      summary: "Summary",
-      keyPoints: [{ text: "Point", startSec: 100, endSec: 110 }],
-      chapters: [{ title: "Opening", summary: "Short", detail: "Longer detail", startSec: 100, endSec: 110 }]
-    })
-    const client = providerClient([ungrounded, ungrounded], calls)
+    const failedCalls: Call[] = []
+    const failedClient = createClient(failedCalls, () => ungrounded)
     await expect(runAnalysis({
-      provider: client.provider,
-      transcript,
-      client: client as never
+      provider,
+      transcript: shortTranscript,
+      client: failedClient as never
     })).rejects.toThrow("after one repair attempt")
-    expect(calls.filter((call) => call === "json_object")).toHaveLength(2)
+    expect(failedCalls).toHaveLength(2)
   })
 
-  it("fails after exactly one repair retry when both outputs are invalid", async () => {
-    const calls: string[] = []
-    const client = providerClient(["not json", "still not json"], calls)
-    await expect(runAnalysis({ provider: client.provider, transcript, client: client as never })).rejects.toThrow(
-      "after one repair attempt"
+  it("runs sequential maps then one final structured request when summaries fit", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief map summary", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
     )
-    expect(calls.filter((call) => call === "json_object")).toHaveLength(2)
+    const calls: Call[] = []
+    const client = createClient(calls, (call) =>
+      call.responseFormat === "json_object" ? validResponse(cues.at(-1)!.endSec) : "brief map summary"
+    )
+    const result = await runAnalysis({
+      provider,
+      transcript: { videoId: "long", title: "Long", cues },
+      budgetPolicy: scenario.policy,
+      client: client as never
+    })
+
+    expect(result.strategy).toBe("map-reduce")
+    expect(result.initialChunkCount).toBe(scenario.chunkCount)
+    expect(result.reductionLevels).toBe(0)
+    expect(result.chunkSummaries).toHaveLength(scenario.chunkCount)
+    expect(result.chunkSummaries[0].startSec).toBe(0)
+    expect(result.chunkSummaries.at(-1)!.endSec).toBe(cues.at(-1)!.endSec)
+    expect(calls.slice(0, -1).every((call) => call.responseFormat === "text")).toBe(true)
+    expect(calls.at(-1)!.responseFormat).toBe("json_object")
+    expect(calls).toHaveLength(scenario.chunkCount + 1)
   })
 
-  it("does not retry after cancellation", async () => {
-    const calls: string[] = []
-    const controller = new AbortController()
-    const client = providerClient(["not json"], calls)
-    controller.abort()
-    await expect(runAnalysis({ provider: client.provider, transcript, client: client as never, signal: controller.signal })).rejects.toThrow(
-      "cancelled"
+  it("performs deterministic adjacent one-level reduction with local union ranges", async () => {
+    const cues = longCues(10, 280)
+    const mapSummary = `map ${"m".repeat(260)}`
+    const reducedSummary = "condensed reduction"
+    const scenario = findScenario(cues, mapSummary, reducedSummary, (value) =>
+      value.chunkCount >= 4 && value.reductionLevels === 1
     )
+    const calls: Call[] = []
+    const client = createClient(calls, (call) => {
+      if (call.responseFormat === "json_object") return validResponse(cues.at(-1)!.endSec)
+      if (call.user.includes("Reduction level:")) return reducedSummary
+      return mapSummary
+    })
+    const result = await runAnalysis({
+      provider,
+      transcript: { videoId: "reduce", title: "Reduce", cues },
+      budgetPolicy: scenario.policy,
+      client: client as never
+    })
+
+    expect(result.reductionLevels).toBe(1)
+    const reductionCalls = calls.filter((call) => call.user.includes("Reduction level: 1"))
+    expect(reductionCalls.length).toBeGreaterThan(0)
+    for (const call of reductionCalls) {
+      const ranges = Array.from(call.user.matchAll(/chunk-\d+ \/ (\d+)s-(\d+)s/g))
+      expect(ranges.length).toBeGreaterThanOrEqual(2)
+      for (let index = 1; index < ranges.length; index += 1) {
+        expect(Number(ranges[index][1])).toBe(Number(ranges[index - 1][2]))
+      }
+    }
+    expect(calls.at(-1)!.user).toContain("reduction-1-")
+    expect(calls.at(-1)!.user).toContain("0s-")
+  })
+
+  it("supports multiple bounded reduction levels", async () => {
+    const cues = longCues(24, 300)
+    const mapSummary = `map ${"m".repeat(300)}`
+    const reducedSummary = `reduced ${"r".repeat(180)}`
+    const scenario = findScenario(cues, mapSummary, reducedSummary, (value) =>
+      value.chunkCount >= 8 && value.reductionLevels >= 2
+    )
+    const calls: Call[] = []
+    const client = createClient(calls, (call) => {
+      if (call.responseFormat === "json_object") return validResponse(cues.at(-1)!.endSec)
+      if (call.user.includes("Reduction level:")) return reducedSummary
+      return mapSummary
+    })
+    const result = await runAnalysis({
+      provider,
+      transcript: { videoId: "multi", title: "Multi", cues },
+      budgetPolicy: scenario.policy,
+      client: client as never
+    })
+    expect(result.reductionLevels).toBeGreaterThanOrEqual(2)
+    expect(calls.some((call) => call.user.includes("Reduction level: 1"))).toBe(true)
+    expect(calls.some((call) => call.user.includes("Reduction level: 2"))).toBe(true)
+    expect(calls.at(-1)!.responseFormat).toBe("json_object")
+  })
+
+  it("fails before provider calls for an oversized cue", async () => {
+    const calls: Call[] = []
+    const client = createClient(calls, () => "unexpected")
+    await expect(runAnalysis({
+      provider,
+      transcript: {
+        videoId: "oversized",
+        cues: [{ startSec: 0, endSec: 5, text: "x".repeat(20_000) }]
+      },
+      budgetPolicy: policyForInputBudget(300),
+      client: client as never
+    })).rejects.toThrow(AnalysisInputBudgetExceededError)
     expect(calls).toEqual([])
   })
 
-  it("summarizes chunks before requesting a final merge", async () => {
-    const prompts: string[] = []
-    let structuredCalls = 0
+  it("fails with bounded calls when reduction cannot make progress", async () => {
+    const cues = longCues(8, 280)
+    const mapSummary = `large ${"x".repeat(500)}`
+    const scenario = findNoProgressScenario(cues, mapSummary)
+    const calls: Call[] = []
+    const client = createClient(calls, () => mapSummary)
+    await expect(runAnalysis({
+      provider,
+      transcript: { videoId: "no-progress", cues },
+      budgetPolicy: scenario.policy,
+      client: client as never
+    })).rejects.toThrow(ReductionCannotProgressError)
+    expect(calls).toHaveLength(scenario.chunkCount)
+    expect(calls.every((call) => call.responseFormat === "text")).toBe(true)
+  })
+
+  it("stops subsequent calls when cancelled during map or reduction", async () => {
+    const mapCues = longCues(8, 260)
+    const mapScenario = findScenario(mapCues, "brief", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    const mapController = new AbortController()
+    const mapCalls: Call[] = []
+    const mapClient = createClient(mapCalls, () => {
+      mapController.abort()
+      return "brief"
+    })
+    await expect(runAnalysis({
+      provider,
+      transcript: { videoId: "cancel-map", cues: mapCues },
+      budgetPolicy: mapScenario.policy,
+      signal: mapController.signal,
+      client: mapClient as never
+    })).rejects.toThrow("cancelled")
+    expect(mapCalls).toHaveLength(1)
+
+    const reduceCues = longCues(10, 280)
+    const mapSummary = `map ${"m".repeat(260)}`
+    const reduceScenario = findScenario(reduceCues, mapSummary, "condensed", (value) =>
+      value.chunkCount >= 4 && value.reductionLevels === 1
+    )
+    const reduceController = new AbortController()
+    const reduceCalls: Call[] = []
+    const reduceClient = createClient(reduceCalls, (call) => {
+      if (call.user.includes("Reduction level:")) {
+        reduceController.abort()
+        return "condensed"
+      }
+      return mapSummary
+    })
+    await expect(runAnalysis({
+      provider,
+      transcript: { videoId: "cancel-reduce", cues: reduceCues },
+      budgetPolicy: reduceScenario.policy,
+      signal: reduceController.signal,
+      client: reduceClient as never
+    })).rejects.toThrow("cancelled")
+    expect(reduceCalls.filter((call) => call.user.includes("Reduction level:"))).toHaveLength(1)
+    expect(reduceCalls.some((call) => call.responseFormat === "json_object")).toBe(false)
+  })
+
+  it("keeps CR-05 repair on the map-reduce final result", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    const calls: Call[] = []
+    const ungrounded = JSON.stringify({
+      summary: "Summary",
+      keyPoints: [{ text: "Point" }],
+      chapters: [{
+        title: "Wrong",
+        summary: "Short",
+        detail: "Longer",
+        startSec: 1000,
+        endSec: 1100
+      }]
+    })
+    const structuredResponses = [ungrounded, validResponse(cues.at(-1)!.endSec)]
+    const client = createClient(calls, (call) =>
+      call.responseFormat === "json_object" ? structuredResponses.shift()! : "brief"
+    )
     const result = await runAnalysis({
-      provider: {
-        baseUrl: "https://api.example.com/v1",
-        apiKey: "sk-test-placeholder",
-        model: "gpt-4.1-mini"
-      },
-      transcript: {
-        videoId: "video-1",
-        title: "Deep dive",
-          durationSec: 15,
-        cues: [
-          { startSec: 0, endSec: 5, text: "intro section" },
-          { startSec: 5, endSec: 10, text: "middle section" },
-          { startSec: 10, endSec: 15, text: "closing section" }
-        ]
-      },
-      chunking: {
-        maxCharacters: 20
-      },
-      client: {
-        provider: {
-          baseUrl: "https://api.example.com/v1",
-          apiKey: "sk-test-placeholder",
-          model: "gpt-4.1-mini"
-        },
-        testConnection: async () => ({
-          ok: true as const,
-          baseUrl: "https://api.example.com/v1",
-          model: "gpt-4.1-mini",
-          latencyMs: 1
-        }),
-        createChatCompletion: async ({ messages, responseFormat }) => {
-          prompts.push(messages[1]?.content ?? "")
-
-          if (responseFormat === "json_object") {
-            structuredCalls += 1
-            return JSON.stringify({
-              summary: "merged",
-              keyPoints: [
-                {
-                  text: "point",
-                  startSec: 0,
-                  endSec: 5
-                }
-              ],
-              chapters: [
-                {
-                  title: "Opening",
-                  summary: "segment",
-                  detail: "A fuller segment explanation.",
-                  startSec: 0,
-                  endSec: 14
-                }
-              ]
-            })
-          }
-
-          return `chunk-${prompts.length}`
-        }
-      }
+      provider,
+      transcript: { videoId: "long-grounding", cues },
+      budgetPolicy: scenario.policy,
+      client: client as never
     })
-
-    expect(result.chunkSummaries).toEqual([
-      {
-        chunkId: "chunk-1",
-        startSec: 0,
-        endSec: 5,
-        summary: "chunk-1"
-      },
-      {
-        chunkId: "chunk-2",
-        startSec: 5,
-        endSec: 10,
-        summary: "chunk-2"
-      },
-      {
-        chunkId: "chunk-3",
-        startSec: 10,
-        endSec: 15,
-        summary: "chunk-3"
-      }
-    ])
-    expect(result.analysis).toEqual({
-      summary: "merged",
-      keyPoints: [
-        {
-          text: "point",
-          startSec: 0,
-          endSec: 5
-        }
-      ],
-      chapters: [
-        {
-          title: "Opening",
-          summary: "segment",
-          detail: "A fuller segment explanation.",
-          startSec: 0,
-          endSec: 15
-        }
-      ]
-    })
-    expect(result.rawResponse).toContain('"summary":"merged"')
-    expect(result.repairAttempted).toBe(false)
-    expect(structuredCalls).toBe(1)
-    expect(prompts[prompts.length - 1]).toContain("Chunk summaries")
+    expect(result.strategy).toBe("map-reduce")
+    expect(result.repairAttempted).toBe(true)
+    expect(calls.filter((call) => call.responseFormat === "json_object")).toHaveLength(2)
+    expect(calls.at(-1)!.system).toContain("<<<PARTIAL_ANALYSES_BEGIN>>>")
+    expect(calls.at(-1)!.system).toContain("untrusted model-derived evidence")
   })
 
   it("fails fast when transcript cues are missing", async () => {
-    await expect(
-      runAnalysis({
-        provider: {
-          baseUrl: "https://api.example.com/v1",
-          apiKey: "sk-test-placeholder",
-          model: "gpt-4.1-mini"
-        },
-        transcript: {
-          videoId: "video-1",
-          cues: []
-        }
-      })
-    ).rejects.toThrow("Transcript cues are required")
+    await expect(runAnalysis({
+      provider,
+      transcript: { videoId: "video-1", cues: [] }
+    })).rejects.toThrow("Transcript cues are required")
   })
 })
+
+function longCues(count: number, textLength: number): TranscriptCue[] {
+  return Array.from({ length: count }, (_, index) => ({
+    startSec: index * 10,
+    endSec: (index + 1) * 10,
+    text: `${index} ${String.fromCharCode(97 + index % 26).repeat(textLength)}`
+  }))
+}
+
+function policyForInputBudget(inputBudget: number): AnalysisBudgetPolicy {
+  return {
+    contextWindowEstimateTokens: inputBudget + 510,
+    reservedCompletionTokens: 10,
+    reservedRepairTokens: 500
+  }
+}
+
+function findScenario(
+  cues: TranscriptCue[],
+  mapSummary: string,
+  reducedSummary: string,
+  predicate: (value: { chunkCount: number, reductionLevels: number }) => boolean
+) {
+  for (let inputBudget = 100; inputBudget <= 5_000; inputBudget += 5) {
+    const policy = policyForInputBudget(inputBudget)
+    try {
+      if (selectAnalysisStrategy({ cues, budgetPolicy: policy }) !== "map-reduce") continue
+      const chunks = planTranscriptChunks({ cues, budgetPolicy: policy })
+      let summaries: EvidenceSummary[] = chunks.map((chunk) => ({
+        chunkId: chunk.id,
+        startSec: chunk.startSec,
+        endSec: chunk.endSec,
+        summary: mapSummary
+      }))
+      let reductionLevels = 0
+      while (!finalAnalysisPromptFits({ summaries, budgetPolicy: policy })) {
+        reductionLevels += 1
+        if (reductionLevels > 8) throw new Error("test scenario did not converge")
+        const groups = planReductionGroups({ level: reductionLevels, summaries, budgetPolicy: policy })
+        summaries = groups.map((group, index) => group.length === 1 ? group[0] : ({
+          chunkId: `reduction-${reductionLevels}-${index + 1}`,
+          startSec: Math.min(...group.map((node) => node.startSec)),
+          endSec: Math.max(...group.map((node) => node.endSec)),
+          summary: reducedSummary
+        }))
+      }
+      const value = { chunkCount: chunks.length, reductionLevels }
+      if (predicate(value)) return { policy, ...value }
+    } catch {
+      // Search the next deterministic injected budget.
+    }
+  }
+  throw new Error("No deterministic analysis budget matched the requested test scenario.")
+}
+
+function findNoProgressScenario(cues: TranscriptCue[], mapSummary: string) {
+  for (let inputBudget = 100; inputBudget <= 5_000; inputBudget += 5) {
+    const policy = policyForInputBudget(inputBudget)
+    try {
+      if (selectAnalysisStrategy({ cues, budgetPolicy: policy }) !== "map-reduce") continue
+      const chunks = planTranscriptChunks({ cues, budgetPolicy: policy })
+      if (chunks.length < 2) continue
+      const summaries = chunks.map((chunk) => ({
+        chunkId: chunk.id,
+        startSec: chunk.startSec,
+        endSec: chunk.endSec,
+        summary: mapSummary
+      }))
+      if (finalAnalysisPromptFits({ summaries, budgetPolicy: policy })) continue
+      try {
+        planReductionGroups({ level: 1, summaries, budgetPolicy: policy })
+      } catch (error) {
+        if (error instanceof ReductionCannotProgressError) {
+          return { policy, chunkCount: chunks.length }
+        }
+      }
+    } catch {
+      // Search the next deterministic injected budget.
+    }
+  }
+  throw new Error("No deterministic no-progress budget matched the requested test scenario.")
+}

@@ -1,7 +1,7 @@
 # TASK_STATE
 
-- 最后完成：Task 5 — CR-05 follow-up
-- 当前任务：Task 5 — CR-05 follow-up / awaiting independent review；Task 6 未开始
+- 最后完成：Task 6 — Long-video analysis pipeline
+- 当前任务：Task 6 — PASS；Task 7 — NOT STARTED
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
@@ -83,19 +83,35 @@
 
 ## Task 5 — Structured video analysis
 
-- 状态：CR-05 follow-up / awaiting independent review。
-- 基线 commit `0ae37a0df7909d25322ca7fae17a80ddc7a2a70a` 已实际 push；本 follow-up 不 amend 基线，追加独立修复 commit。
+- 状态：CLOSED / PASS。最终 HEAD `194e3c42adc8f104e842e5cbd324e7e86e8a145c`；CR-05 已通过独立复审。
+- 基线 commit `0ae37a0df7909d25322ca7fae17a80ddc7a2a70a` 与 CR-05 follow-up 均已实际 push。
 - Canonical fresh-analysis domain is strict `VideoAnalysis` with `summary`, grounded optional-timestamp `keyPoints`, and `chapters` containing `title`, `startSec`, `endSec`, `summary`, and `detail`.
-- Added schema/prompt versions (`VIDEO_ANALYSIS_SCHEMA_VERSION = 1`, `VIDEO_ANALYSIS_PROMPT_VERSION = "video-analysis-v1"`), strict JSON object parsing, transcript/duration normalization, cue-boundary snap, sorting, deterministic dedupe, and no silent fake repair.
+- Task 5 added schema/prompt versions (schema v1 and then-current prompt v1), strict JSON object parsing, transcript/duration normalization, cue-boundary snap, sorting, deterministic dedupe, and no silent fake repair. Task 6 later upgrades only the prompt/runtime version to `video-analysis-v2`.
 - Analysis and Ask AI each perform at most one same-provider/same-model structured repair retry; retry responses re-enter the same parse/validation/grounding pipeline. Abort and second-failure behavior are covered by tests.
 - Legacy persisted `topics`/`segments`/`moments` remain behind an explicit compatibility projection; new chapter `detail` is persisted as a bounded optional field, with old rows reading `detail = summary`.
 - Side Panel minimally renders Chapters with summary/detail and no fresh Topics dependency.
 - `docs/analysis-architecture.md` records the contract and Task 6 boundary.
-- Task 6/7/8 capabilities were not started.
+- Task 6 is recorded below; Task 7/8 capabilities were not started.
 - CR-05 修复：timestamped chapter/key point ranges must overlap effective transcript evidence before clamp/snap; ungrounded ranges now raise a concise structured grounding error and enter the existing one-repair retry path.
 
-- Task 2 仅实现 YouTubeAdapter；BilibiliAdapter 未实现。
-- Task 6/7/8 及 ASR/Vision/Whisper 均未开始；Task 4 Provider profiles 与 Task 5 Structured video analysis 已完成。
+## Task 6 — Long-video analysis pipeline
+
+- 状态：PASS。Task 7 — NOT STARTED。
+- 新增中央、确定性、provider-agnostic token heuristic：ASCII 使用保守 chars/token，non-ASCII 近似按 code point 计数，并包含 safety multiplier 与 chat/message overhead；不维护 model/tokenizer/context catalog。
+- 新增中央 `AnalysisBudgetPolicy`：默认 16,000 context estimate、2,000 completion reserve、2,000 repair reserve；short/long 判定、chunk planner、reducer、final 与 repair 统一使用该 policy，测试可注入小预算。
+- `VIDEO_ANALYSIS_SCHEMA_VERSION` 保持 `1`；`VIDEO_ANALYSIS_PROMPT_VERSION` 升级为 `video-analysis-v2`。
+- 短 transcript 使用实际 direct prompt estimate；fit 时只发一次 canonical structured request，失败时最多一次 same-provider/same-model repair，不产生 map/reduce calls。
+- 长 transcript 使用实际 timed map prompt 的 greedy cue-boundary packing；cue 顺序与内容恰好一次，不 split、不 truncate。单 cue 超预算时在任何 Provider call 前明确失败。
+- Map 与 reduction 均为 sequential prose calls；所有 cue/summary evidence 均有独立 untrusted fence。Initial map summary 保留本地 chunk range；hierarchical reducer 只合并 adjacent nodes，range 由本地 child min/max union 生成。
+- Final prompt 在发送前实际估算；超预算时按层 deterministic reduce，每层 node count 必须严格下降。无法合并任意 adjacent pair 时抛出 no-progress error，不无限循环或 silent truncation。
+- Direct/final 共用 strict parse、Zod、完整原 transcript CR-05 grounding、duration clamp/snap/normalize 与 exactly-one repair helper；`rawResponse` 仍仅为最终 accepted structured response。
+- `RunAnalysisResult` 增加 `strategy`、`initialChunkCount`、`reductionLevels`；`chunkSummaries` 仅保留 initial map results，中间 reduction nodes 不持久化。
+- 同一个 resolved client、Base URL、API key 与 explicit model 用于 map/reduce/final/repair；同一 abort signal 传入每次调用，并在每阶段前检查，取消后不继续后续 calls。
+- 回归覆盖：estimator/budget validation、short one-call、short repair、cue exactly-once/no-split/determinism、oversized cue、long N-map+final、one/multi-level reduction、no-progress bounded failure、map/reduction cancellation、timestamp/range preservation、injection fences、direct/map-reduce CR-05、duration 与既有 Task 1-5 regressions。
+- Validation：`bun test` PASS（211 tests / 0 fail / 683 expect calls / 42 files）；`bun run typecheck` PASS；production build 与最终 diff/manifest gate 见本次最终报告。
+- Chrome smoke：NOT RUN — environment limitation；本轮没有安全 fake Provider/browser harness，未使用真实付费 API，未伪造 smoke 结果。
+
+- Task 7/8 及 ASR/Vision/Whisper 均未开始；Task 4 Provider profiles、Task 5 Structured video analysis 与 Task 6 Long-video analysis pipeline 已完成。
 - Task 8 persistence contentKey migration 未开始。
 
 ## Task 3 — Bilibili adapter / CR-03 follow-up

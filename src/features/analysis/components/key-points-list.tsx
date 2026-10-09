@@ -33,7 +33,7 @@ export function KeyPointsList({
   formatTimestamp
 }: KeyPointsListProps) {
   return (
-    <Card className="border-border/70 bg-card/95">
+    <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95">
       <CardHeader className="p-4">
         <CardDescription className="flex items-center gap-2 text-xs font-medium uppercase text-primary">
           <ListChecks className="h-3.5 w-3.5" />
@@ -56,7 +56,7 @@ export function KeyPointsList({
                 className="flex min-w-0 gap-3 rounded-lg border border-border/70 bg-background/80 p-3">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <span className="text-sm leading-6 text-muted-foreground">{point.text}</span>
+                  <span className="max-w-full text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{point.text}</span>
                   {hasJumpRange(point) ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary" className="rounded-full px-2 py-0.5">

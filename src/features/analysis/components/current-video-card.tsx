@@ -21,6 +21,8 @@ type CurrentVideoCardProps = {
   isReady: boolean
   runtimeStatus: string
   providerName: string | null
+  providerModel: string | null
+  analysisState: string
   onRefresh: () => void | Promise<void>
 }
 
@@ -35,12 +37,14 @@ export function CurrentVideoCard({
   isReady,
   runtimeStatus,
   providerName,
+  providerModel,
+  analysisState,
   onRefresh
 }: CurrentVideoCardProps) {
   return (
-    <Card className="overflow-hidden border-border/70 bg-card/95">
-      <CardHeader className="flex flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-3">
+    <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95">
+      <CardHeader className="flex min-w-0 flex-col gap-3 p-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
               <Film className="h-3.5 w-3.5" />
@@ -60,9 +64,9 @@ export function CurrentVideoCard({
           </Button>
         </div>
         <div className="flex min-w-0 flex-col gap-2">
-          <CardTitle className="line-clamp-2 text-base leading-snug sm:text-lg">{title}</CardTitle>
+          <CardTitle className="line-clamp-2 max-w-full text-base leading-snug [overflow-wrap:anywhere] sm:text-lg">{title}</CardTitle>
           <CardDescription className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
-            <span>{author ?? "Unknown author"}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{author ?? "Unknown author"}</span>
             <span className="hidden text-border sm:inline">•</span>
             <span>{timestampLabel}</span>
           </CardDescription>
@@ -71,15 +75,21 @@ export function CurrentVideoCard({
       <CardContent className="border-t border-border/60 p-0">
         <details className="group">
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2 text-xs text-muted-foreground">
-            <span className="min-w-0 truncate">
-              {providerName ?? "Provider not configured"} · {runtimeStatus}
+            <span className="min-w-0 [overflow-wrap:anywhere]">
+              {providerName ?? "Provider not configured"}
+              {providerModel ? ` · ${providerModel}` : ""}
+              {` · ${analysisState}`}
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
           </summary>
           <div className="flex flex-col gap-2 border-t border-border/60 px-4 py-3 text-xs">
             <div className="flex min-w-0 justify-between gap-3">
+              <span className="shrink-0 text-muted-foreground">Runtime</span>
+              <span className="min-w-0 text-right font-medium text-foreground [overflow-wrap:anywhere]">{runtimeStatus}</span>
+            </div>
+            <div className="flex min-w-0 justify-between gap-3">
               <span className="shrink-0 text-muted-foreground">Video ID</span>
-              <span className="min-w-0 truncate font-medium text-foreground">{videoId}</span>
+              <span className="min-w-0 text-right font-medium text-foreground [overflow-wrap:anywhere]">{videoId}</span>
             </div>
             <div className="flex min-w-0 justify-between gap-3">
               <span className="shrink-0 text-muted-foreground">URL</span>

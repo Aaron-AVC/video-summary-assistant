@@ -1,4 +1,4 @@
-import { Download, Play } from "lucide-react"
+import { Play } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,31 +25,23 @@ export type SegmentTimelineItem = {
 type SegmentTimelineProps = {
   segments: SegmentTimelineItem[]
   isLoading: boolean
-  canDownload: boolean
   onJump: (timestampSeconds: number) => void | Promise<void>
-  onDownload: () => void | Promise<void>
   formatTimestamp: (timestampSeconds: number) => string
 }
 
 export function SegmentTimeline({
   segments,
   isLoading,
-  canDownload,
   onJump,
-  onDownload,
   formatTimestamp
 }: SegmentTimelineProps) {
   return (
     <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95" data-layout-check="chapters-panel">
-      <CardHeader className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <CardHeader className="flex min-w-0 flex-col gap-3 p-4">
         <div className="min-w-0">
           <CardTitle className="text-base">Chapters</CardTitle>
           <CardDescription className="text-xs">Jump to transcript-backed sections.</CardDescription>
         </div>
-        <Button variant="outline" size="sm" className="shrink-0 gap-2" disabled={!canDownload} onClick={onDownload}>
-          <Download data-icon="inline-start" />
-          VTT
-        </Button>
       </CardHeader>
       <CardContent className="min-w-0 overflow-hidden p-4 pt-0">
         {isLoading ? (

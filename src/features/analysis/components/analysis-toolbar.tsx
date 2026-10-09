@@ -9,38 +9,46 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
+import {
+  getAnalysisAction,
+  getAnalysisStatusLabel,
+  type AnalysisPhase,
+} from "@/sidepanel/lib/sidepanel-ux"
 
 type AnalysisToolbarProps = {
   hasProvider: boolean
+  hasAnalysis: boolean
   canAnalyze: boolean
-  isAnalyzing: boolean
-  isCancelling?: boolean
+  status: AnalysisPhase
   lastAnalyzedAt: string | null
   onAnalyze: () => void | Promise<void>
-  onCancel?: () => void
-  onOpenOptions: () => void | Promise<void>
+  onCancel: () => void
+  onConfigureProvider: () => void
 }
 
 export function AnalysisToolbar({
   hasProvider,
+  hasAnalysis,
   canAnalyze,
-  isAnalyzing,
-  isCancelling = false,
+  status,
   lastAnalyzedAt,
   onAnalyze,
   onCancel,
-  onOpenOptions
+  onConfigureProvider,
 }: AnalysisToolbarProps) {
-  const actionLabel = isAnalyzing ? "Analyzing…" : lastAnalyzedAt ? "Reanalyze video" : "Analyze video"
+  const isAnalyzing = status === "loading-transcript" || status === "analyzing" || status === "cancelling"
+  const action = getAnalysisAction({ hasProvider, hasAnalysis, isAnalyzing })
+  const isCancelling = status === "cancelling"
+  const statusLabel = getAnalysisStatusLabel(status, hasAnalysis)
 
   return (
     <Card className="border-border/70 bg-card/95">
       <CardHeader className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base">Summarize</CardTitle>
-            <CardDescription className="text-xs">
-              {lastAnalyzedAt ? `Saved ${lastAnalyzedAt}.` : "No saved analysis yet."}
+            <CardTitle className="text-base">Analysis</CardTitle>
+            <CardDescription role="status" className="text-xs">
+              {statusLabel}{lastAnalyzedAt ? ` · ${lastAnalyzedAt}` : ""}
             </CardDescription>
           </div>
           <Badge variant={hasProvider ? "secondary" : "outline"} className="rounded-full px-3 py-1">
@@ -48,33 +56,35 @@ export function AnalysisToolbar({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 p-4 pt-0 sm:flex-row">
+      <CardContent className="flex min-w-0 flex-col gap-2 p-4 pt-0 sm:flex-row">
         <div className="flex flex-1 flex-wrap gap-2">
-          <Button variant="outline" className="gap-2" onClick={onOpenOptions}>
-            <Settings2 data-icon="inline-start" />
-            Settings
-          </Button>
-          <Button className="min-w-40 flex-1 gap-2" disabled={!canAnalyze || isAnalyzing} onClick={onAnalyze}>
-            {isAnalyzing ? (
-              <Loader2 data-icon="inline-start" className="animate-spin" />
-            ) : lastAnalyzedAt ? (
-              <RotateCcw data-icon="inline-start" />
-            ) : (
-              <PlayCircle data-icon="inline-start" />
-            )}
-            {actionLabel}
-          </Button>
-          {isAnalyzing && onCancel ? (
+          {action.kind === "configure-provider" ? (
+            <Button className="min-w-0 flex-1 gap-2" onClick={onConfigureProvider}>
+              <Settings2 data-icon="inline-start" />
+              Configure provider
+            </Button>
+          ) : action.kind === "cancel" ? (
             <Button
               variant="destructive"
-              className="gap-2"
+              className="min-w-0 flex-1 gap-2"
               onClick={onCancel}
               disabled={isCancelling}
               aria-label="Cancel analysis">
               <Square data-icon="inline-start" />
               {isCancelling ? "Cancelling…" : "Cancel"}
             </Button>
-          ) : null}
+          ) : (
+            <Button className="min-w-0 flex-1 gap-2" disabled={!canAnalyze} onClick={onAnalyze}>
+              {status === "loading-transcript" || status === "analyzing" ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              ) : action.kind === "regenerate" ? (
+                <RotateCcw data-icon="inline-start" />
+              ) : (
+                <PlayCircle data-icon="inline-start" />
+              )}
+              {action.label}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

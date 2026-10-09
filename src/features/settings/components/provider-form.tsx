@@ -47,10 +47,11 @@ import {
 type ProviderFormProps = {
   connectionStatus?: ProviderConnectionStatus | null
   onSelectedProviderChange?: (provider: ProviderConfigRecord | null) => void
+  onProvidersChange?: (providers: ProviderConfigRecord[]) => void
   refreshToken?: number
 }
 
-type ProviderDraft = ProviderProfileInput & {
+export type ProviderDraft = ProviderProfileInput & {
   id: string | null
   apiKey: string
   isDefault: boolean
@@ -81,6 +82,7 @@ function createEmptyState(defaultSelected = false): ProviderDraft {
 export function ProviderForm({
   connectionStatus = null,
   onSelectedProviderChange,
+  onProvidersChange,
   refreshToken = 0
 }: ProviderFormProps) {
   const [providerConfigs, setProviderConfigs] = useState<ProviderConfigRecord[]>([])
@@ -140,6 +142,7 @@ export function ProviderForm({
     )
     setFieldErrors({})
     setIsLoading(false)
+    onProvidersChange?.(nextProviders)
   }
 
   function handleProviderSelection(value: string) {
@@ -299,11 +302,11 @@ export function ProviderForm({
   }
 
   return (
-    <Card className="border-primary/10 bg-card/95 shadow-xl shadow-primary/5">
-      <CardHeader className="gap-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
+    <Card className="min-w-0 overflow-hidden border-primary/10 bg-card/95 shadow-xl shadow-primary/5">
+      <CardHeader className="min-w-0 gap-4 p-4">
+        <div className="flex min-w-0 flex-col gap-3 min-[720px]:flex-row min-[720px]:items-start min-[720px]:justify-between">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
                 <Sparkles className="h-3.5 w-3.5" />
                 Provider routing
@@ -315,18 +318,18 @@ export function ProviderForm({
                 </Badge>
               ) : null}
             </div>
-            <CardTitle>Provider configuration</CardTitle>
-            <CardDescription>
+            <CardTitle className="[overflow-wrap:anywhere]">Provider configuration</CardTitle>
+            <CardDescription className="[overflow-wrap:anywhere]">
               Save one or more OpenAI-compatible endpoints, switch between them,
               and choose which config should be used by default.
             </CardDescription>
           </div>
-          <div className="w-full max-w-xs space-y-2">
+          <div className="w-full min-w-0 max-w-xs space-y-2">
             <span className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
               Saved providers
             </span>
             <Select disabled={isLoading} onValueChange={handleProviderSelection} value={selectedProviderId}>
-              <SelectTrigger className="h-11 rounded-xl">
+              <SelectTrigger className="h-11 min-w-0 rounded-xl">
                 <SelectValue placeholder="Select a provider" />
               </SelectTrigger>
               <SelectContent>
@@ -349,7 +352,7 @@ export function ProviderForm({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="min-w-0 space-y-6 p-4 pt-0">
         {feedback.state !== "idle" ? (
           <Alert variant={feedback.state === "error" ? "destructive" : "default"}>
             <AlertTitle>{feedback.title}</AlertTitle>
@@ -365,8 +368,8 @@ export function ProviderForm({
           </Alert>
         ) : null}
 
-        <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-          <SettingsSection className="bg-background/70 p-5">
+        <div className="grid min-w-0 gap-4 min-[760px]:grid-cols-[1.35fr_0.65fr]">
+          <SettingsSection className="min-w-0 bg-background/70 p-4">
             <FieldGroup>
               <ProviderField
                 description="A friendly label to distinguish local, hosted, or fallback models."
@@ -386,7 +389,7 @@ export function ProviderForm({
                 />
               </ProviderField>
 
-              <div className="grid gap-5 md:grid-cols-2">
+              <div className="grid min-w-0 gap-5 min-[620px]:grid-cols-2">
                 <ProviderField
                   description="Base URL for an OpenAI-compatible API, like /v1."
                   error={fieldErrors.baseUrl}
@@ -396,7 +399,7 @@ export function ProviderForm({
                   <Input
                     aria-invalid={Boolean(fieldErrors.baseUrl)}
                     autoComplete="url"
-                    className="h-11 rounded-xl"
+                    className="h-11 min-w-0 rounded-xl"
                     disabled={isLoading || isSaving}
                     id="provider-base-url"
                     onChange={(event) => updateDraft("baseUrl", event.target.value)}
@@ -413,7 +416,7 @@ export function ProviderForm({
                   <Input
                     aria-invalid={Boolean(fieldErrors.model)}
                     autoComplete="off"
-                    className="h-11 rounded-xl"
+                    className="h-11 min-w-0 rounded-xl"
                     disabled={isLoading || isSaving}
                     id="provider-model"
                     onChange={(event) => updateDraft("model", event.target.value)}
@@ -432,7 +435,7 @@ export function ProviderForm({
                 <Input
                   aria-invalid={Boolean(fieldErrors.apiKey)}
                   autoComplete="off"
-                  className="h-11 rounded-xl"
+                  className="h-11 min-w-0 rounded-xl"
                   disabled={isLoading || isSaving}
                   id="provider-api-key"
                   onChange={(event) => updateDraft("apiKey", event.target.value)}
@@ -454,7 +457,7 @@ export function ProviderForm({
                 {draft.modelOptions.length > 0 ? (
                   <Input
                     aria-label="Search models"
-                    className="h-10 max-w-xs rounded-xl"
+                    className="h-10 min-w-0 max-w-xs rounded-xl"
                     onChange={(event) => setModelSearch(event.target.value)}
                     placeholder="Search model IDs"
                     value={modelSearch}
@@ -466,8 +469,13 @@ export function ProviderForm({
                   {draft.modelOptions
                     .filter((model) => model.toLowerCase().includes(modelSearch.trim().toLowerCase()))
                     .map((model) => (
-                      <Button key={model} onClick={() => updateDraft("model", model)} type="button" variant="secondary">
-                        {model}
+                      <Button
+                        key={model}
+                        className="h-auto max-w-full min-w-0 whitespace-normal text-left [overflow-wrap:anywhere]"
+                        onClick={() => updateDraft("model", model)}
+                        type="button"
+                        variant="secondary">
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{model}</span>
                       </Button>
                     ))}
                 </div>
@@ -475,7 +483,7 @@ export function ProviderForm({
             </FieldGroup>
           </SettingsSection>
 
-          <SettingsSection className="space-y-4 bg-muted/40 p-5">
+          <SettingsSection className="min-w-0 space-y-4 bg-muted/40 p-4">
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Default provider</p>
               <p className="text-sm leading-6 text-muted-foreground">
@@ -521,7 +529,7 @@ export function ProviderForm({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex min-w-0 flex-wrap gap-3">
               <Button
                 className="flex-1 rounded-xl"
                 disabled={isLoading || isSaving}
@@ -593,7 +601,7 @@ function ProviderField({
   )
 }
 
-function mapProviderToDraft(provider: ProviderConfigRecord | null): ProviderDraft {
+export function mapProviderToDraft(provider: ProviderConfigRecord | null): ProviderDraft {
   if (!provider) {
     return createEmptyState(true)
   }

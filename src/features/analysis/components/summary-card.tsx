@@ -18,7 +18,7 @@ type SummaryCardProps = {
 
 export function SummaryCard({ summary, isLoading, errorMessage }: SummaryCardProps) {
   return (
-    <Card className="border-border/70 bg-card/95">
+    <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95">
       <CardHeader className="p-4">
         <CardDescription className="flex items-center gap-2 text-xs font-medium uppercase text-primary">
           <Sparkles className="h-3.5 w-3.5" />
@@ -42,7 +42,7 @@ export function SummaryCard({ summary, isLoading, errorMessage }: SummaryCardPro
             <Skeleton className="h-20 w-full rounded-lg" />
           </div>
         ) : (
-          <p className="text-sm leading-6 text-muted-foreground">
+          <p className="max-w-full whitespace-pre-wrap text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
             {summary ?? "Run analysis to generate a concise summary for the current video."}
           </p>
         )}

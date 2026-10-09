@@ -1,7 +1,7 @@
 # TASK_STATE
 
-- 最后完成：Task 6 — Long-video analysis pipeline
-- 当前任务：Task 6 — PASS；Task 7 — NOT STARTED
+- 最后完成：Task 6 — CLOSED / PASS（最终 HEAD `964a176d356896b3c482a65449b8bb3e7afd551c`）
+- 当前任务：Task 7 — implementation complete / awaiting independent review；Task 8 — NOT STARTED
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
@@ -96,7 +96,7 @@
 
 ## Task 6 — Long-video analysis pipeline
 
-- 状态：PASS。Task 7 — NOT STARTED。
+- 状态：CLOSED / PASS。最终 HEAD `964a176d356896b3c482a65449b8bb3e7afd551c`；Task 7 已完成实现并等待独立复审，Task 8 — NOT STARTED。
 - 新增中央、确定性、provider-agnostic token heuristic：ASCII 使用保守 chars/token，non-ASCII 近似按 code point 计数，并包含 safety multiplier 与 chat/message overhead；不维护 model/tokenizer/context catalog。
 - 新增中央 `AnalysisBudgetPolicy`：默认 16,000 context estimate、2,000 completion reserve、2,000 repair reserve；short/long 判定、chunk planner、reducer、final 与 repair 统一使用该 policy，测试可注入小预算。
 - `VIDEO_ANALYSIS_SCHEMA_VERSION` 保持 `1`；`VIDEO_ANALYSIS_PROMPT_VERSION` 升级为 `video-analysis-v2`。
@@ -111,8 +111,24 @@
 - Validation：`bun test` PASS（211 tests / 0 fail / 683 expect calls / 42 files）；`bun run typecheck` PASS；production build 与最终 diff/manifest gate 见本次最终报告。
 - Chrome smoke：NOT RUN — environment limitation；本轮没有安全 fake Provider/browser harness，未使用真实付费 API，未伪造 smoke 结果。
 
-- Task 7/8 及 ASR/Vision/Whisper 均未开始；Task 4 Provider profiles、Task 5 Structured video analysis 与 Task 6 Long-video analysis pipeline 已完成。
+- Task 7 已完成实现并等待独立复审；Task 8 及 ASR/Vision/Whisper 均未开始。Task 4 Provider profiles、Task 5 Structured video analysis 与 Task 6 Long-video analysis pipeline 已完成。
 - Task 8 persistence contentKey migration 未开始。
+
+## Task 7 — Side Panel V1 UX
+
+- 状态：implementation complete / awaiting independent review。Task 8 — NOT STARTED。
+- Side Panel 采用持久 current-video header 与可访问 Radix tabs：Overview（默认）、Transcript、Ask、Settings。tab state 与 runtime refresh 解耦；同一 `contentKey` 刷新保留 tab，identity 变化清除旧 analysis/transcript/Ask question/answer/error，并递增 generation、abort 当前 analysis。
+- Overview 使用单一 canonical `VideoAnalysis` 投影 Summary、optional-timestamp Key Points 与 Chapters；正式 action 为 Generate analysis / Regenerate / Cancel，Provider 缺失时切换到 Settings。chapter `detail` 可见，untimed key point 不生成 Jump。
+- Analyze 与 Transcript tab 共用 `loadCurrentTranscript()`；该 helper 复用 `FETCH_VIDEO_TRANSCRIPT`、捕获 requested `contentKey`、验证 runtime response，并在 YouTube A→B 或 Bilibili P1→P2 stale response 到达时拒绝展示。
+- Transcript 可独立加载，不触发 analysis；提供本地 case-insensitive plain-text search、安全 React `mark` 高亮、受限 scroll area、identity-aware seek。原始 raw VTT 不存在时 Download VTT 保持 disabled，不从 normalized segments 伪造文件。
+- Ask 移入独立 tab，保留 structured answer、citations、suggested jumps、follow-ups 与 runtime bridge seek；Provider / analysis / transcript 缺失时分别提供 Settings / Overview / Load transcript CTA。Ask 使用独立 generation guard，identity 变化后旧结果不会写回。
+- Settings 直接复用 `ProviderForm`、`ConnectionTest` 与 `settingsStorage`；save/delete/default/model 变化通过 metadata-only callback 立即刷新 Side Panel 默认 Provider。已有 API key 从不映射进 React draft，继续只显示空输入与 `Saved key available`。
+- 窄宽度默认单列，tabs 在约 320px 使用两列换行、约 420px 起四列；主要 cards/forms/buttons/model IDs/model text 使用 `min-w-0`、wrap 与 `overflow-wrap:anywhere`。全局最小宽度与 Side Panel surface 调整为 320px。
+- 文档：新增 `docs/sidepanel-ux.md`，记录 tabs、state ownership、共享 transcript loader、identity reset、Settings 复用与 Task 8 边界。
+- Tests：新增 Side Panel state/action/prerequisite、共享 transcript stale guard、Transcript search/highlight/injection、Overview/Ask/Transcript/Settings server-render integration、narrow tab layout，以及 Provider API-key draft boundary回归。
+- Validation：`bun test` PASS（227 tests / 0 fail / 744 expect calls / 47 files）；`bun run typecheck` PASS；`bun run build` PASS（Plasmo chrome-mv3 production build，普通沙箱 `spawn EPERM` 后在授权环境完成）；`git diff --check` PASS。
+- Production Manifest：Manifest V3；required permissions/hosts 与 Task 6 相同；Provider capability 仍只在既有 `optional_host_permissions`；无 `<all_urls>`、`nativeMessaging`、新 API/analytics hosts。
+- Chrome smoke：NOT RUN — environment limitation。Computer Use skill 已检查，但本会话未暴露所需 `node_repl` / `@oai/sky` runtime；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
 
 ## Task 3 — Bilibili adapter / CR-03 follow-up
 

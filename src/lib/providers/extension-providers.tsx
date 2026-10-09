@@ -48,7 +48,7 @@ const SURFACE_CONFIG: Record<ExtensionSurfaceName, ExtensionSurfaceConfig> = {
     title: "Sidepanel workspace",
     description: "Pinned context for video analysis and future summaries.",
     minHeightClassName: "min-h-screen",
-    minWidthClassName: "min-w-[400px]",
+    minWidthClassName: "min-w-[320px]",
   },
   options: {
     name: "options",

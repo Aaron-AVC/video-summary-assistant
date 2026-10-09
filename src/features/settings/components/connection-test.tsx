@@ -105,15 +105,15 @@ export function ConnectionTest({
         : "info"
 
   return (
-    <Card className="border-border/70 bg-card/95 shadow-lg shadow-primary/5">
-      <CardHeader className="gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="space-y-1.5">
+    <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95 shadow-lg shadow-primary/5">
+      <CardHeader className="min-w-0 gap-3 p-4">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0 space-y-1.5">
             <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
               Connection test
             </Badge>
-            <CardTitle>Validate provider connectivity</CardTitle>
-            <CardDescription>
+            <CardTitle className="[overflow-wrap:anywhere]">Validate provider connectivity</CardTitle>
+            <CardDescription className="[overflow-wrap:anywhere]">
               Run a lightweight request against the selected provider before you
               trust it for transcript analysis.
             </CardDescription>
@@ -132,14 +132,14 @@ export function ConnectionTest({
           </StatusBadge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <SettingsSection>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1.5">
+      <CardContent className="min-w-0 space-y-4 p-4 pt-0">
+        <SettingsSection className="min-w-0">
+          <div className="flex min-w-0 flex-col gap-3 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
+            <div className="min-w-0 space-y-1.5">
               <p className="text-sm font-medium text-foreground">
                 {provider ? provider.name : "No provider selected"}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="max-w-full text-sm text-muted-foreground [overflow-wrap:anywhere]">
                 {provider
                   ? `${provider.baseUrl} · ${provider.model}`
                   : "Choose a saved provider from the form above to enable testing."}

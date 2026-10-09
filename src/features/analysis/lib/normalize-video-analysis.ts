@@ -4,6 +4,7 @@ import {
   type VideoAnalysisChapter,
   type VideoAnalysisKeyPoint
 } from "@/features/analysis/lib/analysis-schema"
+import { StructuredOutputError, type StructuredParseIssue } from "@/features/analysis/lib/parse-video-analysis"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
 export type VideoAnalysisNormalizationOptions = {
@@ -25,13 +26,14 @@ export function normalizeVideoAnalysis(
   options: VideoAnalysisNormalizationOptions
 ): VideoAnalysis {
   const bounds = getBounds(options.transcriptCues, options.durationSec)
+  const evidenceCues = getEvidenceCues(options.transcriptCues, bounds)
   const chapters = dedupeChapters(
     analysis.chapters
-      .map((chapter) => normalizeChapter(chapter, options.transcriptCues, bounds))
+      .map((chapter, index) => normalizeChapter(chapter, evidenceCues, bounds, `chapters.${index}`))
       .sort((left, right) => left.startSec - right.startSec || left.endSec - right.endSec)
   )
   const keyPoints = dedupeKeyPoints(
-    analysis.keyPoints.map((point) => normalizeKeyPoint(point, options.transcriptCues, bounds))
+    analysis.keyPoints.map((point, index) => normalizeKeyPoint(point, evidenceCues, bounds, `keyPoints.${index}`))
   )
 
   // The input schema guarantees non-empty arrays. Keep that invariant explicit
@@ -61,11 +63,23 @@ function getBounds(transcriptCues: TranscriptCue[], durationSec?: number | null)
   }
 }
 
+function getEvidenceCues(transcriptCues: TranscriptCue[], bounds: Bounds): TranscriptCue[] {
+  return transcriptCues
+    .map((cue) => ({
+      ...cue,
+      startSec: Math.max(bounds.startSec, cue.startSec),
+      endSec: Math.min(bounds.endSec, cue.endSec)
+    }))
+    .filter((cue) => cue.endSec >= cue.startSec)
+}
+
 function normalizeChapter(
   chapter: VideoAnalysisChapter,
   transcriptCues: TranscriptCue[],
-  bounds: Bounds
+  bounds: Bounds,
+  path: string
 ): VideoAnalysisChapter {
+  assertRangeOverlapsEvidence(chapter.startSec, chapter.endSec, transcriptCues, path)
   const startSec = snapStart(clamp(chapter.startSec, bounds), transcriptCues, bounds)
   const endSec = snapEnd(clamp(Math.max(startSec, chapter.endSec), bounds), transcriptCues, bounds)
   return {
@@ -80,11 +94,13 @@ function normalizeChapter(
 function normalizeKeyPoint(
   point: VideoAnalysisKeyPoint,
   transcriptCues: TranscriptCue[],
-  bounds: Bounds
+  bounds: Bounds,
+  path: string
 ): VideoAnalysisKeyPoint {
   if (point.startSec === undefined || point.endSec === undefined) {
     return { text: point.text.trim() }
   }
+  assertRangeOverlapsEvidence(point.startSec, point.endSec, transcriptCues, path)
   const startSec = snapStart(clamp(point.startSec, bounds), transcriptCues, bounds)
   const endSec = snapEnd(clamp(Math.max(startSec, point.endSec), bounds), transcriptCues, bounds)
   return {
@@ -92,6 +108,27 @@ function normalizeKeyPoint(
     startSec,
     endSec: Math.max(startSec, endSec)
   }
+}
+
+function assertRangeOverlapsEvidence(
+  startSec: number,
+  endSec: number,
+  transcriptCues: TranscriptCue[],
+  path: string
+) {
+  const overlaps = transcriptCues.some(
+    (cue) => startSec < cue.endSec && endSec > cue.startSec
+  )
+  if (overlaps) return
+
+  const issue: StructuredParseIssue = {
+    path,
+    message: "timestamp range does not overlap transcript evidence"
+  }
+  throw new StructuredOutputError(
+    `Structured video analysis is not grounded in transcript evidence. ${path}: ${issue.message}`,
+    [issue]
+  )
 }
 
 function snapStart(value: number, cues: TranscriptCue[], bounds: Bounds) {

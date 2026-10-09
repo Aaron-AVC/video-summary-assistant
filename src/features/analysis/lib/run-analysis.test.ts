@@ -46,6 +46,45 @@ describe("runAnalysis", () => {
     expect(calls.filter((call) => call === "json_object")).toHaveLength(2)
   })
 
+  it("repairs a schema-valid but ungrounded first response", async () => {
+    const calls: string[] = []
+    const ungrounded = JSON.stringify({
+      summary: "Summary",
+      keyPoints: [{ text: "Point", startSec: 100, endSec: 110 }],
+      chapters: [{ title: "Opening", summary: "Short", detail: "Longer detail", startSec: 100, endSec: 110 }]
+    })
+    const valid = JSON.stringify({
+      summary: "Summary",
+      keyPoints: [{ text: "Point", startSec: 20, endSec: 30 }],
+      chapters: [{ title: "Closing", summary: "Short", detail: "Longer detail", startSec: 20, endSec: 30 }]
+    })
+    const client = providerClient([ungrounded, valid], calls)
+    const result = await runAnalysis({
+      provider: client.provider,
+      transcript: { ...transcript, cues: [{ startSec: 0, endSec: 10, text: "one" }, { startSec: 20, endSec: 30, text: "two" }] },
+      client: client as never
+    })
+    expect(result.repairAttempted).toBe(true)
+    expect(result.analysis.chapters[0].startSec).toBe(20)
+    expect(calls.filter((call) => call === "json_object")).toHaveLength(2)
+  })
+
+  it("fails after one retry when both ranges remain ungrounded", async () => {
+    const calls: string[] = []
+    const ungrounded = JSON.stringify({
+      summary: "Summary",
+      keyPoints: [{ text: "Point", startSec: 100, endSec: 110 }],
+      chapters: [{ title: "Opening", summary: "Short", detail: "Longer detail", startSec: 100, endSec: 110 }]
+    })
+    const client = providerClient([ungrounded, ungrounded], calls)
+    await expect(runAnalysis({
+      provider: client.provider,
+      transcript,
+      client: client as never
+    })).rejects.toThrow("after one repair attempt")
+    expect(calls.filter((call) => call === "json_object")).toHaveLength(2)
+  })
+
   it("fails after exactly one repair retry when both outputs are invalid", async () => {
     const calls: string[] = []
     const client = providerClient(["not json", "still not json"], calls)
@@ -68,6 +107,7 @@ describe("runAnalysis", () => {
 
   it("summarizes chunks before requesting a final merge", async () => {
     const prompts: string[] = []
+    let structuredCalls = 0
     const result = await runAnalysis({
       provider: {
         baseUrl: "https://api.example.com/v1",
@@ -103,6 +143,7 @@ describe("runAnalysis", () => {
           prompts.push(messages[1]?.content ?? "")
 
           if (responseFormat === "json_object") {
+            structuredCalls += 1
             return JSON.stringify({
               summary: "merged",
               keyPoints: [
@@ -169,6 +210,8 @@ describe("runAnalysis", () => {
       ]
     })
     expect(result.rawResponse).toContain('"summary":"merged"')
+    expect(result.repairAttempted).toBe(false)
+    expect(structuredCalls).toBe(1)
     expect(prompts[prompts.length - 1]).toContain("Chunk summaries")
   })
 

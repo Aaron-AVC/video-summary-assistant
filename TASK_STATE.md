@@ -1,7 +1,7 @@
 # TASK_STATE
 
-- 最后完成：Task 5 — Structured video analysis
-- 当前任务：Task 5 — PASS；完成后停止，Task 6 未开始
+- 最后完成：Task 5 — CR-05 follow-up
+- 当前任务：Task 5 — CR-05 follow-up / awaiting independent review；Task 6 未开始
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
@@ -83,7 +83,8 @@
 
 ## Task 5 — Structured video analysis
 
-- 状态：PASS。
+- 状态：CR-05 follow-up / awaiting independent review。
+- 基线 commit `0ae37a0df7909d25322ca7fae17a80ddc7a2a70a` 已实际 push；本 follow-up 不 amend 基线，追加独立修复 commit。
 - Canonical fresh-analysis domain is strict `VideoAnalysis` with `summary`, grounded optional-timestamp `keyPoints`, and `chapters` containing `title`, `startSec`, `endSec`, `summary`, and `detail`.
 - Added schema/prompt versions (`VIDEO_ANALYSIS_SCHEMA_VERSION = 1`, `VIDEO_ANALYSIS_PROMPT_VERSION = "video-analysis-v1"`), strict JSON object parsing, transcript/duration normalization, cue-boundary snap, sorting, deterministic dedupe, and no silent fake repair.
 - Analysis and Ask AI each perform at most one same-provider/same-model structured repair retry; retry responses re-enter the same parse/validation/grounding pipeline. Abort and second-failure behavior are covered by tests.
@@ -91,6 +92,7 @@
 - Side Panel minimally renders Chapters with summary/detail and no fresh Topics dependency.
 - `docs/analysis-architecture.md` records the contract and Task 6 boundary.
 - Task 6/7/8 capabilities were not started.
+- CR-05 修复：timestamped chapter/key point ranges must overlap effective transcript evidence before clamp/snap; ungrounded ranges now raise a concise structured grounding error and enter the existing one-repair retry path.
 
 - Task 2 仅实现 YouTubeAdapter；BilibiliAdapter 未实现。
 - Task 6/7/8 及 ASR/Vision/Whisper 均未开始；Task 4 Provider profiles 与 Task 5 Structured video analysis 已完成。

@@ -18,6 +18,59 @@ const chapter = (startSec: number, endSec: number, title = "Chapter") => ({
 })
 
 describe("normalizeVideoAnalysis", () => {
+  it("rejects a chapter whose range is completely outside transcript evidence", () => {
+    expect(() => normalizeVideoAnalysis(parseVideoAnalysis({
+      summary: "Summary",
+      keyPoints: [{ text: "Point" }],
+      chapters: [chapter(100, 110)]
+    }), { transcriptCues: cues })).toThrow("chapters.0")
+    expect(() => normalizeVideoAnalysis(parseVideoAnalysis({
+      summary: "Summary",
+      keyPoints: [{ text: "Point" }],
+      chapters: [chapter(100, 110)]
+    }), { transcriptCues: cues })).toThrow("does not overlap transcript evidence")
+  })
+
+  it("rejects an untethered timestamped key point", () => {
+    expect(() => normalizeVideoAnalysis(parseVideoAnalysis({
+      summary: "Summary",
+      keyPoints: [{ text: "Point", startSec: 100, endSec: 110 }],
+      chapters: [chapter(0, 10)]
+    }), { transcriptCues: cues })).toThrow("keyPoints.0")
+  })
+
+  it("rejects ranges entirely inside a transcript gap", () => {
+    const gappedCues = [
+      { startSec: 0, endSec: 10, text: "one" },
+      { startSec: 100, endSec: 110, text: "two" }
+    ]
+    expect(() => normalizeVideoAnalysis(parseVideoAnalysis({
+      summary: "Summary",
+      keyPoints: [{ text: "Point" }],
+      chapters: [chapter(40, 50)]
+    }), { transcriptCues: gappedCues })).toThrow("chapters.0")
+  })
+
+  it("allows partial overlap but clamps only to the effective duration", () => {
+    const normalized = normalizeVideoAnalysis(parseVideoAnalysis({
+      summary: "Summary",
+      keyPoints: [{ text: "Point" }],
+      chapters: [chapter(25, 40)]
+    }), { transcriptCues: [{ startSec: 0, endSec: 30, text: "one" }] })
+    expect(normalized.chapters[0].endSec).toBe(30)
+  })
+
+  it("rejects a range in transcript text beyond the video duration", () => {
+    expect(() => normalizeVideoAnalysis(parseVideoAnalysis({
+      summary: "Summary",
+      keyPoints: [{ text: "Point" }],
+      chapters: [chapter(20, 30)]
+    }), {
+      transcriptCues: [{ startSec: 0, endSec: 30, text: "one" }],
+      durationSec: 15
+    })).toThrow("does not overlap transcript evidence")
+  })
+
   it("grounds ranges to cue boundaries and sorts chapters", () => {
     const normalized = normalizeVideoAnalysis(parseVideoAnalysis({
       summary: "Summary",

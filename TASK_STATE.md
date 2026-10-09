@@ -1,7 +1,7 @@
 # TASK_STATE
 
 - 最后完成：Task 4 — Provider profiles
-- 当前任务：Task 4 — Provider profiles（CLOSED / PASS）
+- 当前任务：Task 4 — CR-04 follow-up（已修复，待独立复审；Task 5 未开始）
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
@@ -60,7 +60,7 @@
 
 ## Task 4 — Provider profiles
 
-- 状态：CLOSED / PASS（本地 commit `feat: add provider profiles`，当前 HEAD；Task 5 未开始）。`git push origin main` 于 2026-10-09 被远端凭据环境阻止：`SEC_E_NO_CREDENTIALS (0x8009030e)`；本地提交保留，未修改 Git credential/SSL/proxy 配置。
+- 状态：CR-04 follow-up 处理中。原始 Task 4 commit `07c61fd139104b830f3fb41db9f9c4bd5370a864`（`feat: add provider profiles`）已实际 push；之前的“push blocked / local-only”描述不准确，现已更正。Task 4 在 CR-04 修复通过验证并推送前不标记 CLOSED；Task 5 未开始。
 - Profile metadata 仅含 `id/name/baseUrl/model/createdAt/updatedAt`；UI 只额外投影 `isDefault/hasApiKey`。API key 仅在 `chrome.storage.local` 独立 secret map 中保存，编辑已有 Profile 时输入框保持空白，留空保留原 key。
 - 旧 `yt-summarizer.provider.configs` 迁移为 metadata + secret map，迁移幂等、写入新副本后才移除旧 secret-bearing record；清除 Profile/clear-all 同步删除对应 secret、legacy settings、IndexedDB rows 与 transcript logs。
 - Dexie 追加 v2 migration，providerConfigs metadata-only，并 scrub 历史 `apiKey` 字段；导出 sanitizer 与 combined data-management export 均不含真实 key、Authorization 或 Bearer token。
@@ -70,6 +70,14 @@
 - Final verification：`bun test` PASS（186 pass / 0 fail / 563 expect calls / 37 files）；`bun run typecheck` PASS；`bun run build` PASS（Plasmo chrome-mv3 production build，Windows 普通沙箱 `spawn EPERM` 后按授权提升权限完成）；`git diff --check` PASS。
 - Final Manifest：Manifest V3；required host permissions 保持 YouTube/Bilibili API/CDN；Provider 仅在 `optional_host_permissions`（HTTPS、localhost、127.0.0.1、IPv6 loopback）；无 `<all_urls>`、`nativeMessaging` 或 helper host permission。
 - Chrome smoke：NOT RUN — environment limitation。Computer Use 初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
+
+### CR-04 follow-up
+
+- CR-04A 原因：Chrome extension match pattern 不允许按端口收窄；旧 permission pattern 包含 Base URL 端口。
+- CR-04A 修复：permission pattern 现在只由 scheme + host 构成，Base URL 和实际 fetch 仍保留配置端口；回归覆盖 localhost、IPv4、HTTPS host、IPv6 loopback，以及 `permissions.contains()` / `permissions.request()` 不含端口。
+- CR-04B 原因：Fetch models 路径复用了要求非空 `model` 的完整连接输入，导致新 Provider 必须先手填 model 才能发现列表。
+- CR-04B 修复：新增只要求 `baseUrl` + `apiKey` 的模型发现输入；Fetch models 允许 model 为空。Profile 保存、Test connection、Analyze、Ask 的 model 必填边界不变。
+- 本次修复验证与 Manifest 检查：已通过（`bun test` 188 pass、`bun run typecheck`、提升权限后的 `bun run build`、`git diff --check`）。CR-04 修复按追加原子提交 `fix: correct provider discovery permissions` 发布；Task 4 仍待独立复审，不标记 CLOSED。
 
 ## Scope boundaries
 

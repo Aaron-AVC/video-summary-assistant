@@ -14,8 +14,9 @@ export function deriveProviderPermissionPattern(baseUrl: string): string {
   const normalized = normalizeProviderBaseUrl(baseUrl)
   const url = new URL(normalized)
   const host = url.hostname.includes(":") ? `[${url.hostname.replace(/^\[|\]$/g, "")}]` : url.hostname
-  const port = url.port ? `:${url.port}` : ""
-  return `${url.protocol}//${host}${port}/*`
+  // Chrome extension match patterns scope by scheme + host, not port. The
+  // normalized base URL still retains its port for the actual fetch endpoint.
+  return `${url.protocol}//${host}/*`
 }
 
 export async function hasProviderHostPermission(

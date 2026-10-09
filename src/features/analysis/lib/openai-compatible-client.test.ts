@@ -168,13 +168,14 @@ describe("provider transport boundaries", () => {
 
   it("discovers unique model IDs without making failure fatal", async () => {
     const requests: string[] = []
+    const requestInits: RequestInit[] = []
     const result = await fetchProviderModels({
       baseUrl: "https://models.example/v1",
       apiKey: "sk-model-sentinel",
-      model: "manual-model",
     }, {
-      fetchImpl: async (input) => {
+      fetchImpl: async (input, init) => {
         requests.push(String(input))
+        requestInits.push(init ?? {})
         return new Response(JSON.stringify({ data: [
           { id: "b" }, { id: "a" }, { id: "a" }, { id: "" }, "c"
         ] }), { status: 200 })
@@ -182,11 +183,12 @@ describe("provider transport boundaries", () => {
     })
     expect(result).toEqual({ models: ["b", "a", "c"] })
     expect(requests).toEqual(["https://models.example/v1/models"])
+    expect(requestInits[0]?.method).toBe("GET")
+    expect(requestInits[0]?.headers).toEqual({ Authorization: "Bearer sk-model-sentinel" })
 
     await expect(fetchProviderModels({
       baseUrl: "https://models.example/v1",
       apiKey: "sk-model-sentinel",
-      model: "manual-model",
     }, {
       fetchImpl: async () => new Response("not-json", { status: 404 })
     })).resolves.toMatchObject({ models: [], error: expect.stringContaining("Model list unavailable") })
@@ -194,7 +196,6 @@ describe("provider transport boundaries", () => {
     await expect(fetchProviderModels({
       baseUrl: "https://models.example/v1",
       apiKey: "sk-model-sentinel",
-      model: "manual-model",
     }, {
       fetchImpl: async () => new Response(JSON.stringify({ data: [] }), { status: 200 })
     })).resolves.toEqual({
@@ -205,7 +206,6 @@ describe("provider transport boundaries", () => {
     await expect(fetchProviderModels({
       baseUrl: "https://models.example/v1",
       apiKey: "sk-model-sentinel",
-      model: "manual-model",
     }, {
       fetchImpl: async () => new Response(JSON.stringify({ models: ["not-data"] }), { status: 200 })
     })).resolves.toEqual({

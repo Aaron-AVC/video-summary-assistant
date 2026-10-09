@@ -5,7 +5,8 @@ import {
   isLoopbackProviderHost,
   parseProviderConfigInput,
   parseProviderProfileInput,
-  parseProviderConnectionInput
+  parseProviderConnectionInput,
+  parseProviderModelDiscoveryInput
 } from "@/features/settings/lib/provider-schema"
 
 describe("provider schema", () => {
@@ -33,6 +34,16 @@ describe("provider schema", () => {
         model: ""
       })
     ).toThrow()
+  })
+
+  it("accepts model discovery input without a model", () => {
+    expect(parseProviderModelDiscoveryInput({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-discovery-placeholder",
+    })).toEqual({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-discovery-placeholder",
+    })
   })
 })
 

@@ -4,6 +4,8 @@ import {
 import {
   normalizeProviderBaseUrl,
   parseProviderConnectionInput,
+  parseProviderModelDiscoveryInput,
+  type ProviderModelDiscoveryInput,
   type ProviderConnectionInput
 } from "@/features/settings/lib/provider-schema"
 
@@ -118,10 +120,10 @@ export async function assertProviderHostPermission(baseUrl: string): Promise<voi
 }
 
 export async function fetchProviderModels(
-  input: ProviderConnectionInput,
+  input: ProviderModelDiscoveryInput,
   options: OpenAICompatibleClientOptions = {},
 ): Promise<ProviderModelsResult> {
-  const provider = parseProviderConnectionInput(input)
+  const provider = parseProviderModelDiscoveryInput(input)
   const fetchImpl = options.fetchImpl ?? fetch
   const request = createRequestSignal(undefined, options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
   try {

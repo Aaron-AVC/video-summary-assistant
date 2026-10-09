@@ -59,9 +59,15 @@ export const providerConnectionInputSchema = z.object({
   model: z.string().trim().min(1, "Model is required.")
 })
 
+export const providerModelDiscoveryInputSchema = z.object({
+  baseUrl: providerUrlSchema,
+  apiKey: z.string().trim().min(1, "API key is required.")
+})
+
 export type ProviderProfileInput = z.infer<typeof providerProfileInputSchema>
 export type ProviderConfigInput = z.infer<typeof providerConfigInputSchema>
 export type ProviderConnectionInput = z.infer<typeof providerConnectionInputSchema>
+export type ProviderModelDiscoveryInput = z.infer<typeof providerModelDiscoveryInputSchema>
 
 export function parseProviderProfileInput(input: unknown): ProviderProfileInput {
   return providerProfileInputSchema.parse(input)
@@ -73,6 +79,10 @@ export function parseProviderConfigInput(input: unknown): ProviderConfigInput {
 
 export function parseProviderConnectionInput(input: unknown): ProviderConnectionInput {
   return providerConnectionInputSchema.parse(input)
+}
+
+export function parseProviderModelDiscoveryInput(input: unknown): ProviderModelDiscoveryInput {
+  return providerModelDiscoveryInputSchema.parse(input)
 }
 
 export type ProviderUrlSafety =

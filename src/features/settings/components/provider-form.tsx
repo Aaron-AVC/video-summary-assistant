@@ -33,6 +33,7 @@ import { Switch } from "@/components/ui/switch"
 import { type ProviderConnectionStatus } from "@/features/settings/components/connection-test"
 import { SettingsSection } from "@/features/common/components/settings-ui"
 import {
+  parseProviderModelDiscoveryInput,
   parseProviderProfileInput,
   type ProviderProfileInput
 } from "@/features/settings/lib/provider-schema"
@@ -270,18 +271,19 @@ export function ProviderForm({
     setIsFetchingModels(true)
     setFeedback({ state: "idle", title: "", message: "" })
     try {
-      const parsed = parseProviderProfileInput(draft)
       const providerId = draft.id
       const apiKey = draft.apiKey.trim() || (providerId
         ? (await settingsStorage.resolveProvider(providerId)).apiKey
         : "")
-      if (!apiKey) throw new Error("Enter an API key before fetching models.")
+      const parsed = parseProviderModelDiscoveryInput({
+        baseUrl: draft.baseUrl,
+        apiKey,
+      })
       const permissionGranted = await requestProviderHostPermission(parsed.baseUrl)
       if (!permissionGranted) throw new Error("Provider host permission was not granted.")
       const result = await fetchProviderModels({
         baseUrl: parsed.baseUrl,
         apiKey,
-        model: parsed.model,
       })
       setDraft((current) => ({ ...current, modelOptions: result.models }))
       if (result.error) {

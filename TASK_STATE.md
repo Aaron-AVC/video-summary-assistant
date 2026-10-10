@@ -1,7 +1,7 @@
 # TASK_STATE
 
 - 最后完成：Task 6 — CLOSED / PASS（最终 HEAD `964a176d356896b3c482a65449b8bb3e7afd551c`）
-- 当前任务：Task 7 — implementation complete / awaiting independent review；Task 8 — NOT STARTED
+- 当前任务：Task 8 — implementation complete / awaiting independent review
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
@@ -9,7 +9,7 @@
 - CR-02 follow-up commit：`9222f1cc555ed4ccc0611247884d985ea13ac07a` (`fix: prevent stale YouTube transcript binding`)
 - Task 2 CR-02 独立复审：CLOSED / PASS；URL=B、stale bootstrap=A 时不会把 A 字幕绑定到 B。
 - Chrome smoke：NOT RUN — environment limitation。Computer Use 在本轮再次初始化失败：`windows sandbox failed: helper_unknown_error: setup refresh had errors`；未加载扩展、未修改 Chrome、未伪造 smoke 结果。
-- Task 3 已接入 Bilibili adapter、registry、runtime/content bridge、background allowlisted transport 与 Side Panel session-only 分析路径；CR-03 修复已通过独立复审，最终 HEAD 为 `419898ed093be2beb32c8e49c727d9e9b9d52841`。
+- Task 3 已接入 Bilibili adapter、registry、runtime/content bridge、background allowlisted transport 与 Side Panel 分析路径；CR-03 修复已通过独立复审，最终 HEAD 为 `419898ed093be2beb32c8e49c727d9e9b9d52841`。
 - Task 4 已完成 Provider Profile、独立 API key secret map、legacy settings migration、Dexie secret scrub、optional provider host permissions、shared `/models`/chat/test transport、manual model fallback 与中央错误脱敏。
 
 ## Task 1 — Clean baseline
@@ -96,7 +96,7 @@
 
 ## Task 6 — Long-video analysis pipeline
 
-- 状态：CLOSED / PASS。最终 HEAD `964a176d356896b3c482a65449b8bb3e7afd551c`；Task 7 已完成实现并等待独立复审，Task 8 — NOT STARTED。
+- 状态：CLOSED / PASS。最终 HEAD `964a176d356896b3c482a65449b8bb3e7afd551c`；Task 7 已完成实现并等待独立复审。
 - 新增中央、确定性、provider-agnostic token heuristic：ASCII 使用保守 chars/token，non-ASCII 近似按 code point 计数，并包含 safety multiplier 与 chat/message overhead；不维护 model/tokenizer/context catalog。
 - 新增中央 `AnalysisBudgetPolicy`：默认 16,000 context estimate、2,000 completion reserve、2,000 repair reserve；short/long 判定、chunk planner、reducer、final 与 repair 统一使用该 policy，测试可注入小预算。
 - `VIDEO_ANALYSIS_SCHEMA_VERSION` 保持 `1`；`VIDEO_ANALYSIS_PROMPT_VERSION` 升级为 `video-analysis-v2`。
@@ -116,7 +116,7 @@
 
 ## Task 7 — Side Panel V1 UX
 
-- 状态：implementation complete / awaiting independent review。Task 8 — NOT STARTED。
+- 状态：implementation complete / awaiting independent review。
 - Side Panel 采用持久 current-video header 与可访问 Radix tabs：Overview（默认）、Transcript、Ask、Settings。tab state 与 runtime refresh 解耦；同一 `contentKey` 刷新保留 tab，identity 变化清除旧 analysis/transcript/Ask question/answer/error，并递增 generation、abort 当前 analysis。
 - Overview 使用单一 canonical `VideoAnalysis` 投影 Summary、optional-timestamp Key Points 与 Chapters；正式 action 为 Generate analysis / Regenerate / Cancel，Provider 缺失时切换到 Settings。chapter `detail` 可见，untimed key point 不生成 Jump。
 - Analyze 与 Transcript tab 共用 `loadCurrentTranscript()`；该 helper 复用 `FETCH_VIDEO_TRANSCRIPT`、捕获 requested `contentKey`、验证 runtime response，并在 YouTube A→B 或 Bilibili P1→P2 stale response 到达时拒绝展示。
@@ -148,6 +148,15 @@
 - Task 4 — Provider profiles：已完成，见下方 Task 4 记录。
 
 ## Completion gate
+
+## Task 8 — Persistence / cache identity
+
+- 状态：implementation complete / awaiting independent review；本次提交为 `feat: add content-aware analysis cache`。
+- v3 append-only Dexie migration 保留 v1/v2，新增 `videoRecords`、`transcriptCache`、`analysisCache` 与独立 `qaAnswers`；数据库名保持 `youtube-summarizer`。
+- YouTube 与 Bilibili 以 `contentKey` 为权威身份，Bilibili P1/P2 独立持久化；legacy `videoId` rows 继续可读并保留兼容字段。
+- Transcript fingerprint 使用版本化 canonical normalized cues 的 SHA-256；analysis/QA cache keys 使用稳定 canonical object + SHA-256，不含 API key、Authorization、display name 或 generatedAt。
+- Generate exact cache hit 不调用 provider；Regenerate 绕过 cache 并追加 run；QA cache 读取后重新走 persisted schema validation，损坏 row 视为 miss。
+- 新增迁移、fingerprint/cache identity、contentKey isolation、Bilibili part isolation、corrupt QA regression tests。
 
 - Task 2 已在 `9222f1cc555ed4ccc0611247884d985ea13ac07a` 完成 commit + push，并通过独立复审；不存在待发布的 CR-02 follow-up。
 - Task 3 `419898ed093be2beb32c8e49c727d9e9b9d52841` 已 commit + push，并通过独立复审；Task 4 已完成并发布；Task 5 已完成并发布。

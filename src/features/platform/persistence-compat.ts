@@ -1,10 +1,7 @@
 import type { VideoIdentity } from "@/features/platform/types"
 import type { ActiveVideoContext } from "@/features/platform/types"
 
-/**
- * Task 2 compatibility projection for the existing videoId-keyed YouTube
- * persistence model. Multi-platform persistence moves to contentKey in Task 8.
- */
+/** Legacy YouTube projection kept for old history URLs and migration code. */
 export function projectPersistedVideoIdentity(videoId: string): VideoIdentity {
   return {
     platform: "youtube",
@@ -13,9 +10,13 @@ export function projectPersistedVideoIdentity(videoId: string): VideoIdentity {
   }
 }
 
-/** Task 3 bounded compatibility: Bilibili analyses stay session-only until Task 8. */
+/** Task 8 persistence authority: every supported platform has a stable contentKey. */
 export function shouldPersistPlatformAnalysis(identity: Pick<VideoIdentity, "platform">): boolean {
-  return identity.platform === "youtube"
+  return identity.platform === "youtube" || identity.platform === "bilibili"
+}
+
+export function projectContentIdentity(identity: VideoIdentity): VideoIdentity {
+  return { ...identity }
 }
 
 export function analysisMatchesActiveIdentity(
@@ -29,7 +30,7 @@ export function analysisMatchesActiveIdentity(
   return analysis.videoId === active.videoId
 }
 
-/** Keeps legacy videoId-only history writes within the platforms it can represent safely. */
+/** Compatibility wrapper retained for callers that still use the old name. */
 export async function persistIfSupportedPlatform<T>(
   identity: Pick<VideoIdentity, "platform">,
   persist: () => Promise<T>,

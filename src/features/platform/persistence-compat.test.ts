@@ -6,13 +6,13 @@ import {
 } from "@/features/platform/persistence-compat"
 
 describe("platform persistence compatibility", () => {
-  it("keeps existing YouTube history persistence and skips videoId-only Bilibili history", () => {
+  it("persists both supported platforms through contentKey", () => {
     expect(shouldPersistPlatformAnalysis({
       platform: "youtube",
     })).toBe(true)
     expect(shouldPersistPlatformAnalysis({
       platform: "bilibili",
-    })).toBe(false)
+    })).toBe(true)
   })
 
   it("preserves the existing YouTube timestamp identity projection", () => {

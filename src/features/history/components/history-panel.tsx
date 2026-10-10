@@ -13,11 +13,14 @@ import {
 const FULL_HISTORY_LIMIT = 200
 
 function toListItem(
-  recent: { videoId: string; title: string; channelTitle?: string; updatedAt: string },
+  recent: { videoId: string; title: string; channelTitle?: string; updatedAt: string; contentKey?: string; partId?: string | null; platform?: "youtube" | "bilibili" },
   status: string | null
 ): RecentAnalysisListItem {
   return {
     videoId: recent.videoId,
+    contentKey: recent.contentKey,
+    partId: recent.partId,
+    platform: recent.platform,
     title: recent.title,
     channelTitle: recent.channelTitle ?? null,
     status,
@@ -43,7 +46,7 @@ export function HistoryPanel() {
     void reload()
   }, [reload])
 
-  const handleSelect = useCallback(async (videoId: string) => {
+  const handleSelect = useCallback(async (videoId: string, contentKey?: string) => {
     // Push the request into chrome.storage so the sidepanel can react
     // whether or not it is currently mounted. The sidepanel listens for
     // changes on this key, loads the referenced analysis, and clears the
@@ -52,6 +55,7 @@ export function HistoryPanel() {
     // the sidepanel renders the cached analysis directly.
     const payload: PendingHistoryOpenPayload = {
       videoId,
+      contentKey,
       requestedAt: Date.now()
     }
     try {

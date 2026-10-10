@@ -34,11 +34,11 @@ Bilibili API and subtitle CDN requests use a narrow background transport seam. T
 
 The runtime namespace is `video-summary-assistant/runtime`; active contexts use `pageType: "video" | "unsupported"` and carry `platform`, `videoId`, `contentKey`, canonical URL, title/author, timestamp, and readiness.
 
-## Persistence compatibility
+## Persistence and cache identity
 
-YouTube runtime identity is `youtube:<videoId>`. Existing Dexie/history tables remain `videoId`-based in this task so Task 1 local data and migrations remain compatible. `src/features/platform/persistence-compat.ts` provides the narrow projection needed by existing history/jump paths.
+YouTube runtime identity is `youtube:<videoId>`. The database name remains `youtube-summarizer`; v3 is append-only and leaves v1/v2 blocks unchanged. `videoRecords` is keyed by stable `contentKey`, so YouTube and Bilibili (`bilibili:<bvid>:p:<N>`) histories cannot collide. Legacy rows remain readable and are copied conservatively without destructive reset.
 
-Persistence has **not** been fully migrated to multi-platform `contentKey`; that hardening is deferred to Task 8. YouTube keeps the existing `videoId`-keyed history path. Bilibili analysis is intentionally session-only in Task 3, so P1/P2 cannot overwrite one another in the legacy history tables; the Side Panel makes this limitation explicit. Task 3 does not rename the database, rebuild Dexie migrations, or migrate provider keys.
+`transcriptCache` is separate from `analysisCache`. Transcript identity uses SHA-256 over a versioned canonical serialization of normalized cues; raw VTT and source URL are excluded. Analysis cache identity hashes content key, transcript fingerprint, analysis schema/prompt versions, provider profile ID, normalized base URL, and model. API keys, authorization headers, display names, and generated timestamps are not identity inputs. Generate may reuse an exact hit; Regenerate bypasses it and appends a new run. `qaAnswers` is a separate cache keyed by content key, transcript fingerprint, analysis run, provider identity, trimmed question, and Ask schema/prompt versions; cached answers are validated before use.
 
 ## Provider boundary
 

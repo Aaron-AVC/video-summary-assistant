@@ -19,6 +19,18 @@ import {
 } from "@/features/history/lib/pending-history-open"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
+  computeAnalysisCacheKey,
+  computeQaCacheKey,
+  computeTranscriptFingerprint,
+  TRANSCRIPT_FINGERPRINT_VERSION,
+  VIDEO_QA_PROMPT_VERSION,
+  VIDEO_QA_SCHEMA_VERSION,
+} from "@/lib/persistence/cache-identity"
+import {
+  VIDEO_ANALYSIS_PROMPT_VERSION,
+  VIDEO_ANALYSIS_SCHEMA_VERSION,
+} from "@/features/analysis/lib/analysis-schema"
+import {
   persistIfSupportedPlatform,
   projectPersistedVideoIdentity,
 } from "@/features/platform/persistence-compat"
@@ -60,6 +72,8 @@ type AnalysisView = {
   contentKey: string
   title: string
   analysis: VideoAnalysis
+  analysisRunId: string | null
+  transcriptFingerprint: string | null
   lastAnalyzedAt: string | null
   errorMessage: string | null
 }
@@ -67,6 +81,9 @@ type AnalysisView = {
 type HistoryEntry = {
   recentVideo: {
     videoId: string
+    contentKey?: string
+    platform?: "youtube" | "bilibili"
+    partId?: string | null
     title: string
     channelTitle: string | null
     status: string | null
@@ -167,6 +184,9 @@ function SidepanelWorkspace() {
         .filter((entry) => Boolean(entry.analysis))
         .map((entry) => ({
           videoId: entry.recentVideo.videoId,
+          contentKey: entry.recentVideo.contentKey,
+          platform: entry.recentVideo.platform,
+          partId: entry.recentVideo.partId,
           title: entry.recentVideo.title,
           channelTitle: entry.recentVideo.channelTitle,
           status: entry.recentVideo.status,
@@ -210,6 +230,8 @@ function SidepanelWorkspace() {
         contentKey: identity.contentKey,
         title: recentVideo?.title ?? videoId,
         analysis: canonical,
+        analysisRunId: analysis.id,
+        transcriptFingerprint: analysis.transcriptFingerprint ?? null,
         lastAnalyzedAt: analysis.completedAt,
         errorMessage: analysis.errorMessage,
       })
@@ -218,6 +240,51 @@ function SidepanelWorkspace() {
       if (generation === loadWorkspaceGenerationRef.current) {
         setIsAnalysisFetching(false)
       }
+    }
+  }, [])
+
+  const loadSavedAnalysisForContext = useCallback(async (
+    context: ActiveVideoContext,
+    generation: number
+  ) => {
+    if (!context.contentKey || !context.videoId || !context.platform) return
+    setIsAnalysisFetching(true)
+    try {
+      const [analysis, transcript] = await Promise.all([
+        historyRepository.getCurrentAnalysisByContentKey(context.contentKey),
+        historyRepository.getLatestTranscriptByContentKey(context.contentKey),
+      ])
+      if (generation !== loadWorkspaceGenerationRef.current) return
+      setRawVtt(transcript?.rawVtt ?? null)
+      setTranscriptCues(transcript?.cues ?? [])
+      setTranscriptIdentity(transcript ? {
+        platform: context.platform,
+        videoId: context.videoId,
+        contentKey: context.contentKey,
+        ...(context.partId ? { partId: context.partId } : {}),
+      } : null)
+      setTranscriptTitle(context.title)
+      if (!analysis) {
+        setAnalysisView(null)
+        setAnalysisPhase("idle")
+        return
+      }
+      const canonical = persistedLegacyAnalysisToVideoAnalysis(analysis, analysis.segments)
+      setAnalysisView({
+        platform: context.platform,
+        videoId: context.videoId,
+        partId: context.partId,
+        contentKey: context.contentKey,
+        title: context.title ?? context.videoId,
+        analysis: canonical,
+        analysisRunId: analysis.id ?? null,
+        transcriptFingerprint: analysis.transcriptFingerprint ?? null,
+        lastAnalyzedAt: analysis.completedAt,
+        errorMessage: analysis.errorMessage,
+      })
+      setAnalysisPhase("completed")
+    } finally {
+      if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
   }, [])
 
@@ -237,6 +304,9 @@ function SidepanelWorkspace() {
           .filter((entry) => Boolean(entry.analysis))
           .map((entry) => ({
             videoId: entry.recentVideo.videoId,
+          contentKey: entry.recentVideo.contentKey,
+          platform: entry.recentVideo.platform,
+          partId: entry.recentVideo.partId,
             title: entry.recentVideo.title,
             channelTitle: entry.recentVideo.channelTitle,
             status: entry.recentVideo.status,
@@ -244,15 +314,15 @@ function SidepanelWorkspace() {
           })),
       )
 
-      if (videoContext.platform === "youtube" && videoContext.videoId) {
-        await loadSavedAnalysis(videoContext.videoId, generation)
+      if (videoContext.platform && videoContext.videoId && videoContext.contentKey) {
+        await loadSavedAnalysisForContext(videoContext, generation)
       }
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) {
         setIsBootstrapping(false)
       }
     }
-  }, [loadSavedAnalysis, videoContext.contentKey, videoContext.platform, videoContext.videoId])
+  }, [loadSavedAnalysisForContext, videoContext.contentKey, videoContext.platform, videoContext.videoId, videoContext.title, videoContext.partId])
 
   useEffect(() => {
     loadWorkspaceGenerationRef.current += 1
@@ -310,6 +380,23 @@ function SidepanelWorkspace() {
         ...(result.video.partId ? { partId: result.video.partId } : {}),
       })
       setTranscriptTitle(result.video.title)
+      const now = new Date().toISOString()
+      const fingerprint = await computeTranscriptFingerprint(result.transcript.segments)
+      await historyRepository.saveTranscriptCache({
+        id: `transcript:${result.video.contentKey}:${fingerprint}`,
+        contentKey: result.video.contentKey,
+        platform: result.video.platform,
+        videoId: result.video.videoId,
+        partId: result.video.partId ?? null,
+        fingerprint,
+        fingerprintVersion: TRANSCRIPT_FINGERPRINT_VERSION,
+        language: result.transcript.language ?? null,
+        sourceUrl: result.transcript.raw?.sourceUrl ?? null,
+        rawVtt: result.transcript.raw?.text ?? null,
+        cues: result.transcript.segments,
+        createdAt: now,
+        updatedAt: now,
+      })
       return result
     } catch (error) {
       if (isCurrent()) {
@@ -363,6 +450,53 @@ function SidepanelWorkspace() {
 
       setAnalysisPhase("analyzing")
       const resolvedProvider = await settingsStorage.resolveProvider(requestedProvider.id)
+      const transcriptFingerprint = await computeTranscriptFingerprint(transcript.segments)
+      const forceRegenerate = analysisView?.contentKey === requestedContentKey
+      const cacheKey = await computeAnalysisCacheKey({
+        contentKey: requestedContentKey,
+        transcriptFingerprint,
+        providerProfileId: requestedProvider.id,
+        baseUrl: resolvedProvider.profile.baseUrl,
+        model: resolvedProvider.profile.model,
+      })
+      await historyRepository.saveTranscriptCache({
+        id: `transcript:${requestedContentKey}:${transcriptFingerprint}`,
+        contentKey: requestedContentKey,
+        platform: video.platform,
+        videoId: video.videoId,
+        partId: video.partId ?? null,
+        fingerprint: transcriptFingerprint,
+        fingerprintVersion: TRANSCRIPT_FINGERPRINT_VERSION,
+        language: transcript.language ?? null,
+        sourceUrl: transcript.raw?.sourceUrl ?? null,
+        rawVtt: transcript.raw?.text ?? null,
+        cues: transcript.segments,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+
+      if (!forceRegenerate) {
+        const cached = await historyRepository.getAnalysisCache(cacheKey)
+        if (cached?.analysis) {
+          if (!isCurrentAnalysis()) throw new StaleTranscriptError()
+          setAnalysisView({
+            platform: video.platform,
+            videoId: video.videoId,
+            partId: video.partId ?? null,
+            contentKey: video.contentKey,
+            title: video.title,
+            analysis: cached.analysis,
+            analysisRunId: cached.analysisRunId,
+            transcriptFingerprint,
+            lastAnalyzedAt: cached.updatedAt,
+            errorMessage: null,
+          })
+          setAnalysisPhase("completed")
+          await refreshRecentAnalyses()
+          toast.success("Loaded cached analysis.")
+          return
+        }
+      }
       const completed = await runAnalysis({
         provider: {
           baseUrl: resolvedProvider.profile.baseUrl,
@@ -382,9 +516,23 @@ function SidepanelWorkspace() {
       }
 
       const now = new Date().toISOString()
-      const wasPersisted = await persistIfSupportedPlatform(video, async () => {
-        const transcriptSnapshotId = crypto.randomUUID()
-        const analysisRunId = crypto.randomUUID()
+      const analysisRunId = crypto.randomUUID()
+      const transcriptSnapshotId = crypto.randomUUID()
+      await persistIfSupportedPlatform(video, async () => {
+        await historyRepository.saveVideoRecord({
+          contentKey: video.contentKey,
+          platform: video.platform,
+          videoId: video.videoId,
+          partId: video.partId ?? null,
+          title: video.title,
+          channelTitle: videoContext.author,
+          thumbnailUrl: video.thumbnailUrl ?? null,
+          canonicalUrl: video.canonicalUrl ?? null,
+          durationSec: video.durationSec ?? null,
+          openedAt: now,
+          updatedAt: now,
+          analyzedAt: now,
+        })
         await historyRepository.saveTranscriptSnapshot({
           id: transcriptSnapshotId,
           videoId: video.videoId,
@@ -399,8 +547,18 @@ function SidepanelWorkspace() {
           analysisRun: {
             id: analysisRunId,
             videoId: video.videoId,
+            platform: video.platform,
+            contentKey: video.contentKey,
+            partId: video.partId ?? null,
             transcriptSnapshotId,
             providerConfigId: requestedProvider.id,
+            transcriptFingerprint,
+            analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+            analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+            analysisCacheKey: cacheKey,
+            providerProfileId: requestedProvider.id,
+            providerBaseUrl: resolvedProvider.profile.baseUrl,
+            providerModel: resolvedProvider.profile.model,
             status: "completed",
             summary: completed.analysis.summary,
             keyPoints: completed.analysis.keyPoints,
@@ -433,6 +591,23 @@ function SidepanelWorkspace() {
             updatedAt: now,
           },
         })
+        await historyRepository.saveAnalysisCache({
+          cacheKey,
+          contentKey: video.contentKey,
+          platform: video.platform,
+          videoId: video.videoId,
+          partId: video.partId ?? null,
+          transcriptFingerprint,
+          analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+          analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+          providerProfileId: requestedProvider.id,
+          providerBaseUrl: resolvedProvider.profile.baseUrl,
+          providerModel: resolvedProvider.profile.model,
+          analysisRunId,
+          analysis: completed.analysis,
+          createdAt: now,
+          updatedAt: now,
+        })
       })
       if (!isCurrentAnalysis()) {
         throw new Error("The active video changed before the analysis could be finalized.")
@@ -445,16 +620,14 @@ function SidepanelWorkspace() {
         contentKey: video.contentKey,
         title: video.title,
         analysis: completed.analysis,
+        analysisRunId,
+        transcriptFingerprint,
         lastAnalyzedAt: now,
         errorMessage: null,
       })
       setAnalysisPhase("completed")
-      if (wasPersisted) {
-        await refreshRecentAnalyses()
-        toast.success("Analysis saved locally.")
-      } else {
-        toast.success("Analysis ready for this session; Bilibili history is not saved.")
-      }
+      await refreshRecentAnalyses()
+      toast.success("Analysis saved locally.")
     } catch (error) {
       if (!isCurrentAnalysis()) return
       const isAbort = error instanceof AnalysisAbortedError
@@ -473,7 +646,7 @@ function SidepanelWorkspace() {
     } finally {
       if (analysisAbortRef.current === controller) analysisAbortRef.current = null
     }
-  }, [loadTranscriptForCurrent, provider, refreshRecentAnalyses, videoContext])
+  }, [analysisView?.contentKey, loadTranscriptForCurrent, provider, refreshRecentAnalyses, videoContext])
 
   const handleCancelAnalysis = useCallback(() => {
     if (!analysisAbortRef.current) return
@@ -481,7 +654,7 @@ function SidepanelWorkspace() {
     analysisAbortRef.current.abort()
   }, [])
 
-  const handleOpenSavedAnalysis = useCallback(async (videoId: string) => {
+  const handleOpenSavedAnalysis = useCallback(async (videoId: string, contentKey?: string) => {
     analysisGenerationRef.current += 1
     askGenerationRef.current += 1
     transcriptLoadGenerationRef.current += 1
@@ -491,16 +664,27 @@ function SidepanelWorkspace() {
     setAskError(null)
     setAnalysisError(null)
     const generation = ++loadWorkspaceGenerationRef.current
-    await loadSavedAnalysis(videoId, generation)
+    if (contentKey) {
+      const current = videoContextRef.current
+      await loadSavedAnalysisForContext({
+        ...current,
+        videoId,
+        contentKey,
+        platform: contentKey.startsWith("bilibili:") ? "bilibili" : "youtube",
+        partId: contentKey.startsWith("bilibili:") ? contentKey.split(":p:")[1] ?? null : null,
+      }, generation)
+    } else {
+      await loadSavedAnalysis(videoId, generation)
+    }
     toast.success("Loaded saved analysis from local history.")
-  }, [loadSavedAnalysis])
+  }, [loadSavedAnalysis, loadSavedAnalysisForContext])
 
   useEffect(() => {
     let isCurrent = true
     const consumePayload = async (rawValue: unknown) => {
       if (!isCurrent || !isPendingHistoryOpenPayload(rawValue)) return
       try {
-        await handleOpenSavedAnalysis(rawValue.videoId)
+          await handleOpenSavedAnalysis(rawValue.videoId, rawValue.contentKey)
       } finally {
         try {
           await chrome.storage?.local?.remove(PENDING_HISTORY_OPEN_KEY)
@@ -547,12 +731,31 @@ function SidepanelWorkspace() {
     setAskAnswer(null)
     setAskError(null)
     try {
-      const resolvedProvider = await settingsStorage.resolveProvider(provider.id)
+      const resolvedProviderForAsk = await settingsStorage.resolveProvider(provider.id)
+      const transcriptFingerprint = analysisView.transcriptFingerprint
+        ?? await computeTranscriptFingerprint(transcriptCues)
+      const qaCacheKey = await computeQaCacheKey({
+        contentKey: requestedContentKey,
+        transcriptFingerprint,
+        analysisRunId: analysisView.analysisRunId ?? "legacy",
+        providerProfileId: provider.id,
+        baseUrl: resolvedProviderForAsk.profile.baseUrl,
+        model: resolvedProviderForAsk.profile.model,
+        question: askQuestion,
+      })
+      const cachedAnswer = await historyRepository.getQaAnswer(qaCacheKey)
+      if (cachedAnswer) {
+        if (!isCurrentAsk()) return
+        setAskAnswer(cachedAnswer.answer)
+        setIsAsking(false)
+        toast.success("Loaded cached answer.")
+        return
+      }
       const result = await askVideo({
         provider: {
-          baseUrl: resolvedProvider.profile.baseUrl,
-          apiKey: resolvedProvider.apiKey,
-          model: resolvedProvider.profile.model,
+          baseUrl: resolvedProviderForAsk.profile.baseUrl,
+          apiKey: resolvedProviderForAsk.apiKey,
+          model: resolvedProviderForAsk.profile.model,
         },
         question: askQuestion,
         transcript: {
@@ -563,6 +766,21 @@ function SidepanelWorkspace() {
         analysis: analysisView.analysis,
       })
       if (!isCurrentAsk()) return
+      await historyRepository.saveQaAnswer({
+        cacheKey: qaCacheKey,
+        contentKey: requestedContentKey,
+        transcriptFingerprint,
+        analysisRunId: analysisView.analysisRunId ?? "legacy",
+        providerProfileId: provider.id,
+        providerBaseUrl: resolvedProviderForAsk.profile.baseUrl,
+        providerModel: resolvedProviderForAsk.profile.model,
+        question: askQuestion.trim(),
+        schemaVersion: VIDEO_QA_SCHEMA_VERSION,
+        promptVersion: VIDEO_QA_PROMPT_VERSION,
+        answer: result.answer,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
       setAskAnswer(result.answer)
       toast.success("Ask Video answer ready.")
     } catch (error) {

@@ -22,6 +22,17 @@ Changing `contentKey` increments the transcript, analysis, workspace, and Ask ge
 
 Settings embeds the existing `ProviderForm` and `ConnectionTest`. Provider mutations return the new metadata-only provider list to the Side Panel so the default provider/model display and subsequent Analyze/Ask calls update immediately. Saved API keys are never mapped into React draft state; an existing provider continues to show an empty key input with `Saved key available`.
 
+## Persistence and cache behavior
+
+Analyze captures the current `contentKey` and normalized transcript fingerprint
+before requesting a model. An exact analysis cache hit restores the canonical
+result without a provider call. Regenerate deliberately bypasses the hit and
+stores a new run while preserving older history. YouTube and each Bilibili part
+use independent `videoRecords`; P1 and P2 never share rows. Transcript loading
+writes only the separate transcript cache. Ask answers use `qaAnswers` and are
+reused only after persisted schema validation; corrupt rows are ignored and
+re-requested.
+
 ## Task 8 boundary
 
-Task 7 does not add content-key database migration, transcript fingerprints, provider/model cache keys, Bilibili persisted history, cache-history regenerate semantics, ASR, Vision, or a second persistence layer. YouTube keeps the existing local history model and Bilibili analysis remains available only for the current Side Panel session.
+Task 7 does not add ASR, Vision, or a second runtime orchestration layer.

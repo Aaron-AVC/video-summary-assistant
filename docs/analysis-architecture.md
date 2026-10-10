@@ -110,6 +110,8 @@ boundary.
 
 Legacy persisted `topics`, `segments`, and `moments` remain behind the existing
 compatibility adapter. Fresh output accepts only canonical `VideoAnalysis`, and
-new chapter `detail` persistence is unchanged. Ask AI, platform-native chapter
-fusion, cache/content-key migration, transcript fingerprints, progress UI, and
-the Side Panel redesign remain outside Task 6 (Tasks 7-8 where applicable).
+new chapter `detail` persistence is unchanged. Task 8 persists transcripts and
+analyses by content key, fingerprints canonical cues, and keeps Ask answers in
+an independently validated QA cache. Cache misses are required when the
+transcript, provider profile, normalized endpoint, model, or prompt/schema
+version changes.

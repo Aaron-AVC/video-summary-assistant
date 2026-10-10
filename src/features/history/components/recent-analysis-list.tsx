@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils"
 
 export type RecentAnalysisListItem = {
   videoId: string
+  contentKey?: string
+  partId?: string | null
+  platform?: "youtube" | "bilibili"
   title: string
   channelTitle: string | null
   status: string | null
@@ -27,7 +30,7 @@ type RecentAnalysisListProps = {
   items: RecentAnalysisListItem[]
   isLoading: boolean
   activeVideoId: string | null
-  onSelect: (videoId: string) => void | Promise<void>
+  onSelect: (videoId: string, contentKey?: string) => void | Promise<void>
   onOpenFullHistory?: () => void
   searchable?: boolean
   searchPlaceholder?: string
@@ -55,6 +58,7 @@ export function RecentAnalysisList({
         item.title,
         item.channelTitle ?? "",
         item.videoId,
+        item.contentKey ?? "",
         item.status ?? ""
       ]
         .join(" ")
@@ -107,9 +111,9 @@ export function RecentAnalysisList({
 
                 return (
                   <button
-                    key={item.videoId}
+                    key={item.contentKey ?? item.videoId}
                     type="button"
-                    onClick={() => onSelect(item.videoId)}
+                    onClick={() => onSelect(item.videoId, item.contentKey)}
                     className={cn(
                       "w-full rounded-2xl border p-4 text-left transition-colors",
                       isActive

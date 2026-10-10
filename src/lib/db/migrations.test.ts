@@ -168,4 +168,27 @@ describe("registerMigrations", () => {
     })
     expect(row).not.toHaveProperty("apiKey")
   })
+
+  it("appends v3 content-key stores and preserves legacy rows while copying them", async () => {
+    const v3 = MIGRATION_BLOCKS.find((block) => block.version === 3)
+    expect(v3?.stores.videoRecords).toContain("contentKey")
+    expect(v3?.stores.transcriptCache).toContain("fingerprint")
+    expect(v3?.stores.analysisCache).toContain("cacheKey")
+    expect(v3?.stores.qaAnswers).toContain("analysisRunId")
+
+    const recentRows = [{
+      videoId: "youtube-1", title: "Video", channelTitle: null, thumbnailUrl: null,
+      openedAt: "2026-10-10T00:00:00.000Z", updatedAt: "2026-10-10T00:00:00.000Z", analyzedAt: null
+    }]
+    const copied: Record<string, unknown[]> = { videoRecords: [] }
+    const table = (name: string) => ({
+      toArray: async () => name === "recentVideos" ? recentRows : [],
+      toCollection: () => ({ modify: async () => undefined }),
+      bulkPut: async (rows: unknown[]) => { copied[name] = rows }
+    })
+    await v3?.upgrade?.({ table })
+    expect(copied.videoRecords).toHaveLength(1)
+    expect(copied.videoRecords[0]).toMatchObject({ contentKey: "youtube:youtube-1", platform: "youtube" })
+    expect(recentRows).toHaveLength(1)
+  })
 })

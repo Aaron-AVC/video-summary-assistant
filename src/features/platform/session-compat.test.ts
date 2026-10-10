@@ -17,11 +17,11 @@ function identity(partId: string): VideoIdentity {
   }
 }
 
-describe("session-only platform compatibility", () => {
-  it("never calls legacy persistence for Bilibili analysis", async () => {
+describe("contentKey platform persistence compatibility", () => {
+  it("allows Bilibili persistence through its part-specific contentKey", async () => {
     const save = mock(async () => "saved")
-    await expect(persistIfSupportedPlatform(identity("2"), save)).resolves.toBe(false)
-    expect(save).not.toHaveBeenCalled()
+    await expect(persistIfSupportedPlatform(identity("2"), save)).resolves.toBe(true)
+    expect(save).toHaveBeenCalledTimes(1)
   })
 
   it("preserves YouTube persistence and distinguishes Bilibili parts for display", async () => {

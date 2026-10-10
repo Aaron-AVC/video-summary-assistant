@@ -7,10 +7,14 @@ import {
 import { registerMigrations } from "@/lib/db/migrations"
 import type {
   AnalysisRunEntity,
+  AnalysisCacheEntity,
+  QaAnswerEntity,
   ProviderConfigEntity,
   RecentVideoEntity,
   SegmentSummaryEntity,
-  TranscriptSnapshotEntity
+  TranscriptCacheEntity,
+  TranscriptSnapshotEntity,
+  VideoRecordEntity
 } from "@/lib/schemas/persistence"
 
 export class YoutubeSummarizerDatabase extends Dexie {
@@ -19,6 +23,10 @@ export class YoutubeSummarizerDatabase extends Dexie {
   analysisRuns!: Table<AnalysisRunEntity, string>
   segmentSummaries!: Table<SegmentSummaryEntity, string>
   recentVideos!: Table<RecentVideoEntity, string>
+  videoRecords!: Table<VideoRecordEntity, string>
+  transcriptCache!: Table<TranscriptCacheEntity, string>
+  analysisCache!: Table<AnalysisCacheEntity, string>
+  qaAnswers!: Table<QaAnswerEntity, string>
 
   constructor(name = DATABASE_NAME) {
     super(name)
@@ -30,6 +38,10 @@ export class YoutubeSummarizerDatabase extends Dexie {
     this.analysisRuns = this.table("analysisRuns")
     this.segmentSummaries = this.table("segmentSummaries")
     this.recentVideos = this.table("recentVideos")
+    this.videoRecords = this.table("videoRecords")
+    this.transcriptCache = this.table("transcriptCache")
+    this.analysisCache = this.table("analysisCache")
+    this.qaAnswers = this.table("qaAnswers")
   }
 }
 

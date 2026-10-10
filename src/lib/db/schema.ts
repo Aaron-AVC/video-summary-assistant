@@ -2,10 +2,14 @@ import type { Table } from "dexie"
 
 import type {
   AnalysisRunEntity,
+  AnalysisCacheEntity,
+  QaAnswerEntity,
   ProviderConfigEntity,
   RecentVideoEntity,
   SegmentSummaryEntity,
-  TranscriptSnapshotEntity
+  TranscriptCacheEntity,
+  TranscriptSnapshotEntity,
+  VideoRecordEntity
 } from "@/lib/schemas/persistence"
 
 import { MIGRATION_BLOCKS } from "@/lib/db/migrations"
@@ -51,4 +55,8 @@ export type DatabaseSchema = {
   analysisRuns: Table<AnalysisRunEntity, string>
   segmentSummaries: Table<SegmentSummaryEntity, string>
   recentVideos: Table<RecentVideoEntity, string>
+  videoRecords: Table<VideoRecordEntity, string>
+  transcriptCache: Table<TranscriptCacheEntity, string>
+  analysisCache: Table<AnalysisCacheEntity, string>
+  qaAnswers: Table<QaAnswerEntity, string>
 }

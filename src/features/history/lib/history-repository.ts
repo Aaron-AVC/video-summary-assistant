@@ -50,6 +50,13 @@ export type HistoryRepositoryOptions = {
   runTransaction?: RunRepositoryTransaction
 }
 
+export type SavedAnalysisRunAggregate = {
+  analysisRun: AnalysisRunEntity
+  segments: SegmentSummaryEntity[]
+  transcript: TranscriptSnapshotEntity | TranscriptCacheEntity | null
+  videoRecord: VideoRecordEntity | null
+}
+
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000
 
 function byNewest<T extends { updatedAt: string }>(items: T[]) {
@@ -407,6 +414,13 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         contentKey: latest.contentKey,
         platform: latest.platform,
         partId: latest.partId,
+        transcriptFingerprint: latest.transcriptFingerprint,
+        analysisSchemaVersion: latest.analysisSchemaVersion,
+        analysisPromptVersion: latest.analysisPromptVersion,
+        analysisCacheKey: latest.cacheKey,
+        providerProfileId: latest.providerProfileId,
+        providerBaseUrl: latest.providerBaseUrl,
+        providerModel: latest.providerModel,
         summary: latest.analysis.summary,
         keyPoints: latest.analysis.keyPoints,
         topics: [],
@@ -443,6 +457,53 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         ...analysisRun,
         segments: normalizeSegments(segments).sort((left, right) => left.startSec - right.startSec)
       }
+    },
+    async getSavedAnalysisRunById(analysisRunId: string): Promise<SavedAnalysisRunAggregate | null> {
+      const row = await database.analysisRuns.get(analysisRunId)
+      if (!row) return null
+      const analysisRun = normalizeAnalysisRun(row)
+      const segments = normalizeSegments(await database.segmentSummaries
+        .where("analysisRunId")
+        .equals(analysisRunId)
+        .toArray())
+        .sort((left, right) => left.startSec - right.startSec)
+
+      let transcript: TranscriptSnapshotEntity | TranscriptCacheEntity | null = null
+      if (analysisRun.transcriptSnapshotId) {
+        const snapshot = await database.transcriptSnapshots.get(analysisRun.transcriptSnapshotId)
+        if (snapshot) {
+          try { transcript = transcriptSnapshotSchema.parse(snapshot) } catch { transcript = null }
+        }
+      }
+      if (!transcript && analysisRun.contentKey) {
+        const cacheTable = (database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache
+        if (cacheTable) {
+          const candidates = (await cacheTable.toArray()).flatMap((candidate) => {
+            if (candidate.contentKey !== analysisRun.contentKey) return []
+            if (analysisRun.transcriptFingerprint && candidate.fingerprint !== analysisRun.transcriptFingerprint) return []
+            try { return [transcriptCacheSchema.parse(candidate)] } catch { return [] }
+          })
+          transcript = byNewest(candidates)[0] ?? null
+        }
+      }
+
+      let videoRecord: VideoRecordEntity | null = null
+      const recordsTable = (database as typeof database & { videoRecords?: typeof database.recentVideos }).videoRecords
+      if (recordsTable && analysisRun.contentKey) {
+        const keyed = await (recordsTable as typeof recordsTable & { get?: (key: string) => Promise<unknown> }).get?.(analysisRun.contentKey)
+        if (keyed) {
+          try { videoRecord = videoRecordSchema.parse(keyed) } catch { videoRecord = null }
+        }
+        if (!videoRecord) {
+          const candidates = (await recordsTable.toArray()).flatMap((candidate) => {
+            if (candidate.contentKey !== analysisRun.contentKey) return []
+            try { return [videoRecordSchema.parse(candidate)] } catch { return [] }
+          })
+          videoRecord = candidates[0] ?? null
+        }
+      }
+
+      return { analysisRun, segments, transcript, videoRecord }
     },
     async listRecentAnalyses(limit = 10) {
       const recordsTable = (database as typeof database & { videoRecords?: typeof database.recentVideos }).videoRecords

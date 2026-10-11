@@ -76,6 +76,11 @@ type AnalysisView = {
   analysis: VideoAnalysis
   analysisRunId: string | null
   transcriptFingerprint: string | null
+  providerProfileId: string | null
+  providerBaseUrl: string | null
+  providerModel: string | null
+  analysisSchemaVersion: number | null
+  analysisPromptVersion: string | null
   lastAnalyzedAt: string | null
   errorMessage: string | null
 }
@@ -138,6 +143,7 @@ function SidepanelWorkspace() {
   const [transcriptCues, setTranscriptCues] = useState<TranscriptSegment[]>([])
   const [transcriptIdentity, setTranscriptIdentity] = useState<VideoIdentity | null>(null)
   const [transcriptTitle, setTranscriptTitle] = useState<string | null>(null)
+  const [currentTranscriptFingerprint, setCurrentTranscriptFingerprint] = useState<string | null>(null)
   const [rawVtt, setRawVtt] = useState<string | null>(null)
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [isTranscriptLoading, setIsTranscriptLoading] = useState(false)
@@ -174,6 +180,30 @@ function SidepanelWorkspace() {
     && hasMatchingTranscript
     && askQuestion.trim()
     && !isAsking,
+  )
+  const isExactCurrentDisplayedAnalysis = isExactCurrentAnalysis(
+    analysisView
+      ? {
+          contentKey: analysisView.contentKey,
+          transcriptFingerprint: analysisView.transcriptFingerprint,
+          providerProfileId: analysisView.providerProfileId,
+          baseUrl: analysisView.providerBaseUrl,
+          model: analysisView.providerModel,
+          analysisSchemaVersion: analysisView.analysisSchemaVersion,
+          analysisPromptVersion: analysisView.analysisPromptVersion,
+        }
+      : null,
+    videoContext.contentKey && provider
+      ? {
+          contentKey: videoContext.contentKey,
+          transcriptFingerprint: currentTranscriptFingerprint,
+          providerProfileId: provider.id,
+          baseUrl: provider.baseUrl,
+          model: provider.model,
+          analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+          analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+        }
+      : null,
   )
 
   useEffect(() => {
@@ -214,6 +244,7 @@ function SidepanelWorkspace() {
       setRawVtt(latestTranscriptSnapshot?.rawVtt ?? null)
       setTranscriptCues(latestTranscriptSnapshot?.cues ?? [])
       setTranscriptIdentity(latestTranscriptSnapshot ? identity : null)
+      setCurrentTranscriptFingerprint(latestTranscriptSnapshot?.fingerprint ?? analysis?.transcriptFingerprint ?? null)
       setTranscriptTitle(
         recent.find((entry) => entry.recentVideo.videoId === videoId)?.recentVideo.title ?? videoId,
       )
@@ -236,6 +267,11 @@ function SidepanelWorkspace() {
         analysis: canonical,
         analysisRunId: analysis.id,
         transcriptFingerprint: analysis.transcriptFingerprint ?? null,
+        providerProfileId: null,
+        providerBaseUrl: null,
+        providerModel: null,
+        analysisSchemaVersion: null,
+        analysisPromptVersion: null,
         lastAnalyzedAt: analysis.completedAt,
         errorMessage: analysis.errorMessage,
       })
@@ -250,17 +286,11 @@ function SidepanelWorkspace() {
   const loadSavedAnalysisForContext = useCallback(async (
     context: ActiveVideoContext,
     generation: number,
-    requestedAnalysisRunId?: string,
   ) => {
     if (!context.contentKey || !context.videoId || !context.platform) return
     setIsAnalysisFetching(true)
     try {
-      const analysis = requestedAnalysisRunId
-        ? await historyRepository.getAnalysisRunById(requestedAnalysisRunId)
-        : await historyRepository.getCurrentAnalysisByContentKey(context.contentKey)
-      if (requestedAnalysisRunId && analysis?.contentKey !== context.contentKey) {
-        throw new Error("Saved analysis identity does not match the requested video part.")
-      }
+      const analysis = await historyRepository.getCurrentAnalysisByContentKey(context.contentKey)
       const transcript = analysis?.transcriptSnapshotId
         ? await historyRepository.getTranscriptSnapshotById(analysis.transcriptSnapshotId)
         : await historyRepository.getLatestTranscriptByContentKey(context.contentKey)
@@ -273,6 +303,7 @@ function SidepanelWorkspace() {
         contentKey: context.contentKey,
         ...(context.partId ? { partId: context.partId } : {}),
       } : null)
+      setCurrentTranscriptFingerprint(transcript?.fingerprint ?? analysis?.transcriptFingerprint ?? null)
       setTranscriptTitle(context.title)
       if (!analysis) {
         setAnalysisView(null)
@@ -289,8 +320,63 @@ function SidepanelWorkspace() {
         analysis: canonical,
         analysisRunId: analysis.id ?? null,
         transcriptFingerprint: analysis.transcriptFingerprint ?? null,
+        providerProfileId: analysis.providerProfileId ?? null,
+        providerBaseUrl: analysis.providerBaseUrl ?? null,
+        providerModel: analysis.providerModel ?? null,
+        analysisSchemaVersion: analysis.analysisSchemaVersion ?? null,
+        analysisPromptVersion: analysis.analysisPromptVersion ?? null,
         lastAnalyzedAt: analysis.completedAt,
         errorMessage: analysis.errorMessage,
+      })
+      setAnalysisPhase("completed")
+    } finally {
+      if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
+    }
+  }, [])
+
+  const loadSavedAnalysisRun = useCallback(async (analysisRunId: string, generation: number) => {
+    setIsAnalysisFetching(true)
+    try {
+      const aggregate = await historyRepository.getSavedAnalysisRunById(analysisRunId)
+      if (!aggregate) throw new Error("Saved analysis run was not found in local history.")
+      const { analysisRun, segments, transcript, videoRecord } = aggregate
+      const contentKey = videoRecord?.contentKey ?? analysisRun.contentKey
+      if (!contentKey) throw new Error("Saved analysis run has no persisted content identity.")
+      const platform = videoRecord?.platform ?? analysisRun.platform ?? "youtube"
+      const videoId = videoRecord?.videoId ?? analysisRun.videoId
+      const partId = videoRecord?.partId ?? analysisRun.partId ?? null
+      const title = videoRecord?.title ?? videoId
+      if (generation !== loadWorkspaceGenerationRef.current) return
+
+      setRawVtt(transcript?.rawVtt ?? null)
+      setTranscriptCues(transcript?.cues ?? [])
+      setTranscriptIdentity(transcript ? {
+        platform,
+        videoId: transcript.videoId,
+        contentKey: transcript.contentKey ?? contentKey,
+        ...(transcript.partId ? { partId: transcript.partId } : partId ? { partId } : {}),
+      } : null)
+      setCurrentTranscriptFingerprint(transcript?.fingerprint ?? analysisRun.transcriptFingerprint ?? null)
+      setTranscriptTitle(title)
+      setTranscriptError(null)
+
+      const canonical = persistedLegacyAnalysisToVideoAnalysis(analysisRun, segments)
+      setAnalysisView({
+        platform,
+        videoId,
+        partId,
+        contentKey,
+        title,
+        analysis: canonical,
+        analysisRunId: analysisRun.id,
+        transcriptFingerprint: analysisRun.transcriptFingerprint ?? null,
+        providerProfileId: analysisRun.providerProfileId ?? null,
+        providerBaseUrl: analysisRun.providerBaseUrl ?? null,
+        providerModel: analysisRun.providerModel ?? null,
+        analysisSchemaVersion: analysisRun.analysisSchemaVersion ?? null,
+        analysisPromptVersion: analysisRun.analysisPromptVersion ?? null,
+        lastAnalyzedAt: analysisRun.completedAt,
+        errorMessage: analysisRun.errorMessage,
       })
       setAnalysisPhase("completed")
     } finally {
@@ -349,6 +435,7 @@ function SidepanelWorkspace() {
     setTranscriptCues([])
     setTranscriptIdentity(null)
     setTranscriptTitle(null)
+    setCurrentTranscriptFingerprint(null)
     setRawVtt(null)
     setTranscriptError(null)
     setIsTranscriptLoading(false)
@@ -430,6 +517,7 @@ function SidepanelWorkspace() {
             contentKey: cached.contentKey,
             ...(cached.partId ? { partId: cached.partId } : {}),
           })
+          setCurrentTranscriptFingerprint(cached.fingerprint ?? null)
           setTranscriptTitle(cachedVideo.title)
           return { video: cachedVideo, transcript: cachedTranscript }
         },
@@ -448,6 +536,7 @@ function SidepanelWorkspace() {
       setTranscriptTitle(result.video.title)
       const now = new Date().toISOString()
       const fingerprint = await computeTranscriptFingerprint(result.transcript.segments)
+      setCurrentTranscriptFingerprint(fingerprint)
       await historyRepository.saveTranscriptCache({
         id: `transcript:${result.video.contentKey}:${fingerprint}`,
         contentKey: result.video.contentKey,
@@ -569,6 +658,11 @@ function SidepanelWorkspace() {
             analysis: cached.analysis,
             analysisRunId: cached.analysisRunId,
             transcriptFingerprint,
+            providerProfileId: cached.providerProfileId ?? null,
+            providerBaseUrl: cached.providerBaseUrl ?? null,
+            providerModel: cached.providerModel ?? null,
+            analysisSchemaVersion: cached.analysisSchemaVersion ?? null,
+            analysisPromptVersion: cached.analysisPromptVersion ?? null,
             lastAnalyzedAt: cached.updatedAt,
             errorMessage: null,
           })
@@ -709,6 +803,11 @@ function SidepanelWorkspace() {
         analysis: completed.analysis,
         analysisRunId,
         transcriptFingerprint,
+        providerProfileId: requestedProvider.id,
+        providerBaseUrl: resolvedProvider.profile.baseUrl,
+        providerModel: resolvedProvider.profile.model,
+        analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+        analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
         lastAnalyzedAt: now,
         errorMessage: null,
       })
@@ -755,7 +854,9 @@ function SidepanelWorkspace() {
     setAskError(null)
     setAnalysisError(null)
     const generation = ++loadWorkspaceGenerationRef.current
-    if (contentKey) {
+    if (analysisRunId) {
+      await loadSavedAnalysisRun(analysisRunId, generation)
+    } else if (contentKey) {
       const current = videoContextRef.current
       await loadSavedAnalysisForContext({
         ...current,
@@ -763,12 +864,12 @@ function SidepanelWorkspace() {
         contentKey,
         platform: contentKey.startsWith("bilibili:") ? "bilibili" : "youtube",
         partId: contentKey.startsWith("bilibili:") ? contentKey.split(":p:")[1] ?? null : null,
-      }, generation, analysisRunId)
+      }, generation)
     } else {
       await loadSavedAnalysis(videoId, generation)
     }
     toast.success("Loaded saved analysis from local history.")
-  }, [loadSavedAnalysis, loadSavedAnalysisForContext])
+  }, [loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun])
 
   useEffect(() => {
     let isCurrent = true
@@ -964,10 +1065,7 @@ function SidepanelWorkspace() {
         overview={(
           <OverviewTab
             analysis={analysisView?.analysis ?? null}
-            hasCurrentAnalysis={Boolean(
-              analysisView
-              && analysisView.contentKey === videoContext.contentKey,
-            )}
+            hasCurrentAnalysis={isExactCurrentDisplayedAnalysis}
             analysisError={visibleAnalysisError}
             analysisPhase={analysisPhase}
             isLoading={isAnalysisLoading}

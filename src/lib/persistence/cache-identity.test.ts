@@ -58,6 +58,11 @@ describe("content-aware persistence identities", () => {
     expect(isExactCurrentAnalysis(identity, { ...identity, transcriptFingerprint: "other" })).toBe(false)
     expect(isExactCurrentAnalysis(identity, { ...identity, model: "model-2" })).toBe(false)
     expect(isExactCurrentAnalysis({ ...identity, baseUrl: null }, identity)).toBe(false)
+    expect(isExactCurrentAnalysis({ ...identity, providerProfileId: "other-profile" }, identity)).toBe(false)
+    expect(isExactCurrentAnalysis({ ...identity, baseUrl: "https://other.example.com/v1" }, identity)).toBe(false)
+    expect(isExactCurrentAnalysis({ ...identity, analysisSchemaVersion: 2 }, identity)).toBe(false)
+    expect(isExactCurrentAnalysis({ ...identity, analysisPromptVersion: "other-prompt" }, identity)).toBe(false)
+    expect(isExactCurrentAnalysis({ ...identity, transcriptFingerprint: null }, identity)).toBe(false)
   })
 
   it("normalizes base URLs without collapsing meaningful path prefixes", () => {

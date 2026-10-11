@@ -56,6 +56,38 @@ describe("Side Panel V1 components", () => {
     expect(markup).not.toContain("Ask AI")
   })
 
+  it("shows Generate when displayed history is not the exact current identity", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        analysis={{
+          summary: "History summary",
+          keyPoints: [],
+          chapters: [],
+        }}
+        hasCurrentAnalysis={false}
+        analysisError={null}
+        analysisPhase="completed"
+        isLoading={false}
+        hasProvider
+        canAnalyze
+        lastAnalyzedAt="10/10/2026"
+        recentItems={[]}
+        isHistoryLoading={false}
+        activeVideoId="video-a"
+        onAnalyze={noop}
+        onCancel={noop}
+        onConfigureProvider={noop}
+        onJump={noop}
+        onSelectHistory={noop}
+        onOpenFullHistory={noop}
+        formatTimestamp={formatTimestamp}
+      />,
+    )
+
+    expect(markup).toContain("Generate analysis")
+    expect(markup).not.toContain("Regenerate")
+  })
+
   it("renders actionable Ask prerequisites and the grounded answer surface", () => {
     const missingProvider = renderToStaticMarkup(
       <AskTab

@@ -219,6 +219,11 @@ describe("content-key persistence repository", () => {
         channelTitle: "Uploader", thumbnailUrl: null, canonicalUrl: `https://www.bilibili.com/video/BV?p=${partId}`,
         durationSec: 10, openedAt: time, updatedAt: time, analyzedAt: time
       })
+      await repo.saveTranscriptSnapshot({
+        id: `transcript-${runId}`, videoId: "BV", platform: "bilibili", contentKey, partId,
+        fingerprint: `fingerprint-${runId}`, language: "zh", sourceUrl: null, rawVtt: null,
+        cues: [{ startSec: 0, endSec: 1, text: `Transcript ${partId}` }], createdAt: time, updatedAt: time
+      })
       await repo.saveAnalysisRun({
         analysisRun: run(runId, "model", time, contentKey),
         segments: [segment(runId, contentKey)],
@@ -231,6 +236,10 @@ describe("content-key persistence repository", () => {
     }
     expect((await repo.getAnalysisRunById("p1-run"))?.contentKey).toBe("bilibili:BV:p:1")
     expect((await repo.getAnalysisRunById("p2-run"))?.contentKey).toBe("bilibili:BV:p:2")
+    const aggregate = await repo.getSavedAnalysisRunById("p1-run")
+    expect(aggregate?.analysisRun.id).toBe("p1-run")
+    expect(aggregate?.videoRecord?.title).toBe("Part 1")
+    expect(aggregate?.transcript?.cues[0]?.text).toBe("Transcript 1")
     expect((await repo.listRecentAnalyses(10)).map((entry) => entry.recentVideo.contentKey).sort()).toEqual([
       "bilibili:BV:p:1",
       "bilibili:BV:p:2"

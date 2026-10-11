@@ -246,6 +246,47 @@ describe("content-key persistence repository", () => {
     ])
   })
 
+  it("keeps latest active transcripts separate from exact historical run transcripts", async () => {
+    const fake = database()
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    for (const [runId, contentKey, platform, videoId, partId] of [
+      ["youtube-run", "youtube:video", "youtube", "video", null],
+      ["bilibili-run", "bilibili:BV:p:1", "bilibili", "BV", "1"]
+    ] as const) {
+      const oldTime = "2026-10-10T00:00:01.000Z"
+      const latestTime = "2026-10-10T00:00:02.000Z"
+      await repo.saveVideoRecord({
+        contentKey, platform, videoId, partId, title: `${platform} saved title`,
+        channelTitle: "Uploader", thumbnailUrl: null, canonicalUrl: null,
+        durationSec: 10, openedAt: oldTime, updatedAt: latestTime, analyzedAt: oldTime
+      })
+      await repo.saveTranscriptSnapshot({
+        id: `transcript-${runId}`, videoId, platform, contentKey, partId,
+        fingerprint: `fingerprint-${runId}`, language: "en", sourceUrl: null, rawVtt: null,
+        cues: [{ startSec: 0, endSec: 1, text: "historical FP1" }], createdAt: oldTime, updatedAt: oldTime
+      })
+      await repo.saveAnalysisRun({
+        analysisRun: run(runId, "model", oldTime, contentKey),
+        segments: [segment(runId, contentKey)],
+        recentVideo: {
+          videoId, analysisRunId: runId, contentKey, partId, platform,
+          title: `${platform} saved title`, channelTitle: "Uploader", thumbnailUrl: null,
+          status: "completed", openedAt: oldTime, analyzedAt: oldTime, updatedAt: oldTime
+        }
+      })
+      await repo.saveTranscriptCache({
+        id: `latest-${runId}`, contentKey, platform, videoId, partId,
+        fingerprint: `latest-${runId}`, language: "en", sourceUrl: null, rawVtt: null,
+        cues: [{ startSec: 0, endSec: 1, text: "active FP2" }], createdAt: latestTime, updatedAt: latestTime
+      })
+
+      expect((await repo.getLatestTranscriptByContentKey(contentKey))?.fingerprint).toBe(`latest-${runId}`)
+      expect((await repo.getLatestTranscriptByContentKey(contentKey))?.cues[0]?.text).toBe("active FP2")
+      expect((await repo.getSavedAnalysisRunById(runId))?.transcript?.fingerprint).toBe(`fingerprint-${runId}`)
+      expect((await repo.getSavedAnalysisRunById(runId))?.transcript?.cues[0]?.text).toBe("historical FP1")
+    }
+  })
+
   it("keeps legacy YouTube rows readable through the contentKey authority", async () => {
     const fake = database()
     fake.transcriptSnapshots.rows.push({

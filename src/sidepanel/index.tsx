@@ -290,20 +290,22 @@ function SidepanelWorkspace() {
     if (!context.contentKey || !context.videoId || !context.platform) return
     setIsAnalysisFetching(true)
     try {
-      const analysis = await historyRepository.getCurrentAnalysisByContentKey(context.contentKey)
-      const transcript = analysis?.transcriptSnapshotId
-        ? await historyRepository.getTranscriptSnapshotById(analysis.transcriptSnapshotId)
-        : await historyRepository.getLatestTranscriptByContentKey(context.contentKey)
+      const [analysis, latestTranscript] = await Promise.all([
+        historyRepository.getCurrentAnalysisByContentKey(context.contentKey),
+        historyRepository.getLatestTranscriptByContentKey(context.contentKey),
+      ])
       if (generation !== loadWorkspaceGenerationRef.current) return
-      setRawVtt(transcript?.rawVtt ?? null)
-      setTranscriptCues(transcript?.cues ?? [])
-      setTranscriptIdentity(transcript ? {
-        platform: context.platform,
-        videoId: context.videoId,
-        contentKey: context.contentKey,
-        ...(context.partId ? { partId: context.partId } : {}),
+      setRawVtt(latestTranscript?.rawVtt ?? null)
+      setTranscriptCues(latestTranscript?.cues ?? [])
+      setTranscriptIdentity(latestTranscript ? {
+        platform: latestTranscript.platform ?? context.platform,
+        videoId: latestTranscript.videoId,
+        contentKey: latestTranscript.contentKey ?? context.contentKey,
+        ...(latestTranscript.partId ?? context.partId
+          ? { partId: latestTranscript.partId ?? context.partId }
+          : {}),
       } : null)
-      setCurrentTranscriptFingerprint(transcript?.fingerprint ?? analysis?.transcriptFingerprint ?? null)
+      setCurrentTranscriptFingerprint(latestTranscript?.fingerprint ?? null)
       setTranscriptTitle(context.title)
       if (!analysis) {
         setAnalysisView(null)

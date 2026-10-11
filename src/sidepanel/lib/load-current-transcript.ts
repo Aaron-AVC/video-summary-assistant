@@ -27,6 +27,35 @@ export type CurrentTranscriptResult = {
   transcript: VideoTranscript
 }
 
+export async function resolveCurrentTranscript({
+  requestedContentKey,
+  isCurrent,
+  forceReload = false,
+  sessionResult,
+  loadCached,
+  loadRemote = () => loadCurrentTranscript({ requestedContentKey, isCurrent }),
+}: {
+  requestedContentKey: string
+  isCurrent: () => boolean
+  forceReload?: boolean
+  sessionResult?: CurrentTranscriptResult | null
+  loadCached?: () => Promise<CurrentTranscriptResult | null>
+  loadRemote?: () => Promise<CurrentTranscriptResult>
+}): Promise<CurrentTranscriptResult> {
+  if (
+    !forceReload
+    && sessionResult?.video.contentKey === requestedContentKey
+    && sessionResult.transcript.segments.length > 0
+  ) {
+    return sessionResult
+  }
+  if (!forceReload && loadCached) {
+    const cached = await loadCached()
+    if (cached && isCurrent()) return cached
+  }
+  return loadRemote()
+}
+
 export async function loadCurrentTranscript({
   requestedContentKey,
   isCurrent,

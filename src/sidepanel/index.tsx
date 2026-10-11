@@ -22,6 +22,7 @@ import {
   computeAnalysisCacheKey,
   computeQaCacheKey,
   computeTranscriptFingerprint,
+  isExactCurrentAnalysis,
   TRANSCRIPT_FINGERPRINT_VERSION,
   VIDEO_QA_PROMPT_VERSION,
   VIDEO_QA_SCHEMA_VERSION,
@@ -56,6 +57,7 @@ import { TranscriptTab } from "@/sidepanel/components/transcript-tab"
 import {
   StaleTranscriptError,
   loadCurrentTranscript,
+  resolveCurrentTranscript,
   type CurrentTranscriptResult,
 } from "@/sidepanel/lib/load-current-transcript"
 import {
@@ -81,6 +83,7 @@ type AnalysisView = {
 type HistoryEntry = {
   recentVideo: {
     videoId: string
+    analysisRunId?: string
     contentKey?: string
     platform?: "youtube" | "bilibili"
     partId?: string | null
@@ -184,6 +187,7 @@ function SidepanelWorkspace() {
         .filter((entry) => Boolean(entry.analysis))
         .map((entry) => ({
           videoId: entry.recentVideo.videoId,
+          analysisRunId: entry.recentVideo.analysisRunId,
           contentKey: entry.recentVideo.contentKey,
           platform: entry.recentVideo.platform,
           partId: entry.recentVideo.partId,
@@ -245,15 +249,21 @@ function SidepanelWorkspace() {
 
   const loadSavedAnalysisForContext = useCallback(async (
     context: ActiveVideoContext,
-    generation: number
+    generation: number,
+    requestedAnalysisRunId?: string,
   ) => {
     if (!context.contentKey || !context.videoId || !context.platform) return
     setIsAnalysisFetching(true)
     try {
-      const [analysis, transcript] = await Promise.all([
-        historyRepository.getCurrentAnalysisByContentKey(context.contentKey),
-        historyRepository.getLatestTranscriptByContentKey(context.contentKey),
-      ])
+      const analysis = requestedAnalysisRunId
+        ? await historyRepository.getAnalysisRunById(requestedAnalysisRunId)
+        : await historyRepository.getCurrentAnalysisByContentKey(context.contentKey)
+      if (requestedAnalysisRunId && analysis?.contentKey !== context.contentKey) {
+        throw new Error("Saved analysis identity does not match the requested video part.")
+      }
+      const transcript = analysis?.transcriptSnapshotId
+        ? await historyRepository.getTranscriptSnapshotById(analysis.transcriptSnapshotId)
+        : await historyRepository.getLatestTranscriptByContentKey(context.contentKey)
       if (generation !== loadWorkspaceGenerationRef.current) return
       setRawVtt(transcript?.rawVtt ?? null)
       setTranscriptCues(transcript?.cues ?? [])
@@ -304,9 +314,10 @@ function SidepanelWorkspace() {
           .filter((entry) => Boolean(entry.analysis))
           .map((entry) => ({
             videoId: entry.recentVideo.videoId,
-          contentKey: entry.recentVideo.contentKey,
-          platform: entry.recentVideo.platform,
-          partId: entry.recentVideo.partId,
+            analysisRunId: entry.recentVideo.analysisRunId,
+            contentKey: entry.recentVideo.contentKey,
+            platform: entry.recentVideo.platform,
+            partId: entry.recentVideo.partId,
             title: entry.recentVideo.title,
             channelTitle: entry.recentVideo.channelTitle,
             status: entry.recentVideo.status,
@@ -352,7 +363,7 @@ function SidepanelWorkspace() {
     void loadWorkspace()
   }, [loadWorkspace])
 
-  const loadTranscriptForCurrent = useCallback(async (): Promise<CurrentTranscriptResult> => {
+  const loadTranscriptForCurrent = useCallback(async (forceReload = false): Promise<CurrentTranscriptResult> => {
     const current = videoContextRef.current
     if (!current.isReady || !current.contentKey) {
       throw new Error("Open a supported video page before loading its transcript.")
@@ -368,7 +379,62 @@ function SidepanelWorkspace() {
     setIsTranscriptLoading(true)
     setTranscriptError(null)
     try {
-      const result = await loadCurrentTranscript({ requestedContentKey, isCurrent })
+      const sessionResult = transcriptIdentity?.contentKey === requestedContentKey && transcriptCues.length > 0
+        ? {
+            video: {
+              platform: current.platform!,
+              videoId: current.videoId!,
+              contentKey: current.contentKey!,
+              ...(current.partId ? { partId: current.partId } : {}),
+              title: current.title ?? current.videoId!,
+              author: current.author,
+              canonicalUrl: current.canonicalUrl ?? current.url,
+            },
+            transcript: {
+              segments: transcriptCues,
+              source: "unknown" as const,
+              raw: rawVtt ? { format: "vtt" as const, text: rawVtt } : undefined,
+            },
+          }
+        : null
+      const result = await resolveCurrentTranscript({
+        requestedContentKey,
+        isCurrent,
+        forceReload,
+        sessionResult,
+        loadCached: async () => {
+          const cached = await historyRepository.getLatestTranscriptByContentKey(requestedContentKey)
+          if (!cached) return null
+          const cachedVideo = {
+            platform: cached.platform,
+            videoId: cached.videoId,
+            contentKey: cached.contentKey,
+            ...(cached.partId ? { partId: cached.partId } : {}),
+            title: current.title ?? cached.videoId,
+            author: current.author,
+            canonicalUrl: current.canonicalUrl ?? current.url,
+          }
+          const cachedTranscript = {
+            segments: cached.cues,
+            source: "unknown" as const,
+            language: cached.language,
+            raw: cached.rawVtt
+              ? { format: "vtt" as const, text: cached.rawVtt, sourceUrl: cached.sourceUrl }
+              : undefined,
+          }
+          setTranscriptCues(cached.cues)
+          setRawVtt(cached.rawVtt)
+          setTranscriptIdentity({
+            platform: cached.platform,
+            videoId: cached.videoId,
+            contentKey: cached.contentKey,
+            ...(cached.partId ? { partId: cached.partId } : {}),
+          })
+          setTranscriptTitle(cachedVideo.title)
+          return { video: cachedVideo, transcript: cachedTranscript }
+        },
+        loadRemote: () => loadCurrentTranscript({ requestedContentKey, isCurrent }),
+      })
       if (!isCurrent()) throw new StaleTranscriptError()
 
       setTranscriptCues(result.transcript.segments)
@@ -406,11 +472,11 @@ function SidepanelWorkspace() {
     } finally {
       if (isCurrent()) setIsTranscriptLoading(false)
     }
-  }, [])
+  }, [rawVtt, transcriptCues, transcriptIdentity])
 
   const handleLoadTranscript = useCallback(async () => {
     try {
-      await loadTranscriptForCurrent()
+      await loadTranscriptForCurrent(true)
       toast.success("Transcript loaded.")
     } catch (error) {
       if (error instanceof StaleTranscriptError) return
@@ -418,7 +484,7 @@ function SidepanelWorkspace() {
     }
   }, [loadTranscriptForCurrent])
 
-  const handleAnalyze = useCallback(async () => {
+  const handleAnalyze = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     if (!videoContext.isReady || !videoContext.videoId || !videoContext.contentKey) {
       toast.error("Open a supported video page before analyzing.")
       return
@@ -445,13 +511,12 @@ function SidepanelWorkspace() {
     setAskError(null)
 
     try {
-      const { video, transcript } = await loadTranscriptForCurrent()
+      const { video, transcript } = await loadTranscriptForCurrent(false)
       if (!isCurrentAnalysis()) throw new StaleTranscriptError()
 
       setAnalysisPhase("analyzing")
       const resolvedProvider = await settingsStorage.resolveProvider(requestedProvider.id)
       const transcriptFingerprint = await computeTranscriptFingerprint(transcript.segments)
-      const forceRegenerate = analysisView?.contentKey === requestedContentKey
       const cacheKey = await computeAnalysisCacheKey({
         contentKey: requestedContentKey,
         transcriptFingerprint,
@@ -475,9 +540,25 @@ function SidepanelWorkspace() {
         updatedAt: new Date().toISOString(),
       })
 
-      if (!forceRegenerate) {
+      if (!force) {
         const cached = await historyRepository.getAnalysisCache(cacheKey)
-        if (cached?.analysis) {
+        if (cached?.analysis && isExactCurrentAnalysis({
+          contentKey: cached.contentKey,
+          transcriptFingerprint: cached.transcriptFingerprint,
+          providerProfileId: cached.providerProfileId,
+          baseUrl: cached.providerBaseUrl,
+          model: cached.providerModel,
+          analysisSchemaVersion: cached.analysisSchemaVersion,
+          analysisPromptVersion: cached.analysisPromptVersion,
+        }, {
+          contentKey: requestedContentKey,
+          transcriptFingerprint,
+          providerProfileId: requestedProvider.id,
+          baseUrl: resolvedProvider.profile.baseUrl,
+          model: resolvedProvider.profile.model,
+          analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+          analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+        })) {
           if (!isCurrentAnalysis()) throw new StaleTranscriptError()
           setAnalysisView({
             platform: video.platform,
@@ -536,6 +617,9 @@ function SidepanelWorkspace() {
         await historyRepository.saveTranscriptSnapshot({
           id: transcriptSnapshotId,
           videoId: video.videoId,
+          platform: video.platform,
+          contentKey: video.contentKey,
+          partId: video.partId ?? null,
           language: transcript.language ?? null,
           sourceUrl: transcript.raw?.sourceUrl ?? null,
           rawVtt: transcript.raw?.text ?? null,
@@ -572,6 +656,7 @@ function SidepanelWorkspace() {
             id: crypto.randomUUID(),
             analysisRunId,
             videoId: video.videoId,
+            contentKey: video.contentKey,
             title: chapter.title,
             summary: chapter.summary,
             detail: chapter.detail,
@@ -582,6 +667,8 @@ function SidepanelWorkspace() {
           })),
           recentVideo: {
             videoId: video.videoId,
+            analysisRunId,
+            contentKey: video.contentKey,
             title: video.title ?? videoContext.title ?? video.videoId,
             channelTitle: videoContext.author,
             thumbnailUrl: video.thumbnailUrl ?? null,
@@ -646,7 +733,7 @@ function SidepanelWorkspace() {
     } finally {
       if (analysisAbortRef.current === controller) analysisAbortRef.current = null
     }
-  }, [analysisView?.contentKey, loadTranscriptForCurrent, provider, refreshRecentAnalyses, videoContext])
+  }, [loadTranscriptForCurrent, provider, refreshRecentAnalyses, videoContext])
 
   const handleCancelAnalysis = useCallback(() => {
     if (!analysisAbortRef.current) return
@@ -654,7 +741,11 @@ function SidepanelWorkspace() {
     analysisAbortRef.current.abort()
   }, [])
 
-  const handleOpenSavedAnalysis = useCallback(async (videoId: string, contentKey?: string) => {
+  const handleOpenSavedAnalysis = useCallback(async (
+    videoId: string,
+    contentKey?: string,
+    analysisRunId?: string,
+  ) => {
     analysisGenerationRef.current += 1
     askGenerationRef.current += 1
     transcriptLoadGenerationRef.current += 1
@@ -672,7 +763,7 @@ function SidepanelWorkspace() {
         contentKey,
         platform: contentKey.startsWith("bilibili:") ? "bilibili" : "youtube",
         partId: contentKey.startsWith("bilibili:") ? contentKey.split(":p:")[1] ?? null : null,
-      }, generation)
+      }, generation, analysisRunId)
     } else {
       await loadSavedAnalysis(videoId, generation)
     }
@@ -684,7 +775,7 @@ function SidepanelWorkspace() {
     const consumePayload = async (rawValue: unknown) => {
       if (!isCurrent || !isPendingHistoryOpenPayload(rawValue)) return
       try {
-          await handleOpenSavedAnalysis(rawValue.videoId, rawValue.contentKey)
+          await handleOpenSavedAnalysis(rawValue.videoId, rawValue.contentKey, rawValue.analysisRunId)
       } finally {
         try {
           await chrome.storage?.local?.remove(PENDING_HISTORY_OPEN_KEY)
@@ -873,6 +964,10 @@ function SidepanelWorkspace() {
         overview={(
           <OverviewTab
             analysis={analysisView?.analysis ?? null}
+            hasCurrentAnalysis={Boolean(
+              analysisView
+              && analysisView.contentKey === videoContext.contentKey,
+            )}
             analysisError={visibleAnalysisError}
             analysisPhase={analysisPhase}
             isLoading={isAnalysisLoading}
@@ -890,6 +985,7 @@ function SidepanelWorkspace() {
             recentItems={recentItems}
             isHistoryLoading={isBootstrapping}
             activeVideoId={analysisView?.videoId ?? videoContext.videoId}
+            activeAnalysisRunId={analysisView?.analysisRunId}
             onAnalyze={handleAnalyze}
             onCancel={handleCancelAnalysis}
             onConfigureProvider={() => setActiveTab("settings")}

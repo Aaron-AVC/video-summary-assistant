@@ -14,6 +14,7 @@ import type { AnalysisPhase } from "@/sidepanel/lib/sidepanel-ux"
 
 type OverviewTabProps = {
   analysis: VideoAnalysis | null
+  hasCurrentAnalysis?: boolean
   analysisError: string | null
   analysisPhase: AnalysisPhase
   isLoading: boolean
@@ -23,17 +24,19 @@ type OverviewTabProps = {
   recentItems: RecentAnalysisListItem[]
   isHistoryLoading: boolean
   activeVideoId: string | null
-  onAnalyze: () => void | Promise<void>
+  activeAnalysisRunId?: string | null
+  onAnalyze: (options?: { force?: boolean }) => void | Promise<void>
   onCancel: () => void
   onConfigureProvider: () => void
   onJump: (timestampSeconds: number) => void | Promise<void>
-  onSelectHistory: (videoId: string) => void | Promise<void>
+  onSelectHistory: (videoId: string, contentKey?: string, analysisRunId?: string) => void | Promise<void>
   onOpenFullHistory: () => void
   formatTimestamp: (timestampSeconds: number) => string
 }
 
 export function OverviewTab({
   analysis,
+  hasCurrentAnalysis = Boolean(analysis),
   analysisError,
   analysisPhase,
   isLoading,
@@ -43,6 +46,7 @@ export function OverviewTab({
   recentItems,
   isHistoryLoading,
   activeVideoId,
+  activeAnalysisRunId,
   onAnalyze,
   onCancel,
   onConfigureProvider,
@@ -60,7 +64,7 @@ export function OverviewTab({
     <div className="flex min-w-0 flex-col gap-3" data-layout-check="overview-tab">
       <AnalysisToolbar
         hasProvider={hasProvider}
-        hasAnalysis={Boolean(analysis)}
+        hasAnalysis={hasCurrentAnalysis}
         canAnalyze={canAnalyze}
         status={analysisPhase}
         lastAnalyzedAt={lastAnalyzedAt}
@@ -99,6 +103,7 @@ export function OverviewTab({
         items={recentItems}
         isLoading={isHistoryLoading}
         activeVideoId={activeVideoId}
+        activeAnalysisRunId={activeAnalysisRunId}
         onSelect={onSelectHistory}
         onOpenFullHistory={onOpenFullHistory}
         scrollHeightClassName="h-[16rem]"

@@ -82,7 +82,7 @@ export const MIGRATION_BLOCKS: MigrationBlock[] = [
       segmentSummaries: "id, analysisRunId, videoId, [videoId+startSec]",
       recentVideos: "videoId, updatedAt, status",
       videoRecords: "&contentKey, platform, videoId, updatedAt, [platform+updatedAt]",
-      transcriptCache: "id, &contentKey, contentKey, fingerprint, updatedAt, [contentKey+updatedAt]",
+      transcriptCache: "id, contentKey, fingerprint, updatedAt, [contentKey+fingerprint], [contentKey+updatedAt]",
       analysisCache: "&cacheKey, contentKey, transcriptFingerprint, providerProfileId, updatedAt, [contentKey+updatedAt]",
       qaAnswers: "&cacheKey, contentKey, analysisRunId, question, updatedAt, [contentKey+updatedAt]"
     },

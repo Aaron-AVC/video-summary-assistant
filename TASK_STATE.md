@@ -1,7 +1,7 @@
 # TASK_STATE
 
 - 最后完成：Task 6 — CLOSED / PASS（最终 HEAD `964a176d356896b3c482a65449b8bb3e7afd551c`）
-- 当前任务：Task 8 — implementation complete / awaiting independent review
+- 当前任务：Task 8 — CR-06 follow-up / awaiting independent review
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`
@@ -151,7 +151,7 @@
 
 ## Task 8 — Persistence / cache identity
 
-- 状态：implementation complete / awaiting independent review；本次提交为 `feat: add content-aware analysis cache`。
+- 状态：CR-06 follow-up / awaiting independent review；修复提交为 `fix: complete content-aware persistence identity`。
 - v3 append-only Dexie migration 保留 v1/v2，新增 `videoRecords`、`transcriptCache`、`analysisCache` 与独立 `qaAnswers`；数据库名保持 `youtube-summarizer`。
 - YouTube 与 Bilibili 以 `contentKey` 为权威身份，Bilibili P1/P2 独立持久化；legacy `videoId` rows 继续可读并保留兼容字段。
 - Transcript fingerprint 使用版本化 canonical normalized cues 的 SHA-256；analysis/QA cache keys 使用稳定 canonical object + SHA-256，不含 API key、Authorization、display name 或 generatedAt。

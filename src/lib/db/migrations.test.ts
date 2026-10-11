@@ -191,4 +191,42 @@ describe("registerMigrations", () => {
     expect(copied.videoRecords[0]).toMatchObject({ contentKey: "youtube:youtube-1", platform: "youtube" })
     expect(recentRows).toHaveLength(1)
   })
+
+  it("copies multiple v2 transcript snapshots for one video without collapsing them", async () => {
+    const v3 = MIGRATION_BLOCKS.find((block) => block.version === 3)
+    const recentRows = [{
+      videoId: "youtube-1", title: "Video", channelTitle: null, thumbnailUrl: null,
+      openedAt: "2026-10-10T00:00:00.000Z", updatedAt: "2026-10-10T00:00:00.000Z", analyzedAt: null
+    }]
+    const snapshots = [
+      {
+        id: "snapshot-a", videoId: "youtube-1", language: "en", sourceUrl: null, rawVtt: "a",
+        cues: [{ startSec: 0, endSec: 1, text: "A" }], createdAt: "2026-10-09T00:00:00.000Z", updatedAt: "2026-10-09T00:00:00.000Z"
+      },
+      {
+        id: "snapshot-b", videoId: "youtube-1", language: "en", sourceUrl: null, rawVtt: "b",
+        cues: [{ startSec: 0, endSec: 1, text: "B" }], createdAt: "2026-10-10T00:00:00.000Z", updatedAt: "2026-10-10T00:00:00.000Z"
+      }
+    ]
+    const copied: Record<string, unknown[]> = { transcriptCache: [] }
+    const table = (name: string) => ({
+      toArray: async () => {
+        if (name === "recentVideos") return recentRows
+        if (name === "transcriptSnapshots") return snapshots
+        return []
+      },
+      toCollection: () => ({ modify: async () => undefined }),
+      bulkPut: async (rows: unknown[]) => { copied[name] = rows }
+    })
+
+    await v3?.upgrade?.({ table })
+
+    expect(copied.transcriptCache).toHaveLength(2)
+    expect(copied.transcriptCache?.map((row) => (row as { id: string }).id)).toEqual([
+      "legacy-transcript:snapshot-a",
+      "legacy-transcript:snapshot-b"
+    ])
+    expect(v3?.stores.transcriptCache).toContain("[contentKey+fingerprint]")
+    expect(v3?.stores.transcriptCache).not.toContain("&contentKey")
+  })
 })

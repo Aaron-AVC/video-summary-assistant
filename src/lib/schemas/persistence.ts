@@ -63,6 +63,7 @@ export const segmentSummarySchema = z.object({
   id: z.string().min(1),
   analysisRunId: z.string().min(1),
   videoId: z.string().trim().min(1),
+  contentKey: z.string().trim().min(1).optional(),
   title: z.string().trim().min(1),
   summary: z.string().trim().min(1),
   detail: z.string().trim().min(1).optional(),
@@ -102,6 +103,7 @@ export const analysisRunSchema = z.object({
 
 export const recentVideoSchema = z.object({
   videoId: z.string().trim().min(1),
+  analysisRunId: z.string().min(1).optional(),
   platform: z.enum(["youtube", "bilibili"]).optional(),
   contentKey: z.string().trim().min(1).optional(),
   partId: z.string().trim().min(1).nullable().optional(),

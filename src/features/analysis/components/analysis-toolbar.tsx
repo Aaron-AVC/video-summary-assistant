@@ -21,7 +21,7 @@ type AnalysisToolbarProps = {
   canAnalyze: boolean
   status: AnalysisPhase
   lastAnalyzedAt: string | null
-  onAnalyze: () => void | Promise<void>
+  onAnalyze: (options?: { force?: boolean }) => void | Promise<void>
   onCancel: () => void
   onConfigureProvider: () => void
 }
@@ -74,7 +74,10 @@ export function AnalysisToolbar({
               {isCancelling ? "Cancelling…" : "Cancel"}
             </Button>
           ) : (
-            <Button className="min-w-0 flex-1 gap-2" disabled={!canAnalyze} onClick={onAnalyze}>
+            <Button
+              className="min-w-0 flex-1 gap-2"
+              disabled={!canAnalyze}
+              onClick={() => onAnalyze({ force: action.kind === "regenerate" })}>
               {status === "loading-transcript" || status === "analyzing" ? (
                 <Loader2 data-icon="inline-start" className="animate-spin" />
               ) : action.kind === "regenerate" ? (

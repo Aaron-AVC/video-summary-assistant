@@ -12,6 +12,7 @@ import {
   analysisCacheSchema,
   qaAnswerSchema,
   transcriptCacheSchema,
+  transcriptSnapshotSchema,
   videoRecordSchema
 } from "@/lib/schemas/persistence"
 import type {
@@ -63,6 +64,49 @@ function normalizeSegments(segments: SegmentSummaryEntity[]) {
   return segments.map((segment) => segmentSummarySchema.parse(segment))
 }
 
+type IndexedCollection<T> = {
+  equals?: (key: unknown) => {
+    reverse?: () => { first: () => Promise<T | undefined> }
+    first?: () => Promise<T | undefined>
+    toArray: () => Promise<T[]>
+  }
+  between?: (lower: unknown[], upper: unknown[]) => {
+    reverse: () => { first: () => Promise<T | undefined> }
+  }
+}
+
+async function queryLatestByCompoundIndex<T>(
+  table: { where: (index: string) => IndexedCollection<T> },
+  index: string,
+  key: unknown,
+): Promise<T | null> {
+  try {
+    const collection = table.where(index)
+    const equals = collection.equals?.(key)
+    if (equals?.reverse) return (await equals.reverse().first()) ?? null
+    if (equals?.first) return (await equals.first()) ?? null
+    return (await equals?.toArray?.())?.[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+async function queryLatestByCompoundPrefix<T>(
+  table: { where: (index: string) => IndexedCollection<T> },
+  index: string,
+  prefix: string,
+): Promise<T | null> {
+  try {
+    const collection = table.where(index)
+    if (collection.between) {
+      return (await collection.between([prefix, ""], [prefix, "￿"]).reverse().first()) ?? null
+    }
+  } catch {
+    // Fall through to the compatibility scan below.
+  }
+  return null
+}
+
 export function createHistoryRepository(database = db, options: HistoryRepositoryOptions = {}) {
   const recentVideosRetentionLimit =
     options.recentVideosRetentionLimit ?? RECENT_VIDEOS_RETENTION_LIMIT
@@ -100,6 +144,19 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
     )
   }
 
+  async function shedOldCachedRawVtt() {
+    if (transcriptRawVttRetentionDays <= 0) return
+    const cacheTable = (database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache
+    if (!cacheTable) return
+    const cutoffIso = new Date(now().getTime() - transcriptRawVttRetentionDays * MILLISECONDS_PER_DAY).toISOString()
+    const stale = (await cacheTable.toArray()).filter(
+      (snapshot) => snapshot.rawVtt !== null && snapshot.updatedAt < cutoffIso
+    )
+    if (stale.length > 0 && typeof cacheTable.bulkPut === "function") {
+      await cacheTable.bulkPut(stale.map((snapshot) => ({ ...snapshot, rawVtt: null })))
+    }
+  }
+
   return {
     async saveTranscriptSnapshot(snapshot: TranscriptSnapshotEntity) {
       return runWriteWithQuotaGuard(async () => {
@@ -108,25 +165,56 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         return snapshot
       })
     },
-    async saveTranscriptCache(input: TranscriptCacheEntity) {
+    async saveOrReuseTranscriptSnapshot(input: TranscriptCacheEntity) {
       const parsed = transcriptCacheSchema.parse(input)
       const cacheTable = (database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache
       if (!cacheTable) return parsed
       return runWriteWithQuotaGuard(async () => {
-        await cacheTable.put(parsed)
-        return parsed
+        let existing: TranscriptCacheEntity | null = null
+        if (parsed.fingerprint) {
+          existing = await queryLatestByCompoundIndex(
+            cacheTable as never,
+            "[contentKey+fingerprint]",
+            [parsed.contentKey, parsed.fingerprint],
+          )
+        }
+        if (!existing) {
+          for (const row of await cacheTable.toArray()) {
+            if (row.contentKey === parsed.contentKey && row.fingerprint === parsed.fingerprint) {
+              existing = row
+              break
+            }
+          }
+        }
+        const stored = { ...parsed, id: existing?.id ?? parsed.id }
+        await cacheTable.put(stored)
+        await shedOldCachedRawVtt()
+        return stored
       })
+    },
+    async saveTranscriptCache(input: TranscriptCacheEntity) {
+      return this.saveOrReuseTranscriptSnapshot(input)
     },
     async getLatestTranscriptByContentKey(contentKey: string) {
       const cacheTable = (database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache
-      const parsed = cacheTable
-        ? (await cacheTable.toArray())
-          .filter((row) => (row as TranscriptCacheEntity).contentKey === contentKey)
-          .flatMap((row) => {
-            try { return [transcriptCacheSchema.parse(row)] } catch { return [] }
-          })
-        : []
-      const cached = byNewest(parsed)[0]
+      let cached: TranscriptCacheEntity | null = null
+      if (cacheTable) {
+        cached = await queryLatestByCompoundPrefix(
+          cacheTable as never,
+          "[contentKey+updatedAt]",
+          contentKey,
+        )
+        if (!cached) {
+          const parsed: TranscriptCacheEntity[] = []
+          for (const row of await cacheTable.toArray()) {
+            if (row.contentKey !== contentKey) continue
+            try { parsed.push(transcriptCacheSchema.parse(row)) } catch { /* ignore corrupt cache rows */ }
+          }
+          cached = byNewest(parsed)[0] ?? null
+        } else {
+          try { cached = transcriptCacheSchema.parse(cached) } catch { cached = null }
+        }
+      }
       if (cached) return cached
       if (contentKey.startsWith("youtube:")) {
         const videoId = contentKey.slice("youtube:".length)
@@ -142,6 +230,10 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         }
       }
       return null
+    },
+    async getTranscriptSnapshotById(id: string) {
+      const row = await database.transcriptSnapshots.get(id)
+      return row ? transcriptSnapshotSchema.parse(row) : null
     },
     async saveVideoRecord(input: VideoRecordEntity) {
       const parsed = videoRecordSchema.parse(input)
@@ -181,20 +273,22 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         const analysisRun = normalizeAnalysisRun(input.analysisRun)
         const segments = normalizeSegments(input.segments)
 
+        const isCanonical = Boolean(analysisRun.contentKey)
         await runTransaction(
           "rw",
-          ["analysisRuns", "segmentSummaries", "recentVideos"],
+          isCanonical
+            ? ["analysisRuns", "segmentSummaries"]
+            : ["analysisRuns", "segmentSummaries", "recentVideos"],
           async () => {
             await database.analysisRuns.put(analysisRun)
             await database.segmentSummaries.bulkPut(segments)
-            await database.recentVideos.put({
-              ...input.recentVideo,
-              updatedAt
-            })
+            if (!isCanonical) {
+              await database.recentVideos.put({ ...input.recentVideo, updatedAt })
+            }
           }
         )
 
-        await trimRecentVideos()
+        if (!isCanonical) await trimRecentVideos()
 
         return {
           ...analysisRun,
@@ -337,49 +431,104 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         completedAt: latest.updatedAt
       } : null
     },
+    async getAnalysisRunById(analysisRunId: string) {
+      const row = await database.analysisRuns.get(analysisRunId)
+      if (!row) return null
+      const analysisRun = normalizeAnalysisRun(row)
+      const segments = await database.segmentSummaries
+        .where("analysisRunId")
+        .equals(analysisRunId)
+        .toArray()
+      return {
+        ...analysisRun,
+        segments: normalizeSegments(segments).sort((left, right) => left.startSec - right.startSec)
+      }
+    },
     async listRecentAnalyses(limit = 10) {
-      const recentVideos = byNewest(await database.recentVideos.toArray()).slice(0, limit)
+      const recordsTable = (database as typeof database & { videoRecords?: typeof database.recentVideos }).videoRecords
+      const cacheTable = (database as typeof database & { analysisCache?: typeof database.analysisRuns }).analysisCache
+      const canonicalRuns = (await database.analysisRuns.toArray())
+        .map((row) => { try { return normalizeAnalysisRun(row) } catch { return null } })
+        .filter((row): row is AnalysisRunEntity => Boolean(row && row.status === "completed" && row.contentKey))
+      const records = recordsTable ? await recordsTable.toArray() : []
+      const parsedRecords = records.flatMap((record) => {
+        const parsedRecord = (() => { try { return videoRecordSchema.parse(record) } catch { return null } })()
+        if (!parsedRecord) return []
+        return [parsedRecord]
+      })
+      const caches = cacheTable
+        ? (await cacheTable.toArray()).flatMap((row) => {
+          try { return [analysisCacheSchema.parse(row)] } catch { return [] }
+        })
+        : []
+      const canonicalEntries = (await Promise.all(canonicalRuns.map(async (run) => {
+        const parsedRecord = parsedRecords.find((record) => record.contentKey === run.contentKey)
+        const cache = caches.find((row) => row.analysisRunId === run.id && row.analysis)
+        const segments = normalizeSegments(await database.segmentSummaries
+          .where("analysisRunId")
+          .equals(run.id)
+          .toArray())
+        const analysis = cache?.analysis ?? {
+          summary: run.summary,
+          keyPoints: run.keyPoints,
+          chapters: segments.map((segment) => ({
+            title: segment.title,
+            summary: segment.summary,
+            detail: segment.detail ?? segment.summary,
+            startSec: segment.startSec,
+            endSec: segment.endSec
+          })) ?? []
+        }
+        if (!parsedRecord && !cache) return []
+        const video = parsedRecord ?? {
+          videoId: run.videoId,
+          contentKey: run.contentKey!,
+          platform: run.platform ?? "youtube",
+          partId: run.partId ?? null,
+          title: run.videoId,
+          channelTitle: null,
+          thumbnailUrl: null,
+          canonicalUrl: null,
+          durationSec: null,
+          openedAt: run.createdAt,
+          updatedAt: run.updatedAt,
+          analyzedAt: run.completedAt
+        }
+        return [{
+          recentVideo: {
+            videoId: video.videoId,
+            analysisRunId: run.id,
+            contentKey: video.contentKey,
+            platform: video.platform,
+            partId: video.partId,
+            title: video.title,
+            channelTitle: video.channelTitle,
+            thumbnailUrl: video.thumbnailUrl,
+            status: "completed" as const,
+            updatedAt: run.updatedAt,
+            openedAt: video.openedAt,
+            analyzedAt: run.completedAt
+          },
+          analysis: {
+            ...run,
+            summary: analysis.summary,
+            videoId: video.videoId,
+            contentKey: video.contentKey,
+            platform: video.platform,
+            segments
+          }
+        }]
+      }))).flat()
+      const canonicalKeys = new Set(canonicalRuns.map((run) => run.contentKey))
+      const recentVideos = byNewest(await database.recentVideos.toArray())
+        .filter((entry) => !entry.contentKey || !canonicalKeys.has(entry.contentKey))
+        .slice(0, limit)
       const legacyEntries = await Promise.all(
         recentVideos.map(async (recentVideo) => ({
           recentVideo,
           analysis: await this.getCurrentAnalysisByVideoId(recentVideo.videoId)
         }))
       )
-      const recordsTable = (database as typeof database & { videoRecords?: typeof database.recentVideos }).videoRecords
-      const cacheTable = (database as typeof database & { analysisCache?: typeof database.analysisRuns }).analysisCache
-      if (!recordsTable || !cacheTable) return legacyEntries
-      const records = await recordsTable.toArray()
-      const caches = (await cacheTable.toArray()).flatMap((row) => {
-        try { return [analysisCacheSchema.parse(row)] } catch { return [] }
-      })
-      const canonicalEntries = records.flatMap((record) => {
-        const parsedRecord = (() => { try { return videoRecordSchema.parse(record) } catch { return null } })()
-        if (!parsedRecord) return []
-        const analysis = byNewest(caches.filter((row) => row.contentKey === parsedRecord.contentKey && row.analysis))[0]
-        if (!analysis?.analysis) return []
-        return [{
-          recentVideo: {
-            videoId: parsedRecord.videoId,
-            contentKey: parsedRecord.contentKey,
-            platform: parsedRecord.platform,
-            partId: parsedRecord.partId,
-            title: parsedRecord.title,
-            channelTitle: parsedRecord.channelTitle,
-            thumbnailUrl: parsedRecord.thumbnailUrl,
-            status: "completed" as const,
-            updatedAt: parsedRecord.updatedAt,
-            openedAt: parsedRecord.openedAt,
-            analyzedAt: parsedRecord.analyzedAt
-          },
-          analysis: {
-            ...analysis,
-            summary: analysis.analysis.summary,
-            videoId: parsedRecord.videoId,
-            contentKey: parsedRecord.contentKey,
-            platform: parsedRecord.platform
-          }
-        }]
-      })
       return [...legacyEntries, ...canonicalEntries]
         .sort((left, right) => right.recentVideo.updatedAt.localeCompare(left.recentVideo.updatedAt))
         .slice(0, limit)

@@ -6,7 +6,7 @@ import {
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
 /** Bump when the canonical cue serialization changes. */
-export const TRANSCRIPT_FINGERPRINT_VERSION = 1
+export const TRANSCRIPT_FINGERPRINT_VERSION = 2
 export const VIDEO_QA_SCHEMA_VERSION = 1
 export const VIDEO_QA_PROMPT_VERSION = "video-qa-v1"
 
@@ -70,7 +70,7 @@ function normalizeCue(cue: TranscriptCue) {
   return {
     startSec: Number(cue.startSec),
     endSec: Number(cue.endSec),
-    text: cue.text.trim().replace(/\s+/g, " ")
+    text: cue.text
   }
 }
 
@@ -99,6 +99,31 @@ export function buildAnalysisCacheIdentity(input: AnalysisCacheIdentityInput) {
 
 export async function computeAnalysisCacheKey(input: AnalysisCacheIdentityInput): Promise<string> {
   return sha256Hex(canonicalJson(buildAnalysisCacheIdentity(input)))
+}
+
+export type ExactAnalysisIdentity = {
+  contentKey: string
+  transcriptFingerprint: string | null | undefined
+  providerProfileId: string | null | undefined
+  baseUrl: string | null | undefined
+  model: string | null | undefined
+  analysisSchemaVersion: number | null | undefined
+  analysisPromptVersion: string | null | undefined
+}
+
+export function isExactCurrentAnalysis(
+  analysis: ExactAnalysisIdentity | null | undefined,
+  current: ExactAnalysisIdentity | null | undefined,
+) {
+  if (!analysis || !current) return false
+  if (analysis.contentKey !== current.contentKey) return false
+  if (analysis.transcriptFingerprint !== current.transcriptFingerprint) return false
+  if (analysis.providerProfileId !== current.providerProfileId) return false
+  if (analysis.model?.trim() !== current.model?.trim()) return false
+  if (analysis.analysisSchemaVersion !== current.analysisSchemaVersion) return false
+  if (analysis.analysisPromptVersion !== current.analysisPromptVersion) return false
+  if (!analysis.baseUrl || !current.baseUrl) return false
+  return normalizeCacheBaseUrl(analysis.baseUrl) === normalizeCacheBaseUrl(current.baseUrl)
 }
 
 export function buildQaCacheIdentity(input: QaCacheIdentityInput) {

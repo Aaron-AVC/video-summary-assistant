@@ -5,6 +5,7 @@ import {
   computeAnalysisCacheKey,
   computeQaCacheKey,
   computeTranscriptFingerprint,
+  isExactCurrentAnalysis,
   normalizeCacheBaseUrl
 } from "@/lib/persistence/cache-identity"
 
@@ -14,7 +15,7 @@ const cues = [
 ]
 
 describe("content-aware persistence identities", () => {
-  it("fingerprints canonical normalized cues and excludes source metadata", async () => {
+  it("fingerprints cue text byte-for-byte and excludes source metadata", async () => {
     const first = await computeTranscriptFingerprint(cues)
     const equivalent = await computeTranscriptFingerprint([
       { startSec: 0, endSec: 2, text: "Hello world" },
@@ -25,8 +26,38 @@ describe("content-aware persistence identities", () => {
       { startSec: 2, endSec: 5, text: "Changed" }
     ])
 
-    expect(first).toBe(equivalent)
+    expect(first).not.toBe(equivalent)
     expect(first).not.toBe(changed)
+  })
+
+  it("keeps identical normalized cues stable while preserving whitespace changes", async () => {
+    const first = await computeTranscriptFingerprint([
+      { startSec: 0, endSec: 2, text: "a  b" }
+    ])
+    const same = await computeTranscriptFingerprint([
+      { startSec: 0, endSec: 2, text: "a  b" }
+    ])
+    const changed = await computeTranscriptFingerprint([
+      { startSec: 0, endSec: 2, text: "a b" }
+    ])
+    expect(first).toBe(same)
+    expect(first).not.toBe(changed)
+  })
+
+  it("recognizes only an exact current analysis identity", () => {
+    const identity = {
+      contentKey: "youtube:a",
+      transcriptFingerprint: "fp",
+      providerProfileId: "profile",
+      baseUrl: "https://api.example.com/v1",
+      model: "model",
+      analysisSchemaVersion: 1,
+      analysisPromptVersion: "prompt"
+    }
+    expect(isExactCurrentAnalysis(identity, { ...identity, baseUrl: "https://API.EXAMPLE.COM/v1/" })).toBe(true)
+    expect(isExactCurrentAnalysis(identity, { ...identity, transcriptFingerprint: "other" })).toBe(false)
+    expect(isExactCurrentAnalysis(identity, { ...identity, model: "model-2" })).toBe(false)
+    expect(isExactCurrentAnalysis({ ...identity, baseUrl: null }, identity)).toBe(false)
   })
 
   it("normalizes base URLs without collapsing meaningful path prefixes", () => {

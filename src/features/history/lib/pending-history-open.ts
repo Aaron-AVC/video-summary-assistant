@@ -10,6 +10,7 @@ export const PENDING_HISTORY_OPEN_KEY = "yt-summarizer.pending-history-open"
 export type PendingHistoryOpenPayload = {
   videoId: string
   contentKey?: string
+  analysisRunId?: string
   requestedAt: number
 }
 
@@ -23,6 +24,7 @@ export function isPendingHistoryOpenPayload(
     candidate.videoId.length > 0 &&
     typeof candidate.requestedAt === "number" &&
     Number.isFinite(candidate.requestedAt) &&
-    (candidate.contentKey === undefined || typeof candidate.contentKey === "string")
+    (candidate.contentKey === undefined || typeof candidate.contentKey === "string") &&
+    (candidate.analysisRunId === undefined || typeof candidate.analysisRunId === "string")
   )
 }

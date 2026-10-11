@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 
 export type RecentAnalysisListItem = {
   videoId: string
+  analysisRunId?: string
   contentKey?: string
   partId?: string | null
   platform?: "youtube" | "bilibili"
@@ -30,7 +31,8 @@ type RecentAnalysisListProps = {
   items: RecentAnalysisListItem[]
   isLoading: boolean
   activeVideoId: string | null
-  onSelect: (videoId: string, contentKey?: string) => void | Promise<void>
+  activeAnalysisRunId?: string | null
+  onSelect: (videoId: string, contentKey?: string, analysisRunId?: string) => void | Promise<void>
   onOpenFullHistory?: () => void
   searchable?: boolean
   searchPlaceholder?: string
@@ -42,6 +44,7 @@ export function RecentAnalysisList({
   items,
   isLoading,
   activeVideoId,
+  activeAnalysisRunId = null,
   onSelect,
   onOpenFullHistory,
   searchable = true,
@@ -107,13 +110,15 @@ export function RecentAnalysisList({
           <ScrollArea className={scrollHeightClassName}>
             <div className="space-y-3">
               {filteredItems.map((item) => {
-                const isActive = item.videoId === activeVideoId
+                const isActive = item.analysisRunId
+                  ? item.analysisRunId === activeAnalysisRunId
+                  : item.videoId === activeVideoId
 
                 return (
                   <button
-                    key={item.contentKey ?? item.videoId}
+                    key={item.analysisRunId ?? item.contentKey ?? item.videoId}
                     type="button"
-                    onClick={() => onSelect(item.videoId, item.contentKey)}
+                    onClick={() => onSelect(item.videoId, item.contentKey, item.analysisRunId)}
                     className={cn(
                       "w-full rounded-2xl border p-4 text-left transition-colors",
                       isActive

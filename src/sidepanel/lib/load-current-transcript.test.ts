@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test"
 
 import {
   StaleTranscriptError,
-  loadCurrentTranscript
+  loadCurrentTranscript,
+  resolveCurrentTranscript
 } from "@/sidepanel/lib/load-current-transcript"
 import { FETCH_VIDEO_TRANSCRIPT } from "@/lib/runtime/messages"
 
@@ -60,5 +61,55 @@ describe("loadCurrentTranscript", () => {
         error: "captions_unavailable"
       })
     })).rejects.toThrow("captions_unavailable")
+  })
+})
+
+describe("resolveCurrentTranscript", () => {
+  const result = {
+    video: {
+      platform: "youtube" as const,
+      videoId: "video-1",
+      contentKey: "youtube:video-1",
+      title: "Video",
+      canonicalUrl: "https://www.youtube.com/watch?v=video-1"
+    },
+    transcript: {
+      segments: [{ startSec: 0, endSec: 1, text: "cached" }],
+      source: "unknown" as const
+    }
+  }
+
+  it("uses session or IndexedDB candidates before remote fetch", async () => {
+    let remoteCalls = 0
+    const session = await resolveCurrentTranscript({
+      requestedContentKey: "youtube:video-1",
+      isCurrent: () => true,
+      sessionResult: result,
+      loadRemote: async () => { remoteCalls += 1; return result }
+    })
+    expect(session).toBe(result)
+    expect(remoteCalls).toBe(0)
+
+    const cached = await resolveCurrentTranscript({
+      requestedContentKey: "youtube:video-1",
+      isCurrent: () => true,
+      loadCached: async () => result,
+      loadRemote: async () => { remoteCalls += 1; return result }
+    })
+    expect(cached).toBe(result)
+    expect(remoteCalls).toBe(0)
+  })
+
+  it("forces a remote reload when explicitly requested", async () => {
+    let remoteCalls = 0
+    await resolveCurrentTranscript({
+      requestedContentKey: "youtube:video-1",
+      isCurrent: () => true,
+      forceReload: true,
+      sessionResult: result,
+      loadCached: async () => result,
+      loadRemote: async () => { remoteCalls += 1; return result }
+    })
+    expect(remoteCalls).toBe(1)
   })
 })

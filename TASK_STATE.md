@@ -1,7 +1,11 @@
 # TASK_STATE
 
-- 最后完成：Task 6 — CLOSED / PASS（最终 HEAD `964a176d356896b3c482a65449b8bb3e7afd551c`）
-- 当前任务：Task 8 — CR-06 follow-up / awaiting independent review
+- 最后完成：Task 8 — CLOSED / PASS（最终 HEAD `ac3fb3038df3e9af6a2a01fcbf430b4fd52bf1f3`）
+- 当前任务：Task 9 — implementation complete / awaiting independent review
+- Task 8 最终 HEAD：`ac3fb3038df3e9af6a2a01fcbf430b4fd52bf1f3` (`fix: restore latest active transcript cache`)
+- Task 9 release-readiness changes: current V1 README, content-aware persistence/cache documentation, and current Side Panel architecture boundary documentation.
+- Task 9 validation: 249 tests / 824 expect() calls, typecheck PASS, frozen-lockfile install PASS, clean build PASS in authorized environment after sandbox `spawn EPERM`, package PASS, production artifact secret/path scan PASS, `git diff --check` PASS.
+- Browser smoke: NOT RUN — environment limitation. Browser binaries were detected, but no usable Computer Use/GUI automation tool was available in this session; no user profile was opened or modified.
 - Task 2 状态：CLOSED / PASS（含独立复审）
 - Task 3 状态：CLOSED / PASS（最终 HEAD `419898ed093be2beb32c8e49c727d9e9b9d52841`，已实际 commit + push）
 - Task 1 最终复审基线 HEAD：`b7d165bfa3104c6b0ec4a77c35d0e6ad61662476`

@@ -33,6 +33,10 @@ writes only the separate transcript cache. Ask answers use `qaAnswers` and are
 reused only after persisted schema validation; corrupt rows are ignored and
 re-requested.
 
-## Task 8 boundary
+## Current V1 boundary
 
-Task 7 does not add ASR, Vision, or a second runtime orchestration layer.
+The Side Panel uses the Task 8 content-aware persistence layer described in
+`docs/persistence-cache.md`. It does not add ASR, Vision, or a second runtime
+orchestration layer. Legacy `topics`, `segments`, and `moments` remain only in
+the compatibility projection for historical rows; fresh UI state uses the
+canonical Summary, Key Points, and Chapters contract.

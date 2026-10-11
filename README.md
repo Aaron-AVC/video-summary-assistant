@@ -1,80 +1,125 @@
 # Video Summary Assistant
 
-Video Summary Assistant is a Chromium browser extension for turning captioned
-videos into structured, timestamp-aware summaries with a user-configured
-OpenAI-compatible API.
+Video Summary Assistant is a local-first Chromium Manifest V3 extension for
+captioned YouTube and Bilibili videos. It turns an available transcript into a
+structured summary with timestamp navigation, then lets you ask questions
+against the selected analysis.
 
-## Current status
+## V1 capabilities
 
-**Task 1 — Clean baseline** is complete in the current development branch.
-This baseline supports YouTube only. It preserves the browser-side caption
-retrieval, analysis schema, Ask AI foundation, Side Panel, Options page, and
-Dexie/IndexedDB foundation needed for the next tasks.
+- YouTube desktop watch pages: `www.youtube.com/watch...` and
+  `youtube.com/watch...`.
+- Bilibili desktop video pages: `www.bilibili.com/video/BV...`, including
+  supported multi-part pages selected with `?p=N`.
+- Summary, Key Points, Chapters, transcript viewing/search, timestamp jumps,
+  and Ask.
+- OpenAI-compatible Provider Profiles with a configurable HTTPS endpoint,
+  model ID, and optional loopback HTTP endpoint for local development.
+- Local IndexedDB persistence for video history, transcript snapshots, exact
+  analysis cache entries, analysis runs, and validated Ask answers.
+- A Chrome Side Panel with Overview, Transcript, Ask, and Settings tabs.
 
-The final product is planned to support YouTube and Bilibili, but Bilibili is
-not implemented in this baseline. Native hosts, Python, yt-dlp, ASR, Codex
-CLI, and Trae CLI are not runtime requirements. The extension runtime does
-not depend on Codex or on a local agent process.
+V1 is transcript-based. It does not include ASR/Whisper, vision, frame
+extraction, OCR, web search, a native helper, `yt-dlp`, cloud sync, accounts,
+mobile support, Firefox support, YouTube Shorts, Bilibili bangumi, or semantic
+vector retrieval for Ask.
 
-## Technology baseline
+## Transcript requirement
 
-- Plasmo
-- React
-- TypeScript
-- Bun `1.2.5`
-- Chrome Manifest V3
-- Chrome Side Panel
-- Zod-validated analysis and runtime message schemas
-- Dexie/IndexedDB for local persistence
+The current page must expose usable captions or subtitles. When no supported
+transcript is available, the extension reports that state; it does not record
+audio or start an ASR fallback. Bilibili subtitle availability can vary by
+video, region, and browser session.
+
+## Provider configuration
+
+Open Settings in the Side Panel and save a Provider Profile with:
+
+1. a display name;
+2. an OpenAI-compatible base URL, optionally including a path prefix;
+3. an explicit model ID; and
+4. an API key.
+
+Model discovery through `GET /models` is best effort. Manual model IDs remain
+valid when a provider does not implement that endpoint. Test connection,
+Analyze, and Ask use `POST /chat/completions` and send the selected model
+explicitly on every request. Provider host access is optional and is requested
+only from an explicit Save Provider, Fetch models, or Test connection action.
+
+## Side Panel workflow
+
+Open a supported video, open the extension Side Panel, and confirm the current
+video header. Use Overview to load or generate an analysis, Transcript to load
+and search captions or jump to a cue, Ask to query the current analysis, and
+Settings to manage Provider Profiles. Generate may reuse an exact current
+cache entry. Regenerate deliberately bypasses that entry and creates a new
+analysis run while keeping older history available.
+
+## Local data and privacy
+
+Transcript, analysis, history, and cache data are stored locally in IndexedDB.
+The existing IndexedDB name `youtube-summarizer` is retained as a migration
+compatibility identifier. Provider metadata and the API-key secret map are
+stored locally in `chrome.storage.local`; API keys are not included in Settings
+exports, IndexedDB exports, combined exports, cache keys, history, or logs.
+
+Requests are sent only to the Provider URL configured and authorized by the
+user. Bilibili requests use the normal browser session for the supported page;
+the extension does not read, copy, store, or log cookies. There is no separate
+account service or cloud backend, and the project does not claim hardware
+security or end-to-end encryption.
 
 ## Development
 
-Install dependencies with the pinned package manager:
+This repository uses Bun `1.2.5`, pinned in `package.json`.
 
 ```sh
-bun install
-```
-
-Run the baseline checks:
-
-```sh
+bun install --frozen-lockfile
 bun test
 bun run typecheck
 bun run build
+bun run package
 ```
 
-The production build is emitted under `build/chrome-mv3-prod` by Plasmo.
+The production build is emitted under `build/chrome-mv3-prod`. The package
+command creates a local archive for inspection; it does not publish anything.
 
 ## Load the unpacked extension
 
 1. Run `bun run build`.
-2. Open `chrome://extensions` in Chrome or Chromium.
-3. Enable **Developer mode**.
-4. Select **Load unpacked**.
-5. Choose `build/chrome-mv3-prod`.
-6. Open a YouTube watch page with captions and use the extension action or
-   Side Panel.
+2. Open `chrome://extensions` in Chrome, Chromium, or Edge.
+3. Enable Developer mode.
+4. Choose **Load unpacked**.
+5. Select `build/chrome-mv3-prod`.
+6. Open a supported desktop video page and open the Side Panel.
 
-The Task 1 manifest contains only the baseline extension permissions and
-YouTube host permissions. Runtime permissions for arbitrary AI provider
-origins are intentionally not implemented yet; that is a Task 4 concern.
+Use a temporary browser profile for smoke testing. Do not load the extension
+into a daily profile when testing release artifacts.
 
-## Planned task sequence
+## Known limitations
 
-1. Clean baseline — current task
-2. Platform abstraction
-3. Bilibili adapter
-4. Provider profiles and runtime provider permissions
-5. Structured video analysis
-6. Long-video pipeline
-7. Side Panel product experience
-8. Cache/history hardening
-9. Final V1 review
+- Captions are required; there is no ASR fallback.
+- Only the desktop YouTube watch and supported Bilibili BV video URL scopes are
+  handled. Shorts, bangumi, mobile pages, and unrelated routes are outside V1.
+- OpenAI-compatible APIs can differ in authentication, model discovery, model
+  limits, and structured JSON behavior. The provider must accept the
+  documented endpoints and structured JSON requests.
+- Long videos can make multiple sequential API calls. Usage and cost are
+  determined by the configured Provider.
+- Bilibili subtitle and metadata availability can depend on the video, region,
+  and normal browser session state.
+- Browser smoke coverage depends on whether an isolated Chromium/Chrome/Edge
+  environment is available; automated unit, migration, build, and package
+  checks do not prove real-site behavior.
+
+## Project status
+
+This repository is at V1 release-readiness review. The extension is not
+published to the Chrome Web Store, Edge Add-ons, npm, or another release
+channel by the build or package commands.
 
 ## Third-party notices
 
-The current code baseline incorporates selected code from the fixed
-`YouTube-Summarizer` snapshot documented in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). BiliScript and Video Digest
-were architectural references only in Task 0; their code is not a runtime or
-source dependency of this baseline.
+License and attribution information for incorporated code and architectural
+references is recorded in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

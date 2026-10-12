@@ -5,6 +5,7 @@ import {
   CONTENT_VIDEO_CONTEXT_CHANGED,
   FETCH_BILIBILI_RESOURCE,
   GET_ACTIVE_VIDEO_CONTEXT,
+  REFRESH_YOUTUBE_CAPTION_RESOURCE,
   READ_YOUTUBE_LIVE_PLAYER_STATE,
   RUNTIME_MESSAGE_NAMESPACE,
   isActiveVideoContextChangedMessage,
@@ -104,6 +105,25 @@ describe("runtime message boundaries", () => {
       type: READ_YOUTUBE_LIVE_PLAYER_STATE,
       videoId: "video-1",
     })).toBe(false)
+
+    expect(isRuntimeRequestMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+      videoId: "video-1",
+      previousStartTime: 10,
+    })).toBe(true)
+    expect(isRuntimeRequestMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+      videoId: "video-1",
+      previousStartTime: -1,
+    })).toBe(false)
+    expect(isContentScriptRequestMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+      videoId: "video-1",
+      previousStartTime: 10,
+    })).toBe(false)
   })
 
   it("validates content context announcements for extension relay", () => {
@@ -187,6 +207,34 @@ describe("sendRuntimeMessage validation", () => {
       ok: true,
       type: READ_YOUTUBE_LIVE_PLAYER_STATE,
       playerState: { videoId: "video-1", author: "Live author" },
+    })
+  })
+
+  it("accepts a bounded caption refresh response with a current signed candidate", async () => {
+    installChromeRuntime(async () => ({
+      ok: true,
+      type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+      tabId: 1,
+      candidate: {
+        url: "https://www.youtube.com/api/timedtext?v=video-1&lang=zh-Hans&fmt=json3&signature=secret",
+        videoId: "video-1",
+        languageCode: "zh-Hans",
+        format: "json3",
+        startTime: 100,
+      },
+    }))
+
+    const response = await sendRuntimeMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+      videoId: "video-1",
+      previousStartTime: 10,
+    })
+
+    expect(response).toMatchObject({
+      ok: true,
+      type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+      candidate: { languageCode: "zh-Hans", startTime: 100 },
     })
   })
 

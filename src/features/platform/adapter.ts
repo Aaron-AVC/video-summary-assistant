@@ -1,5 +1,8 @@
 import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
-import type { YouTubeLivePlayerState } from "@/features/platform/youtube/youtube-live-state"
+import type {
+  YouTubeLivePlayerState,
+  YouTubeTimedtextCandidate,
+} from "@/features/platform/youtube/youtube-live-state"
 import type {
   NativeChapter,
   VideoIdentity,
@@ -16,6 +19,11 @@ export type PlatformPageEnvironment = {
   getCurrentUrl?: () => URL
   /** Bounded MAIN-world YouTube player/timedtext snapshot, injected by the runtime bridge. */
   readYouTubeLivePlayerState?: (expectedVideoId: string) => Promise<YouTubeLivePlayerState | null>
+  /** One-shot bounded caption reload used only during an explicit transcript request. */
+  refreshYouTubeCaptionResource?: (
+    expectedVideoId: string,
+    previousStartTime: number,
+  ) => Promise<YouTubeTimedtextCandidate | null>
   diagnosticLoggingEnabled?: boolean
 }
 

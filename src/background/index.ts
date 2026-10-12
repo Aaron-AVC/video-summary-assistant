@@ -1,7 +1,9 @@
 import { resolvePlatformAdapter, resolvePlatformAdapterForIdentity } from "@/features/platform/registry"
 import {
   normalizeYouTubeLivePlayerState,
+  normalizeYouTubeTimedtextCandidate,
   readYouTubeLivePlayerStateInMainWorld,
+  refreshYouTubeCaptionResourceInMainWorld,
 } from "@/features/platform/youtube/youtube-live-state"
 import { isAllowedBilibiliTransport } from "@/features/platform/bilibili/bilibili-transport-policy"
 import {
@@ -21,6 +23,7 @@ import {
   JUMP_TO_TIMESTAMP,
   OPEN_SIDEPANEL,
   READ_YOUTUBE_LIVE_PLAYER_STATE,
+  REFRESH_YOUTUBE_CAPTION_RESOURCE,
   RUNTIME_MESSAGE_NAMESPACE,
   type ContentScriptRequestMessage,
   type ContentScriptResponseMessage,
@@ -44,6 +47,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!isRuntimeRequestMessage(message)) return
   if (message.type === READ_YOUTUBE_LIVE_PLAYER_STATE) {
     void readYouTubeLivePlayerStateFromPage(message, sender).then(sendResponse)
+    return true
+  }
+  if (message.type === REFRESH_YOUTUBE_CAPTION_RESOURCE) {
+    void refreshYouTubeCaptionResourceFromPage(message, sender).then(sendResponse)
     return true
   }
   void handleRuntimeMessage(message, sender).then(sendResponse)
@@ -135,6 +142,66 @@ async function readYouTubeLivePlayerStateFromPage(
     }
   } catch {
     // MAIN-world access is an optional fast path; all existing fallbacks remain available.
+    return empty()
+  }
+}
+
+async function refreshYouTubeCaptionResourceFromPage(
+  message: Extract<RuntimeRequestMessage, { type: typeof REFRESH_YOUTUBE_CAPTION_RESOURCE }>,
+  sender?: chrome.runtime.MessageSender,
+): Promise<RuntimeResponseMessage> {
+  const tabId = sender?.tab?.id ?? null
+  const empty = (): RuntimeResponseMessage => ({
+    ok: true,
+    type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+    tabId,
+    candidate: null,
+  })
+  if (tabId === null || sender?.frameId !== 0) return empty()
+
+  const senderUrl = sender.url ?? sender.tab?.url ?? ""
+  let senderPageUrl: URL
+  try {
+    senderPageUrl = new URL(senderUrl)
+  } catch {
+    return empty()
+  }
+
+  const senderAdapter = resolvePlatformAdapter(senderPageUrl)
+  const senderIdentity = senderAdapter?.getVideoIdentity(senderPageUrl)
+  if (
+    senderAdapter?.platform !== "youtube"
+    || senderIdentity?.videoId !== message.videoId
+  ) return empty()
+
+  try {
+    const currentTab = await getTab(tabId)
+    const currentUrl = currentTab?.url ? new URL(currentTab.url) : null
+    const currentAdapter = currentUrl ? resolvePlatformAdapter(currentUrl) : null
+    if (currentAdapter?.getVideoIdentity(currentUrl!)?.videoId !== message.videoId) return empty()
+
+    const [injection] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: refreshYouTubeCaptionResourceInMainWorld,
+      args: [message.videoId, message.previousStartTime],
+    })
+
+    const tabAfterInjection = await getTab(tabId)
+    const pageAfterInjection = tabAfterInjection?.url ? new URL(tabAfterInjection.url) : null
+    const adapterAfterInjection = pageAfterInjection ? resolvePlatformAdapter(pageAfterInjection) : null
+    if (adapterAfterInjection?.getVideoIdentity(pageAfterInjection!)?.videoId !== message.videoId) {
+      return empty()
+    }
+
+    const candidate = normalizeYouTubeTimedtextCandidate(injection?.result, message.videoId)
+    return {
+      ok: true,
+      type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+      tabId,
+      candidate: candidate && candidate.startTime > message.previousStartTime ? candidate : null,
+    }
+  } catch {
     return empty()
   }
 }

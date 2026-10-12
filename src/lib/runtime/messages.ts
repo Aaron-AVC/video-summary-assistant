@@ -6,7 +6,10 @@ import type {
   VideoInfo,
   VideoTranscript,
 } from "@/features/platform/types"
-import type { YouTubeLivePlayerState } from "@/features/platform/youtube/youtube-live-state"
+import type {
+  YouTubeLivePlayerState,
+  YouTubeTimedtextCandidate,
+} from "@/features/platform/youtube/youtube-live-state"
 import { isAllowedBilibiliResourceUrl } from "@/features/platform/bilibili/bilibili-transport-policy"
 
 export const RUNTIME_MESSAGE_NAMESPACE = "video-summary-assistant/runtime"
@@ -17,6 +20,7 @@ export const ANALYZE_VIDEO = "analyze-video"
 export const JUMP_TO_TIMESTAMP = "jump-to-timestamp"
 export const FETCH_VIDEO_TRANSCRIPT = "fetch-video-transcript"
 export const READ_YOUTUBE_LIVE_PLAYER_STATE = "read-youtube-live-player-state"
+export const REFRESH_YOUTUBE_CAPTION_RESOURCE = "refresh-youtube-caption-resource"
 export const FETCH_BILIBILI_RESOURCE = "fetch-bilibili-resource"
 export const CONTENT_VIDEO_CONTEXT_CHANGED = "content-video-context-changed"
 export const ACTIVE_VIDEO_CONTEXT_CHANGED = "active-video-context-changed"
@@ -50,6 +54,12 @@ export type RuntimeRequestMessage =
       channel: typeof RUNTIME_MESSAGE_NAMESPACE
       type: typeof READ_YOUTUBE_LIVE_PLAYER_STATE
       videoId: string
+    }
+  | {
+      channel: typeof RUNTIME_MESSAGE_NAMESPACE
+      type: typeof REFRESH_YOUTUBE_CAPTION_RESOURCE
+      videoId: string
+      previousStartTime: number
     }
   | {
       channel: typeof RUNTIME_MESSAGE_NAMESPACE
@@ -90,6 +100,12 @@ export type RuntimeResponseMessage =
     }
   | {
       ok: true
+      type: typeof REFRESH_YOUTUBE_CAPTION_RESOURCE
+      tabId: number | null
+      candidate: YouTubeTimedtextCandidate | null
+    }
+  | {
+      ok: true
       type: typeof FETCH_BILIBILI_RESOURCE
       tabId: number | null
       status: number
@@ -106,6 +122,7 @@ export type RuntimeResponseMessage =
         | typeof FETCH_VIDEO_TRANSCRIPT
         | typeof READ_YOUTUBE_LIVE_PLAYER_STATE
         | typeof FETCH_BILIBILI_RESOURCE
+        | typeof REFRESH_YOUTUBE_CAPTION_RESOURCE
       error: string
       tabId: number | null
     }
@@ -141,6 +158,7 @@ const requestTypeSchema = z.enum([
   JUMP_TO_TIMESTAMP,
   FETCH_VIDEO_TRANSCRIPT,
   READ_YOUTUBE_LIVE_PLAYER_STATE,
+  REFRESH_YOUTUBE_CAPTION_RESOURCE,
   FETCH_BILIBILI_RESOURCE,
 ])
 
@@ -153,6 +171,13 @@ export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequest
   if (value.type === FETCH_BILIBILI_RESOURCE) return isAllowedBilibiliResourceUrl(value.url)
   if (value.type === READ_YOUTUBE_LIVE_PLAYER_STATE) {
     return typeof value.videoId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value.videoId)
+  }
+  if (value.type === REFRESH_YOUTUBE_CAPTION_RESOURCE) {
+    return typeof value.videoId === "string"
+      && /^[a-zA-Z0-9_-]{1,128}$/.test(value.videoId)
+      && typeof value.previousStartTime === "number"
+      && Number.isFinite(value.previousStartTime)
+      && value.previousStartTime >= 0
   }
   return true
 }
@@ -250,6 +275,12 @@ const youtubeLivePlayerStateSchema = z.object({
     kind: z.string().nullable(),
     vssId: z.string().nullable(),
   })).max(100),
+  subtitlesOn: z.boolean().nullable().optional(),
+  currentCaptionTrack: z.object({
+    languageCode: z.string().min(1).max(64),
+    kind: z.string().max(512).nullable().optional(),
+    vssId: z.string().max(512).nullable().optional(),
+  }).nullable().optional(),
   timedtextCandidates: z.array(z.object({
     url: z.string().min(1).max(16_384),
     videoId: z.string().min(1).max(128),
@@ -257,6 +288,13 @@ const youtubeLivePlayerStateSchema = z.object({
     format: z.string().max(32).nullable(),
     startTime: z.number().finite().nonnegative(),
   })).max(100),
+})
+const youtubeTimedtextCandidateSchema = z.object({
+  url: z.string().min(1).max(16_384),
+  videoId: z.string().min(1).max(128),
+  languageCode: z.string().min(1).max(64),
+  format: z.string().max(32).nullable(),
+  startTime: z.number().finite().nonnegative(),
 })
 const videoTranscriptSchema = z.object({
   segments: z.array(transcriptSegmentSchema),
@@ -292,6 +330,10 @@ const runtimeResponseSuccessSchema = z.discriminatedUnion("type", [
   z.object({
     ok: z.literal(true), type: z.literal(READ_YOUTUBE_LIVE_PLAYER_STATE), tabId: tabIdSchema,
     playerState: youtubeLivePlayerStateSchema.nullable(),
+  }),
+  z.object({
+    ok: z.literal(true), type: z.literal(REFRESH_YOUTUBE_CAPTION_RESOURCE), tabId: tabIdSchema,
+    candidate: youtubeTimedtextCandidateSchema.nullable(),
   }),
   z.object({
     ok: z.literal(true), type: z.literal(FETCH_BILIBILI_RESOURCE), tabId: tabIdSchema,
@@ -356,6 +398,15 @@ export function isYouTubeLivePlayerStateResponse(
     && isRecord(value)
     && value.ok === true
     && value.type === READ_YOUTUBE_LIVE_PLAYER_STATE
+}
+
+export function isYouTubeCaptionResourceRefreshResponse(
+  value: unknown,
+): value is Extract<RuntimeResponseMessage, { type: typeof REFRESH_YOUTUBE_CAPTION_RESOURCE }> {
+  return runtimeResponseMessageSchema.safeParse(value).success
+    && isRecord(value)
+    && value.ok === true
+    && value.type === REFRESH_YOUTUBE_CAPTION_RESOURCE
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

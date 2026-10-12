@@ -7,9 +7,11 @@ import {
   FETCH_VIDEO_TRANSCRIPT,
   GET_ACTIVE_VIDEO_CONTEXT,
   JUMP_TO_TIMESTAMP,
+  REFRESH_YOUTUBE_CAPTION_RESOURCE,
   READ_YOUTUBE_LIVE_PLAYER_STATE,
   RUNTIME_MESSAGE_NAMESPACE,
   isYouTubeLivePlayerStateResponse,
+  isYouTubeCaptionResourceRefreshResponse,
   type ContentScriptRequestMessage,
   type ContentScriptResponseMessage,
   isContentScriptRequestMessage,
@@ -58,6 +60,21 @@ export function installPlatformContentBridge({
       })
       return isYouTubeLivePlayerStateResponse(response) && response.ok
         ? response.playerState
+        : null
+    } catch {
+      return null
+    }
+  }
+  const refreshYouTubeCaptionResource = async (videoId: string, previousStartTime: number) => {
+    try {
+      const response: unknown = await chrome.runtime.sendMessage({
+        channel: RUNTIME_MESSAGE_NAMESPACE,
+        type: REFRESH_YOUTUBE_CAPTION_RESOURCE,
+        videoId,
+        previousStartTime,
+      })
+      return isYouTubeCaptionResourceRefreshResponse(response) && response.ok
+        ? response.candidate
         : null
     } catch {
       return null
@@ -115,6 +132,7 @@ export function installPlatformContentBridge({
       getCurrentUrl: currentUrl,
       fetch: pageFetch,
       readYouTubeLivePlayerState,
+      refreshYouTubeCaptionResource,
     }
 
     if (message.type === JUMP_TO_TIMESTAMP) {

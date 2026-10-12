@@ -65,6 +65,8 @@ describe("YouTubeAdapter contract", () => {
         title: "Current player title",
         author: "投机实验室",
         captionTracks: [],
+        subtitlesOn: null,
+        currentCaptionTrack: null,
         timedtextCandidates: [],
       },
     }))
@@ -85,6 +87,8 @@ describe("YouTubeAdapter contract", () => {
         title: "Stale A title",
         author: "Stale A author",
         captionTracks: [],
+        subtitlesOn: null,
+        currentCaptionTrack: null,
         timedtextCandidates: [],
       },
     }))
@@ -120,6 +124,223 @@ describe("YouTubeAdapter contract", () => {
     expect(liveReads).toBe(2)
   })
 
+  it("reloads the current caption resource before opening transcript fallbacks", async () => {
+    const signedUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=zh-Hans&fmt=json3&signature=reload-secret&pot=reload-pot&potc=reload-potc`
+    let refreshCalls = 0
+    const fetchImpl = mock(async (input, init) => {
+      expect(String(input)).toBe(signedUrl)
+      expect(init?.credentials).toBe("include")
+      return okText(JSON.stringify({
+        events: [{ tStartMs: 0, dDurationMs: 1200, segs: [{ utf8: "Reloaded caption" }] }],
+      }))
+    })
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      html: createWatchHtml({ tracks: [] }),
+      rows: [],
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Live title",
+        author: "Live author",
+        captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+        subtitlesOn: true,
+        currentCaptionTrack: { languageCode: "zh-Hans", kind: null, vssId: ".zh-Hans" },
+        timedtextCandidates: [],
+      },
+      refreshCaptionResource: async (videoId, previousStartTime) => {
+        refreshCalls += 1
+        expect(videoId).toBe(VIDEO_ID)
+        expect(previousStartTime).toBe(0)
+        return {
+          url: signedUrl,
+          videoId: VIDEO_ID,
+          languageCode: "zh-Hans",
+          format: "json3",
+          startTime: 100,
+        }
+      },
+      fetchImpl,
+    }))
+
+    expect(refreshCalls).toBe(1)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(transcript.segments[0]?.text).toBe("Reloaded caption")
+  })
+
+  it("keeps caption reload diagnostics URL-free", async () => {
+    const signedUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=zh-Hans&fmt=json3&signature=reload-secret&pot=reload-pot&potc=reload-potc&expire=123`
+    const storedLogs: unknown[] = []
+    const previousChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome")
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: {
+        storage: {
+          local: {
+            get: async () => ({ "yt-summarizer.transcript-log": [] }),
+            set: async (value: Record<string, unknown>) => {
+              storedLogs.push(value["yt-summarizer.transcript-log"])
+            },
+          },
+        },
+      },
+    })
+
+    try {
+      await youtubeAdapter.getTranscript(createEnvironment({
+        html: createWatchHtml({ tracks: [] }),
+        rows: [],
+        liveState: {
+          videoId: VIDEO_ID,
+          title: "Live title",
+          author: "Live author",
+          captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+          subtitlesOn: true,
+          currentCaptionTrack: { languageCode: "zh-Hans", kind: null, vssId: ".zh-Hans" },
+          timedtextCandidates: [],
+        },
+        refreshCaptionResource: async () => ({
+          url: signedUrl,
+          videoId: VIDEO_ID,
+          languageCode: "zh-Hans",
+          format: "json3",
+          startTime: 100,
+        }),
+        fetchImpl: async () => okText(JSON.stringify({
+          events: [{ tStartMs: 0, dDurationMs: 1200, segs: [{ utf8: "Private reload" }] }],
+        })),
+        diagnosticLoggingEnabled: true,
+      }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const persisted = JSON.stringify(storedLogs)
+      expect(persisted).toContain("strategy=caption_reload")
+      expect(persisted).toContain("refreshLatencyMs=")
+      expect(persisted).not.toContain("https://www.youtube.com/api/timedtext")
+      expect(persisted).not.toContain("reload-secret")
+      expect(persisted).not.toContain("reload-pot")
+      expect(persisted).not.toContain("expire=123")
+    } finally {
+      if (previousChrome) Object.defineProperty(globalThis, "chrome", previousChrome)
+      else Reflect.deleteProperty(globalThis, "chrome")
+    }
+  })
+
+  it("does not attempt caption reload when subtitles are off and continues fallback", async () => {
+    let refreshCalls = 0
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      html: createWatchHtml({ tracks: [] }),
+      rows: [{ timestamp: "0:08", text: "DOM fallback" }],
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Live title",
+        author: "Live author",
+        captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+        subtitlesOn: false,
+        currentCaptionTrack: { languageCode: "zh-Hans", kind: null, vssId: ".zh-Hans" },
+        timedtextCandidates: [],
+      },
+      refreshCaptionResource: async () => {
+        refreshCalls += 1
+        return null
+      },
+    }))
+
+    expect(refreshCalls).toBe(0)
+    expect(transcript.segments[0]?.text).toBe("DOM fallback")
+  })
+
+  it("uses the current caption language before an older English json3 entry", async () => {
+    const zhUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=zh-Hans&fmt=vtt&signature=zh`
+    const enUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en&fmt=json3&signature=en`
+    const requests: string[] = []
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      html: createWatchHtml({ tracks: [] }),
+      rows: [],
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Live title",
+        author: "Live author",
+        captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+        subtitlesOn: true,
+        currentCaptionTrack: { languageCode: "zh-Hans", kind: null, vssId: ".zh-Hans" },
+        timedtextCandidates: [
+          { url: enUrl, videoId: VIDEO_ID, languageCode: "en", format: "json3", startTime: 100 },
+          { url: zhUrl, videoId: VIDEO_ID, languageCode: "zh-Hans", format: "vtt", startTime: 50 },
+        ],
+      },
+      fetchImpl: async (input) => {
+        requests.push(String(input))
+        return requests[0] === zhUrl
+          ? okText("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n中文字幕\n")
+          : okText("")
+      },
+    }))
+
+    expect(requests[0]).toBe(zhUrl)
+    expect(transcript.segments[0]?.text).toBe("中文字幕")
+  })
+
+  it("continues to rendered DOM after one caption reload timeout", async () => {
+    let refreshCalls = 0
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      html: createWatchHtml({ tracks: [] }),
+      rows: [{ timestamp: "0:09", text: "After timeout" }],
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Live title",
+        author: "Live author",
+        captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+        subtitlesOn: true,
+        currentCaptionTrack: { languageCode: "zh-Hans", kind: null, vssId: ".zh-Hans" },
+        timedtextCandidates: [],
+      },
+      refreshCaptionResource: async () => {
+        refreshCalls += 1
+        return null
+      },
+    }))
+
+    expect(refreshCalls).toBe(1)
+    expect(transcript.segments[0]?.text).toBe("After timeout")
+  })
+
+  it("discards a caption reload result after a YouTube SPA identity change", async () => {
+    let resolveRefresh!: (candidate: {
+      url: string
+      videoId: string
+      languageCode: string
+      format: string
+      startTime: number
+    } | null) => void
+    let currentUrl = new URL(`https://www.youtube.com/watch?v=${VIDEO_A}`)
+    const env = createEnvironment({
+      location: currentUrl.href,
+      html: createWatchHtml({ videoId: VIDEO_A, tracks: [] }),
+      getCurrentUrl: () => currentUrl,
+      liveState: {
+        videoId: VIDEO_A,
+        title: "A title",
+        author: "A author",
+        captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+        subtitlesOn: true,
+        currentCaptionTrack: { languageCode: "zh-Hans", kind: null, vssId: ".zh-Hans" },
+        timedtextCandidates: [],
+      },
+      refreshCaptionResource: () => new Promise((resolve) => { resolveRefresh = resolve }),
+    })
+    const transcriptPromise = youtubeAdapter.getTranscript(env)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    currentUrl = new URL(`https://www.youtube.com/watch?v=${VIDEO_B}`)
+    resolveRefresh({
+      url: `https://www.youtube.com/api/timedtext?v=${VIDEO_A}&lang=zh-Hans&fmt=json3&signature=stale`,
+      videoId: VIDEO_A,
+      languageCode: "zh-Hans",
+      format: "json3",
+      startTime: 100,
+    })
+
+    await expect(transcriptPromise).rejects.toThrow("video changed")
+  })
+
   it("returns normalized segments for a manual timedtext track", async () => {
     const fetchImpl = mock(async () => okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nManual text\n"))
     const transcript = await youtubeAdapter.getTranscript(createEnvironment({
@@ -150,6 +371,8 @@ describe("YouTubeAdapter contract", () => {
         title: "Live title",
         author: "投机实验室",
         captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+        subtitlesOn: true,
+        currentCaptionTrack: { languageCode: "zh-Hans", kind: null, vssId: ".zh-Hans" },
         timedtextCandidates: [{
           url: signedUrl,
           videoId: VIDEO_ID,
@@ -192,6 +415,8 @@ describe("YouTubeAdapter contract", () => {
           title: "Live title",
           author: "Live author",
           captionTracks: [{ languageCode: "en", languageName: "English" }],
+          subtitlesOn: null,
+          currentCaptionTrack: null,
           timedtextCandidates: [{
             url: signedUrl,
             videoId: VIDEO_ID,
@@ -230,6 +455,8 @@ describe("YouTubeAdapter contract", () => {
         title: "Live title",
         author: "Live author",
         captionTracks: [],
+        subtitlesOn: null,
+        currentCaptionTrack: null,
         timedtextCandidates: [{
           url: liveUrl,
           videoId: VIDEO_ID,
@@ -264,6 +491,8 @@ describe("YouTubeAdapter contract", () => {
         title: "Live title",
         author: "Live author",
         captionTracks: [{ languageCode: "en", languageName: "English" }],
+        subtitlesOn: null,
+        currentCaptionTrack: null,
         timedtextCandidates: [],
       },
       fetchImpl,
@@ -385,6 +614,8 @@ describe("YouTubeAdapter contract", () => {
       title: "A title",
       author: "A author",
       captionTracks: [],
+      subtitlesOn: null,
+      currentCaptionTrack: null,
       timedtextCandidates: [{
         url: `https://www.youtube.com/api/timedtext?v=${VIDEO_A}&lang=en&fmt=json3&signature=secret-value`,
         videoId: VIDEO_A,
@@ -451,6 +682,7 @@ type EnvironmentOptions = {
   fetchImpl?: PlatformPageEnvironment["fetch"]
   liveState?: YouTubeLivePlayerState | null
   readLivePlayerState?: PlatformPageEnvironment["readYouTubeLivePlayerState"]
+  refreshCaptionResource?: PlatformPageEnvironment["refreshYouTubeCaptionResource"]
   getCurrentUrl?: PlatformPageEnvironment["getCurrentUrl"]
   diagnosticLoggingEnabled?: boolean
 }
@@ -518,6 +750,9 @@ function createEnvironment(options: EnvironmentOptions): PlatformPageEnvironment
       : options.liveState !== undefined
         ? { readYouTubeLivePlayerState: async () => options.liveState ?? null }
         : {}),
+    ...(options.refreshCaptionResource
+      ? { refreshYouTubeCaptionResource: options.refreshCaptionResource }
+      : {}),
     diagnosticLoggingEnabled: options.diagnosticLoggingEnabled ?? false,
   }
 }

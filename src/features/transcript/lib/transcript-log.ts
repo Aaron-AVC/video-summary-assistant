@@ -23,7 +23,7 @@ export type TranscriptLogCollector = {
   logStep: <T>(
     stepName: string,
     fn: () => Promise<T>,
-    details?: string,
+    details?: string | (() => string),
   ) => Promise<T>
   skipStep: (stepName: string, reason: string) => void
   finalize: (outcome: "success" | "all_failed", successStep?: string) => void
@@ -37,8 +37,13 @@ export function createLogCollector(
   let finalized = false
 
   return {
-    async logStep<T>(stepName: string, fn: () => Promise<T>, details?: string): Promise<T> {
+    async logStep<T>(
+      stepName: string,
+      fn: () => Promise<T>,
+      details?: string | (() => string),
+    ): Promise<T> {
       const start = performance.now()
+      const resolveDetails = () => typeof details === "function" ? details() : details
       try {
         const result = await fn()
         const durationMs = Math.round(performance.now() - start)
@@ -55,7 +60,7 @@ export function createLogCollector(
           durationMs,
           ok: !isFailResult,
           error: errorMessage,
-          details,
+          details: resolveDetails(),
         })
         return result
       } catch (error) {
@@ -64,7 +69,7 @@ export function createLogCollector(
           durationMs: Math.round(performance.now() - start),
           ok: false,
           error: error instanceof Error ? error.message : String(error),
-          details,
+          details: resolveDetails(),
         })
         throw error
       }

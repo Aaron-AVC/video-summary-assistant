@@ -86,6 +86,8 @@ describe("active video context", () => {
         title: "Live title",
         author: "投机实验室",
         captionTracks: [],
+        subtitlesOn: null,
+        currentCaptionTrack: null,
         timedtextCandidates: [],
       }),
     )
@@ -134,6 +136,8 @@ describe("active video context", () => {
             title: "Live title",
             author: "投机实验室",
             captionTracks: [],
+            subtitlesOn: null,
+            currentCaptionTrack: null,
             timedtextCandidates: [],
           }
         },
@@ -193,6 +197,8 @@ describe("active video context", () => {
             title: "Live title",
             author: "投机实验室",
             captionTracks: [],
+            subtitlesOn: null,
+            currentCaptionTrack: null,
             timedtextCandidates: [],
           }
         },

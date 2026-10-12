@@ -119,7 +119,6 @@ export function createActiveVideoBridge({
       window.location,
       fetchImpl,
       () => new URL(window.location.href),
-      readYouTubeLivePlayerState,
     ).then((snapshot) => {
       if (generation !== publishGeneration) return
       const serialized = JSON.stringify(snapshot)

@@ -94,6 +94,32 @@ describe("YouTubeAdapter contract", () => {
     expect(info.author).toBe("Current B author")
   })
 
+  it("does not use an unrelated global channel node as the author fallback", async () => {
+    const info = await youtubeAdapter.readVideoInfo(createEnvironment({
+      title: "Current video - YouTube",
+      unrelatedAuthor: "Mrs. GREEN APPLE",
+    }))
+
+    expect(info.author).toBeNull()
+  })
+
+  it("refreshes live player state for every transcript request", async () => {
+    let liveReads = 0
+    const env = createEnvironment({
+      html: createWatchHtml({ tracks: [] }),
+      rows: [{ timestamp: "0:08", text: "DOM fallback" }],
+      readLivePlayerState: async () => {
+        liveReads += 1
+        return null
+      },
+    })
+
+    await youtubeAdapter.getTranscript(env)
+    await youtubeAdapter.getTranscript(env)
+
+    expect(liveReads).toBe(2)
+  })
+
   it("returns normalized segments for a manual timedtext track", async () => {
     const fetchImpl = mock(async () => okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nManual text\n"))
     const transcript = await youtubeAdapter.getTranscript(createEnvironment({

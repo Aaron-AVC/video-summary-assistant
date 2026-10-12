@@ -4,6 +4,7 @@ import type { PlatformPageEnvironment } from "@/features/platform/adapter"
 import {
   bilibiliAdapter,
   BilibiliAdapterError,
+  resetWbiKeyCacheForTests,
   resolveBilibiliPageContext,
 } from "@/features/platform/bilibili/bilibili-adapter"
 import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
@@ -28,6 +29,16 @@ const metadata = {
       { cid: 111, page: 1, part: "Part one", duration: 120 },
       { cid: 222, page: 2, part: "Part two", duration: 300 },
     ],
+  },
+}
+
+const wbiNav = {
+  code: 0,
+  data: {
+    wbi_img: {
+      img_url: "https://i0.hdslb.com/bfs/wbi/abcdef1234567890abcdef1234567890.png",
+      sub_url: "https://i0.hdslb.com/bfs/wbi/1234567890abcdef1234567890abcdef.png",
+    },
   },
 }
 
@@ -153,6 +164,7 @@ describe("BilibiliAdapter metadata and multi-part resolution", () => {
   it("resolves P1 to its page entry instead of the collection cid shortcut", async () => {
     const fetchImpl = mock(async (input: string | URL) => {
       const url = new URL(String(input))
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
       if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
       if (url.pathname.endsWith("/v2")) return jsonResponse({
         code: 0,
@@ -171,6 +183,7 @@ describe("BilibiliAdapter metadata and multi-part resolution", () => {
   it("uses P2 cid for P2 subtitles and exposes no Bilibili raw track fields", async () => {
     const fetchImpl = mock(async (input: string | URL) => {
       const url = new URL(String(input))
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
       if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
       if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({
         code: 0,
@@ -201,6 +214,7 @@ describe("BilibiliAdapter metadata and multi-part resolution", () => {
   it("shares the resolved page metadata when info and transcript run together", async () => {
     const fetchImpl = mock(async (input: string | URL) => {
       const url = new URL(String(input))
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
       if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
       if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({
         code: 0,
@@ -252,22 +266,33 @@ describe("Bilibili subtitle discovery and normalization", () => {
     }
   })
 
-  it("uses player-v2 only when the preferred WBI request fails", async () => {
+  it("uses the modern subtitle view after signed WBI returns no tracks", async () => {
     const requests: string[] = []
     const fetchImpl = mock(async (input: string | URL) => {
       const url = new URL(String(input))
-      requests.push(url.pathname)
+      requests.push(url.pathname + url.search)
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
+      if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({ code: 0, data: { subtitle: { subtitles: [] } } })
+      if (url.pathname.endsWith("/subtitle/web/view")) return jsonResponse({ data: { subtitles: [
+        track(1, "ai-zh", "中文 AI", "https://aisubtitle.hdslb.com/bfs/subtitle/fallback-ai.json"),
+        track(2, "zh-CN", "中文", "https://aisubtitle.hdslb.com/bfs/subtitle/fallback-manual.json"),
+        track(3, "en", "English", "https://aisubtitle.hdslb.com/bfs/subtitle/fallback-en.json"),
+      ] } })
       if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
-      if (url.pathname.endsWith("/wbi/v2")) throw new Error("network unavailable")
-      if (url.pathname.endsWith("/player/v2")) return jsonResponse({
-        code: 0,
-        data: { subtitle: { subtitles: [track(1, "zh", "manual", "https://aisubtitle.hdslb.com/bfs/subtitle/fallback.json")] } },
-      })
+      if (url.pathname.endsWith("fallback-manual.json")) {
+        return jsonResponse({ body: [{ from: 0, to: 1, content: "Fallback caption" }] })
+      }
       return jsonResponse({ body: [{ from: 0, to: 1, content: "Fallback caption" }] })
     })
 
     const transcript = await bilibiliAdapter.getTranscript(createEnvironment(P1_URL, fetchImpl))
-    expect(requests).toContain("/x/player/v2")
+    const modernRequest = requests.find((request) => request.startsWith("/x/v2/subtitle/web/view?"))
+    expect(modernRequest).toContain("oid=111")
+    expect(modernRequest).toContain("pid=9001")
+    expect(modernRequest).toContain("context_ext=%7B%22video_type%22%3A1%7D")
+    expect(modernRequest).toContain("type=1")
+    expect(modernRequest).toContain("cur_production_type=0")
+    expect(requests).toContain("/bfs/subtitle/fallback-manual.json")
     expect(transcript.segments[0]?.text).toBe("Fallback caption")
   })
 
@@ -276,13 +301,35 @@ describe("Bilibili subtitle discovery and normalization", () => {
     const fetchImpl = mock(async (input: string | URL) => {
       const url = new URL(String(input))
       paths.push(url.pathname)
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
       if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
       return jsonResponse({ code: 0, data: { subtitle: { subtitles: [] } } })
     })
 
     await expect(bilibiliAdapter.getTranscript(createEnvironment(P1_URL, fetchImpl)))
       .rejects.toMatchObject({ code: "no_subtitle_tracks" })
-    expect(paths).not.toContain("/x/player/v2")
+    expect(paths).toContain("/x/v2/subtitle/web/view")
+  })
+
+  it("rejects a signed player response for another bvid or cid", async () => {
+    const fetchImpl = mock(async (input: string | URL) => {
+      const url = new URL(String(input))
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
+      if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
+      if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({
+        code: 0,
+        data: {
+          aid: 9001,
+          bvid: OTHER_BVID,
+          cid: 222,
+          subtitle: { subtitles: [track(1, "zh", "manual", "https://aisubtitle.hdslb.com/bfs/subtitle/wrong.json")] },
+        },
+      })
+      throw new Error("unexpected subtitle request")
+    })
+
+    await expect(bilibiliAdapter.getTranscript(createEnvironment(P1_URL, fetchImpl)))
+      .rejects.toMatchObject({ code: "player_api_rejected" })
   })
 
   it("normalizes finite subtitle entries, trims text, filters invalid rows, and sorts", async () => {
@@ -386,6 +433,7 @@ describe("Bilibili chapters, seeking, timestamps, and stale requests", () => {
     const body = new Promise<Awaited<ReturnType<typeof jsonResponse>>>((resolve) => { releaseBody = resolve })
     const env = createEnvironment(P1_URL, async (input) => {
       const url = new URL(String(input))
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
       if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
       if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({
         code: 0,
@@ -401,6 +449,66 @@ describe("Bilibili chapters, seeking, timestamps, and stale requests", () => {
     releaseBody(jsonResponse({ body: [{ from: 0, to: 2, content: "Stale P1 caption" }] }))
 
     await expect(pending).rejects.toMatchObject({ code: "stale_part_request" })
+  })
+
+  it("discards a P1 modern subtitle discovery response after the page changes to P2", async () => {
+    let currentUrl = P1_URL
+    let releaseModern!: (response: Awaited<ReturnType<typeof jsonResponse>>) => void
+    let modernRequested!: () => void
+    const modernReady = new Promise<void>((resolve) => { modernRequested = resolve })
+    const modernBody = new Promise<Awaited<ReturnType<typeof jsonResponse>>>((resolve) => { releaseModern = resolve })
+    const env = createEnvironment(P1_URL, async (input) => {
+      const url = new URL(String(input))
+      if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
+      if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({
+        code: 0,
+        data: { subtitle: { subtitles: [] } },
+      })
+      if (url.pathname.endsWith("/subtitle/web/view")) {
+        modernRequested()
+        return modernBody
+      }
+      if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
+      throw new Error("unexpected subtitle request")
+    }, undefined, () => new URL(currentUrl))
+
+    const pending = bilibiliAdapter.getTranscript(env)
+    await modernReady
+    currentUrl = P2_URL
+    releaseModern(jsonResponse({ data: { subtitles: [
+      track(1, "zh", "manual", "https://aisubtitle.hdslb.com/bfs/subtitle/p1-modern.json"),
+    ] } }))
+
+    await expect(pending).rejects.toMatchObject({ code: "stale_part_request" })
+  })
+
+  it("deduplicates concurrent WBI key discovery", async () => {
+    resetWbiKeyCacheForTests()
+    let releaseNav!: () => void
+    const navReady = new Promise<void>((resolve) => { releaseNav = resolve })
+    let navCalls = 0
+    const fetchImpl = mock(async (input: string | URL) => {
+      const url = new URL(String(input))
+      if (url.pathname.endsWith("/nav")) {
+        navCalls += 1
+        await navReady
+        return jsonResponse(wbiNav)
+      }
+      if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
+      if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({
+        code: 0,
+        data: { subtitle: { subtitles: [track(1, "zh", "manual", "https://aisubtitle.hdslb.com/bfs/subtitle/cache.json")] } },
+      })
+      return jsonResponse({ body: [{ from: 0, to: 1, content: "cached" }] })
+    })
+
+    const first = bilibiliAdapter.getTranscript(createEnvironment(P1_URL, fetchImpl, undefined, undefined, createDocument()))
+    const second = bilibiliAdapter.getTranscript(createEnvironment(P1_URL, fetchImpl, undefined, undefined, createDocument()))
+    await Promise.resolve()
+    releaseNav()
+    await Promise.all([first, second])
+
+    expect(navCalls).toBe(1)
   })
 })
 
@@ -461,12 +569,16 @@ function createDocument(video?: { currentTime: number }): Document {
 
 function jsonFetch(payloads: unknown[]): FetchLike {
   let index = 0
-  return mock(async () => jsonResponse(payloads[index++]))
+  return mock(async (input: string | URL) => {
+    if (new URL(String(input)).pathname.endsWith("/nav")) return jsonResponse(wbiNav)
+    return jsonResponse(payloads[index++])
+  })
 }
 
 function fetchWithTracks(tracks: unknown[], body: unknown[]): FetchLike {
   return mock(async (input: string | URL) => {
     const url = new URL(String(input))
+    if (url.pathname.endsWith("/nav")) return jsonResponse(wbiNav)
     if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
     if (url.pathname.endsWith("/wbi/v2")) {
       return jsonResponse({ code: 0, data: { subtitle: { subtitles: tracks } } })

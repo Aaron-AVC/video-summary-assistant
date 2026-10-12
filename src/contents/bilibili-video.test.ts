@@ -29,6 +29,14 @@ describe("Bilibili content-script wiring", () => {
           ],
         } })
       }
+      if (url.pathname.endsWith("/nav")) {
+        return jsonResponse({ code: 0, data: {
+          wbi_img: {
+            img_url: "https://i0.hdslb.com/bfs/wbi/abcdef1234567890abcdef1234567890.png",
+            sub_url: "https://i0.hdslb.com/bfs/wbi/1234567890abcdef1234567890abcdef.png",
+          },
+        } })
+      }
       if (url.pathname.endsWith("/wbi/v2")) {
         expect(url.searchParams.get("cid")).toBe("222")
         return jsonResponse({ code: 0, data: { subtitle: { subtitles: [

@@ -24,6 +24,7 @@ type TranscriptSegmentRootLike = {
 
 type TranscriptSegmentElementLike = {
   querySelector: (selector: string) => TranscriptTextNodeLike | null
+  textContent?: string | null
 }
 
 type TranscriptTextNodeLike = {
@@ -33,19 +34,21 @@ type TranscriptTextNodeLike = {
 type FetchTranscriptDomOptions = {
   document: Document
   metadata: TranscriptPageMetadata
+  videoId?: string
   languageCode?: string
 }
 
 export async function fetchTranscriptDom({
   document,
   metadata,
+  videoId = metadata.videoId,
   languageCode,
 }: FetchTranscriptDomOptions): Promise<FetchVttResult> {
   let root = findTranscriptSegmentsRoot(document)
 
   if (!hasTranscriptSegments(root)) {
     openTranscriptPanel(document)
-    root = await waitForTranscriptSegmentsRoot(document)
+    root = await waitForTranscriptSegmentsRoot(document, videoId)
   }
 
   if (!root || !hasTranscriptSegments(root)) {
@@ -102,13 +105,29 @@ export function convertTranscriptDomToVtt(root: TranscriptSegmentRootLike): stri
 
 export function readTranscriptSegments(root: TranscriptSegmentRootLike): TranscriptSegment[] {
   const elements = Array.from(
-    root.querySelectorAll("ytd-transcript-segment-renderer, ytd-transcript-segment-list-renderer ytd-transcript-segment-renderer"),
+    root.querySelectorAll([
+      "ytd-transcript-segment-renderer",
+      "ytd-transcript-segment-list-renderer ytd-transcript-segment-renderer",
+      "transcript-segment-view-model",
+      "ytm-transcript-segment-renderer",
+    ].join(", ")),
   )
   const segments: TranscriptSegment[] = []
 
   for (const element of elements) {
-    const timestampText = element.querySelector(".segment-timestamp")?.textContent?.trim() ?? ""
-    const text = element.querySelector(".segment-text")?.textContent?.replace(/\s+/g, " ").trim() ?? ""
+    const timestampText = firstText(element, [
+      ".segment-timestamp",
+      ".ytwTranscriptSegmentViewModelTimestamp",
+      "[class*='TranscriptSegmentViewModelTimestamp']",
+      "[data-timestamp]",
+    ])
+    const text = firstText(element, [
+      ".segment-text",
+      ".ytwTranscriptSegmentViewModelText",
+      "[class*='TranscriptSegmentViewModelText']",
+      "[data-text]",
+    ])
+      || (element.textContent ?? "").replace(timestampText, "").replace(/\s+/g, " ").trim()
     const startMs = parseTranscriptTimestamp(timestampText)
 
     if (startMs === null || !text) {
@@ -141,13 +160,26 @@ export function parseTranscriptTimestamp(timestampText: string): number | null {
 }
 
 function findTranscriptSegmentsRoot(document: Document) {
-  return document.querySelector<HTMLElement>(
-    '#segments-container, .ytd-transcript-search-panel-renderer #segments-container',
-  )
+  const selectors = [
+    "#segments-container",
+    ".ytd-transcript-search-panel-renderer #segments-container",
+    "ytd-transcript-renderer",
+    "transcript-segment-view-model",
+  ]
+  for (const selector of selectors) {
+    const root = document.querySelector<HTMLElement>(selector)
+    if (root && hasTranscriptSegments(root)) return root
+  }
+  return document.querySelector<HTMLElement>(selectors.join(", "))
 }
 
 function hasTranscriptSegments(root: Element | null) {
-  return Boolean(root?.querySelector("ytd-transcript-segment-renderer"))
+  if (!root) return false
+  return [
+    "ytd-transcript-segment-renderer",
+    "transcript-segment-view-model",
+    "ytm-transcript-segment-renderer",
+  ].some((selector) => Boolean(root.querySelector(selector)))
 }
 
 function openTranscriptPanel(document: Document) {
@@ -156,26 +188,46 @@ function openTranscriptPanel(document: Document) {
       "ytd-video-description-transcript-section-renderer button",
       "ytd-video-description-transcript-section-renderer tp-yt-paper-button",
       "ytd-video-description-transcript-section-renderer [role='button']",
+      "button[aria-label*='ranscript' i]",
+      "[role='button'][aria-label*='ranscript' i]",
+      "[aria-controls*='transcript' i]",
     ].join(", "),
   )
 
   trigger?.click()
 }
 
-async function waitForTranscriptSegmentsRoot(document: Document) {
+function firstText(element: TranscriptSegmentElementLike, selectors: string[]): string {
+  for (const selector of selectors) {
+    const candidate = element.querySelector(selector)
+    const text = candidate?.textContent?.replace(/\s+/g, " ").trim() ?? ""
+    if (text) return text
+  }
+  return ""
+}
+
+async function waitForTranscriptSegmentsRoot(document: Document, videoId: string) {
   const deadline = Date.now() + TRANSCRIPT_PANEL_TIMEOUT_MS
 
   while (Date.now() < deadline) {
     const root = findTranscriptSegmentsRoot(document)
 
-    if (hasTranscriptSegments(root)) {
+    if (rootMatchesVideo(root, videoId) && hasTranscriptSegments(root)) {
       return root
     }
 
     await delay(TRANSCRIPT_PANEL_POLL_MS)
   }
 
-  return findTranscriptSegmentsRoot(document)
+  const root = findTranscriptSegmentsRoot(document)
+  return rootMatchesVideo(root, videoId) ? root : null
+}
+
+function rootMatchesVideo(root: Element | null, videoId: string): boolean {
+  if (!root || !videoId) return Boolean(root)
+  const owner = root.closest("ytd-watch-flexy[video-id], ytd-player[video-id]")
+  const ownerId = owner?.getAttribute("video-id")
+  return !ownerId || ownerId === videoId
 }
 
 function delay(milliseconds: number) {

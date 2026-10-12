@@ -81,6 +81,7 @@ export type RuntimeResponseMessage =
       tabId: number | null
       status: number
       body: string
+      encoding: "utf8" | "base64"
     }
   | {
       ok: false
@@ -252,7 +253,8 @@ const runtimeResponseSuccessSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     ok: z.literal(true), type: z.literal(FETCH_BILIBILI_RESOURCE), tabId: tabIdSchema,
-    status: z.number().int().min(100).max(599), body: z.string().max(8 * 1024 * 1024),
+    status: z.number().int().min(100).max(599), body: z.string().max(12 * 1024 * 1024),
+    encoding: z.enum(["utf8", "base64"]).default("utf8"),
   }),
 ])
 const runtimeResponseFailureSchema = z.object({

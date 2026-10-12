@@ -109,7 +109,7 @@ export const youtubeAdapter: VideoPlatformAdapter = {
 
     const renderedDom = await runTranscriptStep({
       stepName: "fetchTranscriptDom",
-      run: () => fetchTranscriptDom({ document: env.document, metadata }),
+      run: () => fetchTranscriptDom({ document: env.document, metadata, videoId: identity.videoId }),
       collector,
     })
 

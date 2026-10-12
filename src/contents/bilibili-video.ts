@@ -24,7 +24,7 @@ const bilibiliFetch = createBilibiliFetchTransport(async (url) => {
   if (response.type !== FETCH_BILIBILI_RESOURCE) {
     throw new Error("Unexpected Bilibili transport response.")
   }
-  return { status: response.status, body: response.body }
+  return { status: response.status, body: response.body, encoding: response.encoding }
 })
 
 if (typeof window !== "undefined" && typeof chrome !== "undefined" && chrome.runtime?.onMessage) {

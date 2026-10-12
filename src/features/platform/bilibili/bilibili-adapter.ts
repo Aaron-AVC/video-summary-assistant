@@ -15,6 +15,10 @@ import {
   isValidBvid,
 } from "@/features/platform/bilibili/bilibili-url"
 import { normalizeBilibiliSubtitleUrl } from "@/features/platform/bilibili/bilibili-transport"
+import { buildWbiSignedUrl, extractWbiKeys } from "@/features/platform/bilibili/wbi"
+import { decodeSubtitleViewTracks, type SubtitleViewTrack } from "@/features/platform/bilibili/subtitle-view"
+import type { WbiKeys } from "@/features/platform/bilibili/wbi"
+import { createLogCollector } from "@/features/transcript/lib/transcript-log"
 
 export type BilibiliErrorCode =
   | "unsupported_bilibili_url"
@@ -77,8 +81,16 @@ type SubtitleTrack = {
 }
 
 const metadataByDocument = new WeakMap<Document, Map<string, Promise<BilibiliMetadata>>>()
-const PLAYER_API_BASE = "https://api.bilibili.com/x/player"
+const API_BASE = "https://api.bilibili.com"
 const MAX_BODY_LENGTH = 8 * 1024 * 1024
+const WBI_KEY_TTL_MS = 10 * 60 * 1_000
+let cachedWbiKeys: { keys: WbiKeys; expiresAt: number } | null = null
+let pendingWbiKeys: Promise<WbiKeys> | null = null
+
+export function resetWbiKeyCacheForTests(): void {
+  cachedWbiKeys = null
+  pendingWbiKeys = null
+}
 
 export const bilibiliAdapter: VideoPlatformAdapter = {
   platform: "bilibili",
@@ -119,19 +131,47 @@ export const bilibiliAdapter: VideoPlatformAdapter = {
   async getTranscript(env) {
     const context = await resolveBilibiliPageContext(env)
     assertCurrentPage(env, context)
-    const playerData = await fetchPlayerData(env, context)
+    const collector = env.diagnosticLoggingEnabled
+      ? createLogCollector(context.identity.videoId, env.location.href)
+      : null
+    const requestDetails = `endpoint=/x/player/wbi/v2; requested_bvid=${context.identity.videoId}; requested_cid=${context.cid}`
+    const playerData = collector
+      ? await collector.logStep("bilibili.wbi", () => fetchSignedPlayerData(env, context), requestDetails)
+      : await fetchSignedPlayerData(env, context)
     assertCurrentPage(env, context)
 
-    const tracks = mapSubtitleTracks(playerData.subtitle?.subtitles)
+    let tracks = mapSubtitleTracks(playerData.subtitle?.subtitles)
+    let selectedStrategy = "signed_wbi"
+    let modernDiscovery: ModernSubtitleDiscovery = { tracks: [], httpStatus: null, apiCode: null }
     if (tracks.length === 0) {
+      modernDiscovery = collector
+        ? await collector.logStep(
+          "bilibili.subtitle_view",
+          () => fetchModernSubtitleTracks(env, context),
+          `endpoint=/x/v2/subtitle/web/view; requested_bvid=${context.identity.videoId}; requested_cid=${context.cid}`,
+        )
+        : await fetchModernSubtitleTracks(env, context)
+      assertCurrentPage(env, context)
+      tracks = modernDiscovery.tracks.map((track) => ({ ...track, order: track.order }))
+      selectedStrategy = "modern_subtitle_view"
+    }
+    if (collector) {
+      await collector.logStep(
+        "bilibili.discovery.result",
+        async () => true,
+        `wbi_http_status=${playerData.httpStatus}; wbi_api_code=${playerData.apiCode ?? "n/a"}; modern_http_status=${modernDiscovery.httpStatus ?? "n/a"}; modern_api_code=${modernDiscovery.apiCode ?? "n/a"}; requested_bvid=${context.identity.videoId}; requested_cid=${context.cid}; returned_bvid=${playerData.identity.bvid ?? ""}; returned_cid=${playerData.identity.cid ?? ""}; subtitle_track_count=${tracks.length}; need_login_subtitle=${String(playerData.needLoginSubtitle ?? false)}; selected_strategy=${tracks.length > 0 ? selectedStrategy : "none"}`,
+      )
+    }
+    if (tracks.length === 0) {
+      collector?.finalize("all_failed")
       throw new BilibiliAdapterError("no_subtitle_tracks", "当前视频没有可用字幕。")
     }
 
     const selected = [...tracks].sort(compareSubtitleTracks)[0]
     if (!selected) {
+      collector?.finalize("all_failed")
       throw new BilibiliAdapterError("no_subtitle_tracks", "当前视频没有可用字幕。")
     }
-
     let subtitleResponse
     try {
       subtitleResponse = await env.fetch(selected.url, { method: "GET", credentials: "include", cache: "no-store" })
@@ -158,10 +198,12 @@ export const bilibiliAdapter: VideoPlatformAdapter = {
 
     const segments = normalizeSubtitleBody((payload as { body?: unknown } | null)?.body)
     if (segments.length === 0) {
+      collector?.finalize("all_failed")
       throw new BilibiliAdapterError("captions_unavailable", "当前视频没有可用字幕。")
     }
 
     assertCurrentPage(env, context)
+    collector?.finalize("success", selectedStrategy === "signed_wbi" ? "bilibili.wbi" : "bilibili.subtitle_view")
     return {
       segments,
       language: normalizeLanguage(selected.language),
@@ -172,7 +214,7 @@ export const bilibiliAdapter: VideoPlatformAdapter = {
   async getNativeChapters(env) {
     const context = await resolveBilibiliPageContext(env)
     assertCurrentPage(env, context)
-    const playerData = await fetchPlayerData(env, context)
+    const playerData = await fetchSignedPlayerData(env, context)
     assertCurrentPage(env, context)
     return mapNativeChapters(playerData.view_points)
   },
@@ -322,46 +364,150 @@ async function fetchMetadata(env: PlatformPageEnvironment, bvid: string): Promis
   }
 }
 
-async function fetchPlayerData(
+async function fetchSignedPlayerData(
   env: PlatformPageEnvironment,
   context: BilibiliPageContext,
-): Promise<{ subtitle?: { subtitles?: unknown }; view_points?: unknown }> {
+): Promise<{
+  subtitle?: { subtitles?: unknown }
+  view_points?: unknown
+  identity: { aid?: string; bvid?: string; cid?: string }
+  needLoginSubtitle?: boolean
+  httpStatus: number
+  apiCode: string | null
+}> {
   if (!context.metadata.aid) {
     throw new BilibiliAdapterError("player_api_failed", "Bilibili 视频信息缺少 aid，无法读取字幕。")
   }
-  const query = new URLSearchParams({
-    aid: context.metadata.aid,
-    cid: context.cid,
-    bvid: context.identity.videoId,
-  })
-  const primaryUrl = `${PLAYER_API_BASE}/wbi/v2?${query.toString()}`
-  const fallbackUrl = `${PLAYER_API_BASE}/v2?${query.toString()}`
-
-  try {
-    return parsePlayerData(await fetchJson(env, primaryUrl, "player_api_failed", "player_api_rejected"))
-  } catch (primaryError) {
-    if (primaryError instanceof BilibiliAdapterError && primaryError.code === "bilibili_session_restricted") {
-      throw primaryError
-    }
-    try {
-      return parsePlayerData(await fetchJson(env, fallbackUrl, "player_api_failed", "player_api_rejected"))
-    } catch (fallbackError) {
-      if (fallbackError instanceof BilibiliAdapterError) throw fallbackError
-      throw new BilibiliAdapterError("player_api_failed", "无法读取 Bilibili 字幕与章节信息。")
-    }
+  const keys = await getWbiKeys(env)
+  const url = buildWbiSignedUrl(
+    `${API_BASE}/x/player/wbi/v2`,
+    { aid: context.metadata.aid, cid: context.cid, bvid: context.identity.videoId },
+    keys,
+  )
+  const { payload, status, apiCode } = await fetchJsonWithMetadata(
+    env,
+    url,
+    "player_api_failed",
+    "player_api_rejected",
+  )
+  const parsed = parsePlayerData(payload)
+  validatePlayerIdentity(parsed.identity, context)
+  return {
+    ...parsed.data,
+    identity: parsed.identity,
+    needLoginSubtitle: parsed.needLoginSubtitle,
+    httpStatus: status,
+    apiCode,
   }
 }
 
-function parsePlayerData(payload: unknown): { subtitle?: { subtitles?: unknown }; view_points?: unknown } {
+async function getWbiKeys(env: PlatformPageEnvironment): Promise<WbiKeys> {
+  if (cachedWbiKeys && cachedWbiKeys.expiresAt > Date.now()) return cachedWbiKeys.keys
+  if (pendingWbiKeys) return pendingWbiKeys
+  pendingWbiKeys = (async () => {
+    const navPayload = await fetchJson(
+      env,
+      `${API_BASE}/x/web-interface/nav`,
+      "player_api_failed",
+      "player_api_rejected",
+    )
+    const keys = extractWbiKeys(navPayload)
+    if (!keys) throw new BilibiliAdapterError("player_api_rejected", "Bilibili WBI 签名信息不可用。")
+    cachedWbiKeys = { keys, expiresAt: Date.now() + WBI_KEY_TTL_MS }
+    return keys
+  })()
+  try {
+    return await pendingWbiKeys
+  } finally {
+    pendingWbiKeys = null
+  }
+}
+
+function parsePlayerData(payload: unknown): {
+  data: { subtitle?: { subtitles?: unknown }; view_points?: unknown }
+  identity: { aid?: string; bvid?: string; cid?: string }
+  needLoginSubtitle?: boolean
+} {
   const data = (payload as { data?: unknown } | null)?.data
   if (!isRecord(data)) {
     throw new BilibiliAdapterError("player_api_rejected", "Bilibili 播放器 API 返回了无效数据。")
   }
   const subtitle = data.subtitle as { subtitles?: unknown } | null | undefined
   return {
-    subtitle: isRecord(subtitle) ? subtitle : undefined,
-    view_points: data.view_points,
+    data: {
+      subtitle: isRecord(subtitle) ? subtitle : undefined,
+      view_points: data.view_points,
+    },
+    identity: parsePlayerIdentity(data),
+    needLoginSubtitle: data.need_login_subtitle === true || data.needLoginSubtitle === true,
   }
+}
+
+function parsePlayerIdentity(data: Record<string, unknown>): { aid?: string; bvid?: string; cid?: string } {
+  const identity: { aid?: string; bvid?: string; cid?: string } = {}
+  for (const key of ["aid", "bvid", "cid"] as const) {
+    if (!(key in data)) continue
+    const value = key === "bvid"
+      ? (isValidBvid(data[key]) ? data[key] : null)
+      : positiveIntegerString(data[key])
+    if (!value) {
+      throw new BilibiliAdapterError("player_api_rejected", "Bilibili 播放器返回了无效的视频身份。")
+    }
+    identity[key] = value
+  }
+  return identity
+}
+
+function validatePlayerIdentity(
+  returned: { aid?: string; bvid?: string; cid?: string },
+  context: BilibiliPageContext,
+): void {
+  if (returned.aid && returned.aid !== context.metadata.aid) {
+    throw new BilibiliAdapterError("player_api_rejected", "Bilibili 播放器返回了不匹配的视频。")
+  }
+  if (returned.bvid && returned.bvid !== context.identity.videoId) {
+    throw new BilibiliAdapterError("player_api_rejected", "Bilibili 播放器返回了不匹配的视频。")
+  }
+  if (returned.cid && returned.cid !== context.cid) {
+    throw new BilibiliAdapterError("player_api_rejected", "Bilibili 播放器返回了不匹配的分P。")
+  }
+}
+
+async function fetchModernSubtitleTracks(
+  env: PlatformPageEnvironment,
+  context: BilibiliPageContext,
+): Promise<ModernSubtitleDiscovery> {
+  const url = new URL(`${API_BASE}/x/v2/subtitle/web/view`)
+  url.searchParams.set("oid", context.cid)
+  url.searchParams.set("pid", context.metadata.aid)
+  url.searchParams.set("context_ext", JSON.stringify({ video_type: 1 }))
+  url.searchParams.set("type", "1")
+  url.searchParams.set("cur_production_type", "0")
+  let response
+  try {
+    response = await env.fetch(url.toString(), { method: "GET", credentials: "include", cache: "no-store" })
+  } catch {
+    return { tracks: [], httpStatus: null, apiCode: null }
+  }
+  if (!response.ok) return { tracks: [], httpStatus: response.status, apiCode: null }
+  try {
+    const bytes = response.arrayBuffer
+      ? await response.arrayBuffer()
+      : new TextEncoder().encode(await response.text()).buffer
+    return {
+      tracks: decodeSubtitleViewTracks(bytes),
+      httpStatus: response.status,
+      apiCode: readApiCode(bytes),
+    }
+  } catch {
+    return { tracks: [], httpStatus: response.status, apiCode: null }
+  }
+}
+
+type ModernSubtitleDiscovery = {
+  tracks: SubtitleViewTrack[]
+  httpStatus: number | null
+  apiCode: string | null
 }
 
 async function fetchJson(
@@ -370,6 +516,15 @@ async function fetchJson(
   fetchErrorCode: "metadata_fetch_failed" | "player_api_failed",
   apiErrorCode: "metadata_api_rejected" | "player_api_rejected",
 ): Promise<unknown> {
+  return (await fetchJsonWithMetadata(env, url, fetchErrorCode, apiErrorCode)).payload
+}
+
+async function fetchJsonWithMetadata(
+  env: PlatformPageEnvironment,
+  url: string,
+  fetchErrorCode: "metadata_fetch_failed" | "player_api_failed",
+  apiErrorCode: "metadata_api_rejected" | "player_api_rejected",
+): Promise<{ payload: unknown; status: number; apiCode: string | null }> {
   let response
   try {
     response = await env.fetch(url, { method: "GET", credentials: "include", cache: "no-store" })
@@ -390,6 +545,9 @@ async function fetchJson(
   }
 
   const code = (payload as { code?: unknown } | null)?.code
+  const apiCode = typeof code === "string" || (typeof code === "number" && Number.isFinite(code))
+    ? String(code)
+    : null
   if (code !== 0) {
     if (code === -101 || code === -412 || code === -352) {
       throw new BilibiliAdapterError(
@@ -399,7 +557,21 @@ async function fetchJson(
     }
     throw new BilibiliAdapterError(apiErrorCode, `Bilibili API 拒绝了请求（错误码 ${String(code)}）。`)
   }
-  return payload
+  return { payload, status: response.status, apiCode }
+}
+
+function readApiCode(buffer: ArrayBuffer): string | null {
+  const text = new TextDecoder().decode(buffer).trimStart()
+  if (!text.startsWith("{") && !text.startsWith("[")) return null
+  try {
+    const payload = JSON.parse(text) as { code?: unknown }
+    const code = payload?.code
+    return typeof code === "string" || (typeof code === "number" && Number.isFinite(code))
+      ? String(code)
+      : null
+  } catch {
+    return null
+  }
 }
 
 function mapSubtitleTracks(value: unknown): SubtitleTrack[] {

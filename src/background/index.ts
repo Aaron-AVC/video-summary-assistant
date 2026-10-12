@@ -1,6 +1,9 @@
 import { resolvePlatformAdapter, resolvePlatformAdapterForIdentity } from "@/features/platform/registry"
 import { isAllowedBilibiliTransport } from "@/features/platform/bilibili/bilibili-transport-policy"
-import { readBilibiliResponseText } from "@/features/platform/bilibili/bilibili-transport"
+import {
+  readBilibiliResponseBytes,
+  readBilibiliResponseText,
+} from "@/features/platform/bilibili/bilibili-transport"
 import type { ActiveVideoContext, VideoIdentity } from "@/features/platform/types"
 import { createUnsupportedVideoContext } from "@/lib/runtime/current-video"
 import { matchesManifestPattern } from "@/lib/runtime/manifest-pattern"
@@ -152,13 +155,17 @@ async function handleRuntimeMessage(
         } catch {
           throw new Error("Bilibili resource request failed.")
         }
-        const body = await readBilibiliResponseText(response)
+        const isBinary = new URL(message.url).pathname === "/x/v2/subtitle/web/view"
+        const body = isBinary
+          ? encodeBase64(await readBilibiliResponseBytes(response))
+          : await readBilibiliResponseText(response)
         return {
           ok: true,
           type: FETCH_BILIBILI_RESOURCE,
           tabId,
           status: response.status,
           body,
+          encoding: isBinary ? "base64" : "utf8",
         }
       }
     }
@@ -170,6 +177,15 @@ async function handleRuntimeMessage(
       error: error instanceof Error ? error.message : "Unknown background failure.",
     }
   }
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = ""
+  const chunkSize = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+  }
+  return btoa(binary)
 }
 
 function getRequestedTabId(message: RuntimeRequestMessage): number | undefined {

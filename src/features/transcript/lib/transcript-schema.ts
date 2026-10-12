@@ -86,6 +86,7 @@ export type FetchLike = (
   status: number
   statusText: string
   text(): Promise<string>
+  arrayBuffer?: () => Promise<ArrayBuffer>
 }>
 
 export type FetchVttOptions = {

@@ -76,7 +76,7 @@ describe("runtime message boundaries", () => {
     const base = { channel: RUNTIME_MESSAGE_NAMESPACE, type: FETCH_BILIBILI_RESOURCE }
     expect(isRuntimeRequestMessage({
       ...base,
-      url: "https://api.bilibili.com/x/player/wbi/v2?aid=1&cid=2&bvid=BV1xx411c7mD",
+      url: "https://api.bilibili.com/x/player/wbi/v2?aid=1&cid=2&bvid=BV1xx411c7mD&wts=1700000000&w_rid=0123456789abcdef0123456789abcdef",
     })).toBe(true)
     for (const url of [
       "https://example.com/private",

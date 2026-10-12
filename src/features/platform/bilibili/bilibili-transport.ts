@@ -20,6 +20,7 @@ export function normalizeBilibiliSubtitleUrl(value: unknown): string | null {
 export type BilibiliTransportResponse = {
   status: number
   body: string
+  encoding?: "utf8" | "base64"
 }
 
 export type BilibiliTransportRequest = (
@@ -70,6 +71,43 @@ export async function readBilibiliResponseText(
   return new TextDecoder().decode(body)
 }
 
+export async function readBilibiliResponseBytes(
+  response: Response,
+  maxBytes = 8 * 1024 * 1024,
+): Promise<Uint8Array> {
+  const declaredLength = Number(response.headers.get("content-length"))
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error("Bilibili resource response exceeded the size limit.")
+  }
+  if (!response.body) return new Uint8Array()
+
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel()
+        throw new Error("Bilibili resource response exceeded the size limit.")
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const bytes = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
+}
+
 /** Creates the content-side fetch facade; the service worker owns the actual request. */
 export function createBilibiliFetchTransport(request: BilibiliTransportRequest): FetchLike {
   return async (input, init) => {
@@ -90,6 +128,16 @@ export function createBilibiliFetchTransport(request: BilibiliTransportRequest):
       status: response.status,
       statusText: response.status >= 200 && response.status < 300 ? "OK" : "Request failed",
       text: async () => response.body,
+      arrayBuffer: async () => response.encoding === "base64"
+        ? decodeBase64(response.body)
+        : new TextEncoder().encode(response.body).buffer,
     }
   }
+}
+
+function decodeBase64(value: string): ArrayBuffer {
+  const binary = atob(value)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return bytes.buffer
 }

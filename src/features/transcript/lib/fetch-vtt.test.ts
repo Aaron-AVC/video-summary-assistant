@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 
-import { buildRawVttUrl, fetchVtt, pickTranscriptTrack } from "./fetch-vtt"
+import { buildRawVttUrl, fetchExactTimedtext, fetchVtt, pickTranscriptTrack } from "./fetch-vtt"
 import { parseVtt } from "./parse-vtt"
 import type { FetchVttFailure, TranscriptTrack } from "./transcript-schema"
 
@@ -243,5 +243,50 @@ describe("fetchVtt", () => {
     const failure = result as FetchVttFailure
 
     expect(failure.error.reason).toBe("captions_unavailable")
+  })
+})
+
+describe("fetchExactTimedtext", () => {
+  it("fetches the signed player URL byte-for-byte and converts JSON3 through the existing path", async () => {
+    const url = "https://www.youtube.com/api/timedtext?v=video-1&lang=zh-Hans&fmt=json3&signature=keep&pot=p&potc=pc"
+    const track: TranscriptTrack = { languageCode: "zh-Hans", baseUrl: url, name: "中文" }
+    const calls: Array<{ input: string | URL; init?: RequestInit }> = []
+    const result = await fetchExactTimedtext({
+      url,
+      track,
+      fetchImpl: async (input, init) => {
+        calls.push({ input, init })
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          text: async () => JSON.stringify({
+            events: [{ tStartMs: 1000, dDurationMs: 1500, segs: [{ utf8: "Live JSON3" }] }],
+          }),
+        }
+      },
+    })
+
+    expect(calls).toEqual([{ input: url, init: { credentials: "include", redirect: "error" } }])
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.rawVtt).toContain("Live JSON3")
+      expect(result.sourceUrl).toBe("")
+    }
+  })
+
+  it("returns a URL-free failure when the live request fails", async () => {
+    const url = "https://www.youtube.com/api/timedtext?v=video-1&lang=en&fmt=json3&signature=secret"
+    const result = await fetchExactTimedtext({
+      url,
+      track: { languageCode: "en", baseUrl: url },
+      fetchImpl: async () => ({ ok: false, status: 403, statusText: "Forbidden", text: async () => "" }),
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok === false) {
+      expect(result.error.message).not.toContain("signature")
+      expect(result.error.message).not.toContain(url)
+    }
   })
 })

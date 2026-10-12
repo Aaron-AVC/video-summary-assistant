@@ -1,4 +1,5 @@
 import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
+import type { YouTubeLivePlayerState } from "@/features/platform/youtube/youtube-live-state"
 import type {
   NativeChapter,
   VideoIdentity,
@@ -13,6 +14,8 @@ export type PlatformPageEnvironment = {
   fetch: FetchLike
   /** Live URL probe used to reject asynchronous results after an SPA/part switch. */
   getCurrentUrl?: () => URL
+  /** Bounded MAIN-world YouTube player/timedtext snapshot, injected by the runtime bridge. */
+  readYouTubeLivePlayerState?: (expectedVideoId: string) => Promise<YouTubeLivePlayerState | null>
   diagnosticLoggingEnabled?: boolean
 }
 

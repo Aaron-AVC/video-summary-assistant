@@ -4,6 +4,7 @@ import type {
   VideoInfo,
 } from "@/features/platform/types"
 import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
+import type { YouTubeLivePlayerState } from "@/features/platform/youtube/youtube-live-state"
 
 export const ACTIVE_VIDEO_REQUEST = "VIDEO_SUMMARY_ASSISTANT_REQUEST_ACTIVE_VIDEO"
 export const ACTIVE_VIDEO_EVENT = "video-summary-assistant:active-video"
@@ -26,6 +27,7 @@ type ActiveVideoBridgeOptions = {
   document: Document
   window: Window
   fetch?: FetchLike
+  readYouTubeLivePlayerState?: (videoId: string) => Promise<YouTubeLivePlayerState | null>
 }
 
 export function createUnsupportedVideoContext(url = ""): ActiveVideoContext {
@@ -49,6 +51,7 @@ export async function readActiveVideoContext(
   locationLike: Location | URL,
   fetchImpl: FetchLike = globalThis.fetch as FetchLike,
   getCurrentUrl?: () => URL,
+  readYouTubeLivePlayerState?: (videoId: string) => Promise<YouTubeLivePlayerState | null>,
 ): Promise<ActiveVideoContext> {
   const url = locationLike instanceof URL ? locationLike : new URL(locationLike.href)
   const adapter = resolvePlatformAdapter(url)
@@ -56,7 +59,13 @@ export async function readActiveVideoContext(
     return createUnsupportedVideoContext(url.href)
   }
 
-  const env = { document, location: url, fetch: fetchImpl, getCurrentUrl }
+  const env = {
+    document,
+    location: url,
+    fetch: fetchImpl,
+    getCurrentUrl,
+    readYouTubeLivePlayerState,
+  }
   let video: VideoInfo
   try {
     video = await adapter.readVideoInfo(env)
@@ -97,6 +106,7 @@ export function createActiveVideoBridge({
   document,
   window,
   fetch: fetchImpl = globalThis.fetch as FetchLike,
+  readYouTubeLivePlayerState,
 }: ActiveVideoBridgeOptions) {
   let previousSerialized = ""
   let publishGeneration = 0
@@ -109,6 +119,7 @@ export function createActiveVideoBridge({
       window.location,
       fetchImpl,
       () => new URL(window.location.href),
+      readYouTubeLivePlayerState,
     ).then((snapshot) => {
       if (generation !== publishGeneration) return
       const serialized = JSON.stringify(snapshot)
@@ -132,6 +143,7 @@ export function createActiveVideoBridge({
       window.location,
       fetchImpl,
       () => new URL(window.location.href),
+      readYouTubeLivePlayerState,
     ).then((payload) => {
       const message: ActiveVideoResponseMessage = {
         source: "video-summary-assistant",

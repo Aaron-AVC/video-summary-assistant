@@ -6,6 +6,7 @@ import type {
   VideoInfo,
   VideoTranscript,
 } from "@/features/platform/types"
+import type { YouTubeLivePlayerState } from "@/features/platform/youtube/youtube-live-state"
 import { isAllowedBilibiliResourceUrl } from "@/features/platform/bilibili/bilibili-transport-policy"
 
 export const RUNTIME_MESSAGE_NAMESPACE = "video-summary-assistant/runtime"
@@ -15,6 +16,7 @@ export const OPEN_SIDEPANEL = "open-sidepanel"
 export const ANALYZE_VIDEO = "analyze-video"
 export const JUMP_TO_TIMESTAMP = "jump-to-timestamp"
 export const FETCH_VIDEO_TRANSCRIPT = "fetch-video-transcript"
+export const READ_YOUTUBE_LIVE_PLAYER_STATE = "read-youtube-live-player-state"
 export const FETCH_BILIBILI_RESOURCE = "fetch-bilibili-resource"
 export const CONTENT_VIDEO_CONTEXT_CHANGED = "content-video-context-changed"
 export const ACTIVE_VIDEO_CONTEXT_CHANGED = "active-video-context-changed"
@@ -44,6 +46,11 @@ export type RuntimeRequestMessage =
       timestampSeconds: number
     }
   | { channel: typeof RUNTIME_MESSAGE_NAMESPACE; type: typeof FETCH_VIDEO_TRANSCRIPT; tabId?: number }
+  | {
+      channel: typeof RUNTIME_MESSAGE_NAMESPACE
+      type: typeof READ_YOUTUBE_LIVE_PLAYER_STATE
+      videoId: string
+    }
   | {
       channel: typeof RUNTIME_MESSAGE_NAMESPACE
       type: typeof FETCH_BILIBILI_RESOURCE
@@ -77,6 +84,12 @@ export type RuntimeResponseMessage =
     }
   | {
       ok: true
+      type: typeof READ_YOUTUBE_LIVE_PLAYER_STATE
+      tabId: number | null
+      playerState: YouTubeLivePlayerState | null
+    }
+  | {
+      ok: true
       type: typeof FETCH_BILIBILI_RESOURCE
       tabId: number | null
       status: number
@@ -91,6 +104,7 @@ export type RuntimeResponseMessage =
         | typeof ANALYZE_VIDEO
         | typeof JUMP_TO_TIMESTAMP
         | typeof FETCH_VIDEO_TRANSCRIPT
+        | typeof READ_YOUTUBE_LIVE_PLAYER_STATE
         | typeof FETCH_BILIBILI_RESOURCE
       error: string
       tabId: number | null
@@ -126,6 +140,7 @@ const requestTypeSchema = z.enum([
   ANALYZE_VIDEO,
   JUMP_TO_TIMESTAMP,
   FETCH_VIDEO_TRANSCRIPT,
+  READ_YOUTUBE_LIVE_PLAYER_STATE,
   FETCH_BILIBILI_RESOURCE,
 ])
 
@@ -135,7 +150,11 @@ export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequest
     && value.channel === RUNTIME_MESSAGE_NAMESPACE
     && requestTypeSchema.safeParse(value.type).success
   )) return false
-  return value.type !== FETCH_BILIBILI_RESOURCE || isAllowedBilibiliResourceUrl(value.url)
+  if (value.type === FETCH_BILIBILI_RESOURCE) return isAllowedBilibiliResourceUrl(value.url)
+  if (value.type === READ_YOUTUBE_LIVE_PLAYER_STATE) {
+    return typeof value.videoId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value.videoId)
+  }
+  return true
 }
 
 const activeVideoContextSchema = z.object({
@@ -220,6 +239,25 @@ const transcriptSegmentSchema = z.object({
   path: ["endSec"],
   message: "Transcript segment end must not precede its start.",
 })
+const youtubeLivePlayerStateSchema = z.object({
+  videoId: z.string().min(1).max(128),
+  title: z.string().nullable(),
+  author: z.string().nullable(),
+  captionTracks: z.array(z.object({
+    languageCode: z.string().min(1).max(64),
+    languageName: z.string().nullable(),
+    displayName: z.string().nullable(),
+    kind: z.string().nullable(),
+    vssId: z.string().nullable(),
+  })).max(100),
+  timedtextCandidates: z.array(z.object({
+    url: z.string().min(1).max(16_384),
+    videoId: z.string().min(1).max(128),
+    languageCode: z.string().min(1).max(64),
+    format: z.string().max(32).nullable(),
+    startTime: z.number().finite().nonnegative(),
+  })).max(100),
+})
 const videoTranscriptSchema = z.object({
   segments: z.array(transcriptSegmentSchema),
   language: z.string().nullable().optional(),
@@ -250,6 +288,10 @@ const runtimeResponseSuccessSchema = z.discriminatedUnion("type", [
   z.object({
     ok: z.literal(true), type: z.literal(FETCH_VIDEO_TRANSCRIPT), tabId: tabIdSchema,
     video: videoInfoSchema, transcript: videoTranscriptSchema,
+  }),
+  z.object({
+    ok: z.literal(true), type: z.literal(READ_YOUTUBE_LIVE_PLAYER_STATE), tabId: tabIdSchema,
+    playerState: youtubeLivePlayerStateSchema.nullable(),
   }),
   z.object({
     ok: z.literal(true), type: z.literal(FETCH_BILIBILI_RESOURCE), tabId: tabIdSchema,
@@ -305,6 +347,15 @@ export async function sendRuntimeMessage<TResponse extends RuntimeResponseMessag
 
 export function isRuntimeMessageParseError(value: unknown): value is RuntimeMessageParseError {
   return isRecord(value) && value.ok === false && value.type === "runtime-message-parse-error"
+}
+
+export function isYouTubeLivePlayerStateResponse(
+  value: unknown,
+): value is Extract<RuntimeResponseMessage, { type: typeof READ_YOUTUBE_LIVE_PLAYER_STATE }> {
+  return runtimeResponseMessageSchema.safeParse(value).success
+    && isRecord(value)
+    && value.ok === true
+    && value.type === READ_YOUTUBE_LIVE_PLAYER_STATE
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

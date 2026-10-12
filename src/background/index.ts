@@ -1,4 +1,8 @@
 import { resolvePlatformAdapter, resolvePlatformAdapterForIdentity } from "@/features/platform/registry"
+import {
+  normalizeYouTubeLivePlayerState,
+  readYouTubeLivePlayerStateInMainWorld,
+} from "@/features/platform/youtube/youtube-live-state"
 import { isAllowedBilibiliTransport } from "@/features/platform/bilibili/bilibili-transport-policy"
 import {
   readBilibiliResponseBytes,
@@ -16,6 +20,7 @@ import {
   GET_ACTIVE_VIDEO_CONTEXT,
   JUMP_TO_TIMESTAMP,
   OPEN_SIDEPANEL,
+  READ_YOUTUBE_LIVE_PLAYER_STATE,
   RUNTIME_MESSAGE_NAMESPACE,
   type ContentScriptRequestMessage,
   type ContentScriptResponseMessage,
@@ -37,6 +42,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return
   }
   if (!isRuntimeRequestMessage(message)) return
+  if (message.type === READ_YOUTUBE_LIVE_PLAYER_STATE) {
+    void readYouTubeLivePlayerStateFromPage(message, sender).then(sendResponse)
+    return true
+  }
   void handleRuntimeMessage(message, sender).then(sendResponse)
   return true
 })
@@ -67,6 +76,66 @@ async function relayActiveVideoContext(context: ActiveVideoContext, sender: chro
     })
   } catch {
     // The side panel may not be open; the next explicit context read is authoritative.
+  }
+}
+
+async function readYouTubeLivePlayerStateFromPage(
+  message: Extract<RuntimeRequestMessage, { type: typeof READ_YOUTUBE_LIVE_PLAYER_STATE }>,
+  sender?: chrome.runtime.MessageSender,
+): Promise<RuntimeResponseMessage> {
+  const tabId = sender?.tab?.id ?? null
+  const empty = (): RuntimeResponseMessage => ({
+    ok: true,
+    type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+    tabId,
+    playerState: null,
+  })
+  if (tabId === null || sender?.frameId !== 0) return empty()
+
+  const senderUrl = sender.url ?? sender.tab?.url ?? ""
+  let senderPageUrl: URL
+  try {
+    senderPageUrl = new URL(senderUrl)
+  } catch {
+    return empty()
+  }
+
+  const senderAdapter = resolvePlatformAdapter(senderPageUrl)
+  const senderIdentity = senderAdapter?.getVideoIdentity(senderPageUrl)
+  if (
+    senderAdapter?.platform !== "youtube"
+    || senderIdentity?.videoId !== message.videoId
+  ) return empty()
+
+  try {
+    const currentTab = await getTab(tabId)
+    const currentUrl = currentTab?.url ? new URL(currentTab.url) : null
+    const currentAdapter = currentUrl ? resolvePlatformAdapter(currentUrl) : null
+    if (currentAdapter?.getVideoIdentity(currentUrl!)?.videoId !== message.videoId) return empty()
+
+    const [injection] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: readYouTubeLivePlayerStateInMainWorld,
+      args: [message.videoId],
+    })
+
+    const tabAfterInjection = await getTab(tabId)
+    const pageAfterInjection = tabAfterInjection?.url ? new URL(tabAfterInjection.url) : null
+    const adapterAfterInjection = pageAfterInjection ? resolvePlatformAdapter(pageAfterInjection) : null
+    if (adapterAfterInjection?.getVideoIdentity(pageAfterInjection!)?.videoId !== message.videoId) {
+      return empty()
+    }
+
+    return {
+      ok: true,
+      type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+      tabId,
+      playerState: normalizeYouTubeLivePlayerState(injection?.result, message.videoId),
+    }
+  } catch {
+    // MAIN-world access is an optional fast path; all existing fallbacks remain available.
+    return empty()
   }
 }
 

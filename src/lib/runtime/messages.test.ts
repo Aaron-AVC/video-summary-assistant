@@ -5,6 +5,7 @@ import {
   CONTENT_VIDEO_CONTEXT_CHANGED,
   FETCH_BILIBILI_RESOURCE,
   GET_ACTIVE_VIDEO_CONTEXT,
+  READ_YOUTUBE_LIVE_PLAYER_STATE,
   RUNTIME_MESSAGE_NAMESPACE,
   isActiveVideoContextChangedMessage,
   isContentVideoContextChangedMessage,
@@ -87,6 +88,24 @@ describe("runtime message boundaries", () => {
     }
   })
 
+  it("validates the bounded YouTube live-player request", () => {
+    expect(isRuntimeRequestMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+      videoId: "video-1",
+    })).toBe(true)
+    expect(isRuntimeRequestMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+      videoId: "video id with spaces",
+    })).toBe(false)
+    expect(isContentScriptRequestMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+      videoId: "video-1",
+    })).toBe(false)
+  })
+
   it("validates content context announcements for extension relay", () => {
     expect(isContentVideoContextChangedMessage({
       channel: RUNTIME_MESSAGE_NAMESPACE,
@@ -136,6 +155,39 @@ describe("sendRuntimeMessage validation", () => {
         contentKey: "youtube:video-1",
       })
     }
+  })
+
+  it("accepts a validated live-player response without exposing arbitrary response data", async () => {
+    installChromeRuntime(async () => ({
+      ok: true,
+      type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+      tabId: 1,
+      playerState: {
+        videoId: "video-1",
+        title: "Live title",
+        author: "Live author",
+        captionTracks: [{
+          languageCode: "zh-Hans",
+          languageName: "中文（简体）",
+          displayName: null,
+          kind: null,
+          vssId: ".zh-Hans",
+        }],
+        timedtextCandidates: [],
+      },
+    }))
+
+    const response = await sendRuntimeMessage({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+      videoId: "video-1",
+    })
+
+    expect(response).toMatchObject({
+      ok: true,
+      type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+      playerState: { videoId: "video-1", author: "Live author" },
+    })
   })
 
   it("rejects a legacy context that omits platform and contentKey", async () => {

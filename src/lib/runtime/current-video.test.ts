@@ -74,4 +74,23 @@ describe("active video context", () => {
     })
     expect(second.videoId).not.toBe(first.videoId)
   })
+
+  it("uses matching live player metadata for the active context author", async () => {
+    const context = await readActiveVideoContext(
+      createDocument("DOM title", "Mrs. GREEN APPLE"),
+      new URL("https://www.youtube.com/watch?v=videoA12345"),
+      undefined,
+      undefined,
+      async () => ({
+        videoId: "videoA12345",
+        title: "Live title",
+        author: "投机实验室",
+        captionTracks: [],
+        timedtextCandidates: [],
+      }),
+    )
+
+    expect(context.title).toBe("Live title")
+    expect(context.author).toBe("投机实验室")
+  })
 })

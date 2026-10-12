@@ -7,6 +7,9 @@ import {
   FETCH_VIDEO_TRANSCRIPT,
   GET_ACTIVE_VIDEO_CONTEXT,
   JUMP_TO_TIMESTAMP,
+  READ_YOUTUBE_LIVE_PLAYER_STATE,
+  RUNTIME_MESSAGE_NAMESPACE,
+  isYouTubeLivePlayerStateResponse,
   type ContentScriptRequestMessage,
   type ContentScriptResponseMessage,
   isContentScriptRequestMessage,
@@ -46,11 +49,25 @@ export function installPlatformContentBridge({
 
   const currentUrl = () => new URL(window.location.href)
   const pageFetch: FetchLike = (input, init) => fetch(input, init)
-  createActiveVideoBridge({ document, window, fetch: pageFetch })
+  const readYouTubeLivePlayerState = async (videoId: string) => {
+    try {
+      const response: unknown = await chrome.runtime.sendMessage({
+        channel: RUNTIME_MESSAGE_NAMESPACE,
+        type: READ_YOUTUBE_LIVE_PLAYER_STATE,
+        videoId,
+      })
+      return isYouTubeLivePlayerStateResponse(response) && response.ok
+        ? response.playerState
+        : null
+    } catch {
+      return null
+    }
+  }
+  createActiveVideoBridge({ document, window, fetch: pageFetch, readYouTubeLivePlayerState })
   const publishRuntimeContext = (event: Event) => {
     const context = (event as CustomEvent<unknown>).detail
     void chrome.runtime.sendMessage({
-      channel: "video-summary-assistant/runtime",
+      channel: RUNTIME_MESSAGE_NAMESPACE,
       type: CONTENT_VIDEO_CONTEXT_CHANGED,
       context,
     }).catch(() => undefined)
@@ -65,7 +82,13 @@ export function installPlatformContentBridge({
     if (!isContentScriptRequestMessage(message)) return
 
     if (message.type === GET_ACTIVE_VIDEO_CONTEXT) {
-      void readActiveVideoContext(document, window.location, pageFetch, currentUrl)
+      void readActiveVideoContext(
+        document,
+        window.location,
+        pageFetch,
+        currentUrl,
+        readYouTubeLivePlayerState,
+      )
         .then((context) => sendResponse({ ok: true, type: GET_ACTIVE_VIDEO_CONTEXT, context }))
         .catch((error) => sendResponse({
           ok: false,
@@ -91,6 +114,7 @@ export function installPlatformContentBridge({
       location: currentUrl(),
       getCurrentUrl: currentUrl,
       fetch: pageFetch,
+      readYouTubeLivePlayerState,
     }
 
     if (message.type === JUMP_TO_TIMESTAMP) {

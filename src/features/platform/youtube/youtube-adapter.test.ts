@@ -1,6 +1,7 @@
 import { describe, expect, it, mock } from "bun:test"
 
 import type { PlatformPageEnvironment } from "@/features/platform/adapter"
+import type { YouTubeLivePlayerState } from "@/features/platform/youtube/youtube-live-state"
 import { youtubeAdapter } from "@/features/platform/youtube/youtube-adapter"
 
 const VIDEO_ID = "video123456"
@@ -54,6 +55,45 @@ describe("YouTubeAdapter contract", () => {
     })
   })
 
+  it("prefers matching live player title and author over an unrelated channel DOM node", async () => {
+    const info = await youtubeAdapter.readVideoInfo(createEnvironment({
+      title: "Document title - YouTube",
+      watchTitle: "Current watch metadata title",
+      unrelatedAuthor: "Mrs. GREEN APPLE",
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Current player title",
+        author: "投机实验室",
+        captionTracks: [],
+        timedtextCandidates: [],
+      },
+    }))
+
+    expect(info.title).toBe("Current player title")
+    expect(info.author).toBe("投机实验室")
+  })
+
+  it("ignores stale live metadata and uses only current-watch DOM authors", async () => {
+    const info = await youtubeAdapter.readVideoInfo(createEnvironment({
+      location: `https://www.youtube.com/watch?v=${VIDEO_B}`,
+      title: "Current B title - YouTube",
+      watchTitle: "Current B watch title",
+      author: "Current B author",
+      unrelatedAuthor: "Mrs. GREEN APPLE",
+      liveState: {
+        videoId: VIDEO_A,
+        title: "Stale A title",
+        author: "Stale A author",
+        captionTracks: [],
+        timedtextCandidates: [],
+      },
+    }))
+
+    expect(info.videoId).toBe(VIDEO_B)
+    expect(info.title).toBe("Current B watch title")
+    expect(info.author).toBe("Current B author")
+  })
+
   it("returns normalized segments for a manual timedtext track", async () => {
     const fetchImpl = mock(async () => okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nManual text\n"))
     const transcript = await youtubeAdapter.getTranscript(createEnvironment({
@@ -65,6 +105,146 @@ describe("YouTubeAdapter contract", () => {
     expect(transcript.language).toBe("en")
     expect(transcript.segments).toEqual([{ startSec: 0, endSec: 2, text: "Manual text" }])
     expect(transcript.raw?.format).toBe("vtt")
+  })
+
+  it("fetches a current live JSON3 timedtext URL unchanged when panel and legacy tracks are unavailable", async () => {
+    const signedUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=zh-Hans&fmt=json3&signature=secret-value&pot=pot-value&potc=potc-value&expire=123`
+    const fetchImpl = mock(async (input, init) => {
+      expect(input).toBe(signedUrl)
+      expect(init?.credentials).toBe("include")
+      return okText(JSON.stringify({
+        events: [{ tStartMs: 0, dDurationMs: 1200, segs: [{ utf8: "Live caption" }] }],
+      }))
+    })
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      html: createWatchHtml({ tracks: [] }),
+      rows: [],
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Live title",
+        author: "投机实验室",
+        captionTracks: [{ languageCode: "zh-Hans", languageName: "中文（简体）" }],
+        timedtextCandidates: [{
+          url: signedUrl,
+          videoId: VIDEO_ID,
+          languageCode: "zh-Hans",
+          format: "json3",
+          startTime: 42,
+        }],
+      },
+      fetchImpl,
+    }))
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(transcript.segments).toEqual([{ startSec: 0, endSec: 1.2, text: "Live caption" }])
+    expect(transcript.raw?.sourceUrl).toBeNull()
+  })
+
+  it("does not persist a signed live URL in transcript output or diagnostic logs", async () => {
+    const signedUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en&fmt=json3&signature=secret-value&pot=pot-value&potc=potc-value`
+    const storedLogs: unknown[] = []
+    const previousChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome")
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: {
+        storage: {
+          local: {
+            get: async () => ({ "yt-summarizer.transcript-log": [] }),
+            set: async (value: Record<string, unknown>) => {
+              storedLogs.push(value["yt-summarizer.transcript-log"])
+            },
+          },
+        },
+      },
+    })
+
+    try {
+      const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+        html: createWatchHtml({ tracks: [] }),
+        liveState: {
+          videoId: VIDEO_ID,
+          title: "Live title",
+          author: "Live author",
+          captionTracks: [{ languageCode: "en", languageName: "English" }],
+          timedtextCandidates: [{
+            url: signedUrl,
+            videoId: VIDEO_ID,
+            languageCode: "en",
+            format: "json3",
+            startTime: 42,
+          }],
+        },
+        fetchImpl: async () => okText(JSON.stringify({
+          events: [{ tStartMs: 0, dDurationMs: 1200, segs: [{ utf8: "Private URL test" }] }],
+        })),
+        diagnosticLoggingEnabled: true,
+      }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(transcript.raw?.sourceUrl).toBeNull()
+      const persisted = JSON.stringify(storedLogs)
+      expect(persisted).toContain("strategy=live_timedtext")
+      expect(persisted).not.toContain("https://www.youtube.com/api/timedtext")
+      expect(persisted).not.toContain("secret-value")
+      expect(persisted).not.toContain("pot-value")
+    } finally {
+      if (previousChrome) Object.defineProperty(globalThis, "chrome", previousChrome)
+      else Reflect.deleteProperty(globalThis, "chrome")
+    }
+  })
+
+  it("continues to legacy tracks when the live timedtext request fails", async () => {
+    const liveUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en&fmt=json3&signature=secret-value`
+    const legacyUrl = createTrack(false).baseUrl
+    const requests: string[] = []
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      html: createWatchHtml({ tracks: [createTrack(false)] }),
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Live title",
+        author: "Live author",
+        captionTracks: [],
+        timedtextCandidates: [{
+          url: liveUrl,
+          videoId: VIDEO_ID,
+          languageCode: "en",
+          format: "json3",
+          startTime: 42,
+        }],
+      },
+      fetchImpl: async (input) => {
+        const requestedUrl = String(input)
+        requests.push(requestedUrl)
+        if (requestedUrl === liveUrl) {
+          return { ok: false, status: 403, statusText: "Forbidden", text: async () => "" }
+        }
+        return requestedUrl.includes("fmt=vtt")
+          ? okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nLegacy fallback\n")
+          : okText("")
+      },
+    }))
+
+    expect(requests).toEqual([liveUrl, legacyUrl, `${legacyUrl}&fmt=vtt`])
+    expect(transcript.segments[0]?.text).toBe("Legacy fallback")
+  })
+
+  it("uses rendered DOM without activating captions when Resource Timing has no candidate", async () => {
+    const fetchImpl = mock(async () => okText(""))
+    const transcript = await youtubeAdapter.getTranscript(createEnvironment({
+      html: createWatchHtml({ tracks: [] }),
+      rows: [{ timestamp: "0:08", text: "DOM fallback" }],
+      liveState: {
+        videoId: VIDEO_ID,
+        title: "Live title",
+        author: "Live author",
+        captionTracks: [{ languageCode: "en", languageName: "English" }],
+        timedtextCandidates: [],
+      },
+      fetchImpl,
+    }))
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(transcript.segments[0]?.text).toBe("DOM fallback")
   })
 
   it("maps an automatic timedtext track to auto", async () => {
@@ -161,6 +341,37 @@ describe("YouTubeAdapter contract", () => {
     })
   })
 
+  it("discards an asynchronously returned A live state after the page changes to B", async () => {
+    let resolveLiveState!: (state: YouTubeLivePlayerState | null) => void
+    let currentUrl = new URL(`https://www.youtube.com/watch?v=${VIDEO_A}`)
+    const fetchImpl = mock(async () => okText("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nStale A\n"))
+    const env = createEnvironment({
+      location: currentUrl.href,
+      html: createWatchHtml({ videoId: VIDEO_A }),
+      fetchImpl,
+      getCurrentUrl: () => currentUrl,
+      readLivePlayerState: () => new Promise((resolve) => { resolveLiveState = resolve }),
+    })
+    const transcriptPromise = youtubeAdapter.getTranscript(env)
+    currentUrl = new URL(`https://www.youtube.com/watch?v=${VIDEO_B}`)
+    resolveLiveState({
+      videoId: VIDEO_A,
+      title: "A title",
+      author: "A author",
+      captionTracks: [],
+      timedtextCandidates: [{
+        url: `https://www.youtube.com/api/timedtext?v=${VIDEO_A}&lang=en&fmt=json3&signature=secret-value`,
+        videoId: VIDEO_A,
+        languageCode: "en",
+        format: "json3",
+        startTime: 99,
+      }],
+    })
+
+    await expect(transcriptPromise).rejects.toThrow("video changed")
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
   it("seeks normally and clamps negative seconds", () => {
     const video = { currentTime: 10 }
     const env = createEnvironment({ video })
@@ -205,11 +416,17 @@ type EnvironmentOptions = {
   html?: string
   location?: string
   title?: string
+  watchTitle?: string
   author?: string
+  unrelatedAuthor?: string
   duration?: number
   video?: { currentTime: number }
   rows?: Array<{ timestamp: string; text: string }>
   fetchImpl?: PlatformPageEnvironment["fetch"]
+  liveState?: YouTubeLivePlayerState | null
+  readLivePlayerState?: PlatformPageEnvironment["readYouTubeLivePlayerState"]
+  getCurrentUrl?: PlatformPageEnvironment["getCurrentUrl"]
+  diagnosticLoggingEnabled?: boolean
 }
 
 function createEnvironment(options: EnvironmentOptions): PlatformPageEnvironment {
@@ -232,10 +449,17 @@ function createEnvironment(options: EnvironmentOptions): PlatformPageEnvironment
     querySelectorAll: (selector: string) => selector === "#segments-container" ? [transcriptRoot] : [],
     querySelector: (selector: string) => {
       if (selector === "video") return { ...video, duration: options.duration }
-      if (selector.includes("#segments-container")) return transcriptRoot
-      if (selector.includes("#owner") || selector.includes("ytd-channel-name")) {
+      if (selector === "ytd-watch-metadata h1") {
+        return options.watchTitle ? { textContent: options.watchTitle } : null
+      }
+      if (selector === "ytd-watch-metadata #owner a.yt-simple-endpoint"
+        || selector === "ytd-watch-metadata ytd-channel-name a") {
         return options.author ? { textContent: options.author } : null
       }
+      if (selector === "ytd-channel-name a") {
+        return options.unrelatedAuthor ? { textContent: options.unrelatedAuthor } : null
+      }
+      if (selector.includes("#segments-container")) return transcriptRoot
       return null
     },
   } as unknown as Document
@@ -243,10 +467,17 @@ function createEnvironment(options: EnvironmentOptions): PlatformPageEnvironment
   if (options.video) {
     document.querySelector = ((selector: string) => {
       if (selector === "video") return Object.assign(options.video!, { duration: options.duration })
-      if (selector.includes("#segments-container")) return transcriptRoot
-      if (selector.includes("#owner") || selector.includes("ytd-channel-name")) {
+      if (selector === "ytd-watch-metadata h1") {
+        return options.watchTitle ? { textContent: options.watchTitle } : null
+      }
+      if (selector === "ytd-watch-metadata #owner a.yt-simple-endpoint"
+        || selector === "ytd-watch-metadata ytd-channel-name a") {
         return options.author ? { textContent: options.author } : null
       }
+      if (selector === "ytd-channel-name a") {
+        return options.unrelatedAuthor ? { textContent: options.unrelatedAuthor } : null
+      }
+      if (selector.includes("#segments-container")) return transcriptRoot
       return null
     }) as typeof document.querySelector
   }
@@ -255,7 +486,13 @@ function createEnvironment(options: EnvironmentOptions): PlatformPageEnvironment
     document,
     location: new URL(options.location ?? `https://www.youtube.com/watch?v=${VIDEO_ID}`),
     fetch: options.fetchImpl ?? (async () => okText("")),
-    diagnosticLoggingEnabled: false,
+    ...(options.getCurrentUrl ? { getCurrentUrl: options.getCurrentUrl } : {}),
+    ...(options.readLivePlayerState
+      ? { readYouTubeLivePlayerState: options.readLivePlayerState }
+      : options.liveState !== undefined
+        ? { readYouTubeLivePlayerState: async () => options.liveState ?? null }
+        : {}),
+    diagnosticLoggingEnabled: options.diagnosticLoggingEnabled ?? false,
   }
 }
 

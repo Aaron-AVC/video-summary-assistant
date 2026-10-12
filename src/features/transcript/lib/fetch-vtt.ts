@@ -131,6 +131,46 @@ export async function fetchVtt({
   )
 }
 
+/** Fetch a player-observed URL exactly as-is; never rebuild its signed parameters. */
+export async function fetchExactTimedtext({
+  url,
+  track,
+  fetchImpl = globalThis.fetch as FetchLike,
+}: {
+  url: string
+  track: TranscriptTrack
+  fetchImpl?: FetchLike
+}): Promise<FetchVttResult> {
+  try {
+    const response = await fetchImpl(url, {
+      credentials: "include",
+      redirect: "error",
+    })
+
+    if (!response.ok) {
+      return unsupported(
+        "transcript_request_failed",
+        `Live timedtext request failed with HTTP ${response.status}.`,
+      )
+    }
+
+    const rawVtt = convertTimedtextToVtt(url, await response.text())
+    if (!rawVtt) {
+      return unsupported("captions_unavailable", "Live timedtext returned no usable cues.")
+    }
+
+    return {
+      ok: true,
+      rawVtt,
+      track,
+      sourceUrl: "",
+      source: "in_page",
+    }
+  } catch {
+    return unsupported("transcript_request_failed", "Live timedtext request failed.")
+  }
+}
+
 function rankTranscriptTracks(
   tracks: TranscriptTrack[],
   languageCode = DEFAULT_LANGUAGE,

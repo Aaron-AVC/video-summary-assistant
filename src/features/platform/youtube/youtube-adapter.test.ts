@@ -229,6 +229,7 @@ function createEnvironment(options: EnvironmentOptions): PlatformPageEnvironment
   const document = {
     title: options.title ?? "Adapter video - YouTube",
     documentElement: { outerHTML: options.html ?? createWatchHtml({}) },
+    querySelectorAll: (selector: string) => selector === "#segments-container" ? [transcriptRoot] : [],
     querySelector: (selector: string) => {
       if (selector === "video") return { ...video, duration: options.duration }
       if (selector.includes("#segments-container")) return transcriptRoot

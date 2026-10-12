@@ -296,6 +296,62 @@ describe("Bilibili subtitle discovery and normalization", () => {
     expect(transcript.segments[0]?.text).toBe("Fallback caption")
   })
 
+  it("extracts valid nav WBI keys despite code -101 and continues with signed player discovery", async () => {
+    resetWbiKeyCacheForTests()
+    const requests: URL[] = []
+    const fetchImpl = mock(async (input: string | URL) => {
+      const url = new URL(String(input))
+      requests.push(url)
+      if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
+      if (url.pathname.endsWith("/nav")) return jsonResponse({
+        code: -101,
+        data: {
+          isLogin: false,
+          wbi_img: {
+            img_url: "https://i0.hdslb.com/bfs/wbi/abcdef1234567890abcdef1234567890.png",
+            sub_url: "https://i0.hdslb.com/bfs/wbi/1234567890abcdef1234567890abcdef.png",
+          },
+        },
+      })
+      if (url.pathname.endsWith("/wbi/v2")) return jsonResponse({
+        code: 0,
+        data: { subtitle: { subtitles: [track(1, "zh-CN", "manual", "https://aisubtitle.hdslb.com/bfs/subtitle/nav-101.json")] } },
+      })
+      return jsonResponse({ body: [{ from: 0, to: 1, content: "Signed transcript" }] })
+    })
+
+    const transcript = await bilibiliAdapter.getTranscript(createEnvironment(P1_URL, fetchImpl))
+
+    expect(requests.map((url) => url.pathname)).toContain("/x/player/wbi/v2")
+    const playerUrl = requests.find((url) => url.pathname.endsWith("/wbi/v2"))
+    expect(playerUrl?.searchParams.has("wts")).toBe(true)
+    expect(playerUrl?.searchParams.has("w_rid")).toBe(true)
+    expect(transcript.segments[0]?.text).toBe("Signed transcript")
+    resetWbiKeyCacheForTests()
+  })
+
+  it("rejects other nav error codes and missing WBI image keys", async () => {
+    for (const navPayload of [
+      { ...wbiNav, code: -412 },
+      { code: 0, data: { isLogin: false } },
+    ]) {
+      resetWbiKeyCacheForTests()
+      const paths: string[] = []
+      const fetchImpl = mock(async (input: string | URL) => {
+        const url = new URL(String(input))
+        paths.push(url.pathname)
+        if (url.pathname.endsWith("/view")) return jsonResponse(metadata)
+        if (url.pathname.endsWith("/nav")) return jsonResponse(navPayload)
+        throw new Error("WBI player request must not proceed without valid nav keys")
+      })
+
+      await expect(bilibiliAdapter.getTranscript(createEnvironment(P1_URL, fetchImpl)))
+        .rejects.toMatchObject({ code: "player_api_rejected" })
+      expect(paths).not.toContain("/x/player/wbi/v2")
+    }
+    resetWbiKeyCacheForTests()
+  })
+
   it("does not fall back when WBI succeeds with no subtitles", async () => {
     const paths: string[] = []
     const fetchImpl = mock(async (input: string | URL) => {

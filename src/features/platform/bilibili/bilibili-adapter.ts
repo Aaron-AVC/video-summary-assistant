@@ -405,12 +405,7 @@ async function getWbiKeys(env: PlatformPageEnvironment): Promise<WbiKeys> {
   if (cachedWbiKeys && cachedWbiKeys.expiresAt > Date.now()) return cachedWbiKeys.keys
   if (pendingWbiKeys) return pendingWbiKeys
   pendingWbiKeys = (async () => {
-    const navPayload = await fetchJson(
-      env,
-      `${API_BASE}/x/web-interface/nav`,
-      "player_api_failed",
-      "player_api_rejected",
-    )
+    const navPayload = await fetchWbiNav(env)
     const keys = extractWbiKeys(navPayload)
     if (!keys) throw new BilibiliAdapterError("player_api_rejected", "Bilibili WBI 签名信息不可用。")
     cachedWbiKeys = { keys, expiresAt: Date.now() + WBI_KEY_TTL_MS }
@@ -421,6 +416,37 @@ async function getWbiKeys(env: PlatformPageEnvironment): Promise<WbiKeys> {
   } finally {
     pendingWbiKeys = null
   }
+}
+
+async function fetchWbiNav(env: PlatformPageEnvironment): Promise<unknown> {
+  let response
+  try {
+    response = await env.fetch(`${API_BASE}/x/web-interface/nav`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    })
+  } catch {
+    throw new BilibiliAdapterError("player_api_failed", "Bilibili WBI 签名信息请求失败。")
+  }
+  if (!response.ok) {
+    throw new BilibiliAdapterError("player_api_failed", `Bilibili WBI 签名信息请求失败（HTTP ${response.status}）。`)
+  }
+
+  let payload: unknown
+  try {
+    const body = await response.text()
+    if (body.length > MAX_BODY_LENGTH) throw new Error("response too large")
+    payload = JSON.parse(body)
+  } catch {
+    throw new BilibiliAdapterError("player_api_rejected", "Bilibili WBI 签名信息为空或格式无效。")
+  }
+
+  const code = (payload as { code?: unknown } | null)?.code
+  if (code !== 0 && code !== -101) {
+    throw new BilibiliAdapterError("player_api_rejected", `Bilibili WBI 签名信息被拒绝（错误码 ${String(code)}）。`)
+  }
+  return payload
 }
 
 function parsePlayerData(payload: unknown): {

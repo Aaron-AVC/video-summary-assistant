@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test"
 
 import {
   convertTranscriptDomToVtt,
+  findTranscriptContainer,
+  findTranscriptRows,
   fetchTranscriptDom,
   parseTranscriptTimestamp,
   readTranscriptSegments,
@@ -87,37 +89,29 @@ describe("convertTranscriptDomToVtt", () => {
 })
 
 describe("fetchTranscriptDom modern discovery", () => {
-  it("loads rendered modern rows even when metadata has no caption tracks", async () => {
-    const row = {
-      textContent: "0:07 Modern row",
-      querySelector: (selector: string) => selector.includes("Timestamp") || selector.includes("timestamp")
-        ? { textContent: "0:07" }
-        : selector.includes("Text") || selector.includes("text")
-          ? { textContent: "Modern row" }
-          : null,
-    }
-    const root = {
-      querySelector: (selector: string) => selector.includes("transcript-segment-view-model") ? row : null,
-      querySelectorAll: () => [row],
-    }
-    const document = {
-      querySelector: (selector: string) => selector === "transcript-segment-view-model" ? root : null,
-    } as unknown as Document
+  it("queries modern row descendants of a real container without treating a row as its own root", async () => {
+    const { document, container, rows } = createModernTranscriptDocument(true)
+    expect(findTranscriptContainer(document)).toBe(container as unknown as Element)
+    expect(findTranscriptRows(container)).toEqual(rows)
+    expect(rows[0]?.querySelector("transcript-segment-view-model")).toBeNull()
 
-    const result = await fetchTranscriptDom({
-      document,
-      metadata: {
-        videoId: "video123456",
-        title: null,
-        tracks: [],
-        captionsAvailable: false,
-        transcriptPanel: null,
-      },
-    })
+    const result = await fetchTranscriptDom({ document, metadata: emptyMetadata() })
 
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error("Expected rendered transcript success")
-    expect(result.rawVtt).toContain("Modern row")
+    expect(result.rawVtt).toContain("Modern first row")
+    expect(result.rawVtt).toContain("Modern second row")
+  })
+
+  it("uses a document-level modern-row fallback when no container exists", async () => {
+    const { document } = createModernTranscriptDocument(false)
+
+    const result = await fetchTranscriptDom({ document, metadata: emptyMetadata() })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("Expected document-level rendered transcript success")
+    expect(result.rawVtt).toContain("Modern first row")
+    expect(result.rawVtt).toContain("Modern second row")
   })
 })
 
@@ -156,4 +150,70 @@ function createTranscriptRoot(rows: Array<{ timestamp: string; text: string }>) 
   return {
     querySelectorAll: () => elements,
   }
+}
+
+function emptyMetadata() {
+  return {
+    videoId: "video123456",
+    title: null,
+    tracks: [],
+    captionsAvailable: false,
+    transcriptPanel: null,
+  }
+}
+
+type FakeDomNode = {
+  selector: string
+  textContent: string
+  children: FakeDomNode[]
+  querySelector: (selector: string) => FakeDomNode | null
+  querySelectorAll: (selector: string) => FakeDomNode[]
+  closest: () => null
+  getAttribute: () => null
+}
+
+function createModernTranscriptDocument(withContainer: boolean): {
+  document: Document
+  container: FakeDomNode | null
+  rows: FakeDomNode[]
+} {
+  const rows = [
+    createModernRow("0:07", "Modern first row"),
+    createModernRow("0:12", "Modern second row"),
+  ]
+  const container = withContainer
+    ? createFakeNode(".ytwTranscriptViewModelHost", "", rows)
+    : null
+  const documentRoot = createFakeNode("document", "", container ? [container] : rows)
+  const document = documentRoot as unknown as Document
+  return { document, container, rows }
+}
+
+function createModernRow(timestamp: string, text: string): FakeDomNode {
+  return createFakeNode("transcript-segment-view-model", `${timestamp} ${text}`, [
+    createFakeNode("span.ytwTranscriptSegmentViewModelTimestamp", timestamp),
+    createFakeNode("span.ytAttributedStringHost[role='text']", text),
+  ])
+}
+
+function createFakeNode(selector: string, textContent: string, children: FakeDomNode[] = []): FakeDomNode {
+  const node: FakeDomNode = {
+    selector,
+    textContent,
+    children,
+    querySelector: (requestedSelector) => node.querySelectorAll(requestedSelector)[0] ?? null,
+    querySelectorAll: (requestedSelector) => {
+      const selectors = requestedSelector.split(",").map((item) => item.trim())
+      const matches: FakeDomNode[] = []
+      const visit = (child: FakeDomNode) => {
+        if (selectors.some((item) => item === child.selector)) matches.push(child)
+        for (const descendant of child.children) visit(descendant)
+      }
+      for (const child of children) visit(child)
+      return matches
+    },
+    closest: () => null,
+    getAttribute: () => null,
+  }
+  return node
 }

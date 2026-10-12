@@ -11,6 +11,21 @@ const TRANSCRIPT_PANEL_SOURCE_URL = "youtube-ui://transcript-panel"
 const TRANSCRIPT_PANEL_TIMEOUT_MS = 5_000
 const TRANSCRIPT_PANEL_POLL_MS = 100
 const TRANSCRIPT_FALLBACK_DURATION_MS = 1_000
+const TRANSCRIPT_ROW_SELECTOR = [
+  "ytd-transcript-segment-renderer",
+  "transcript-segment-view-model",
+  "ytm-transcript-segment-renderer",
+].join(", ")
+const TRANSCRIPT_CONTAINER_SELECTORS = [
+  "#segments-container",
+  ".ytwTranscriptViewModelHost",
+  "[class*='TranscriptViewModelHost']",
+  "ytd-transcript-renderer",
+  "ytd-transcript-search-panel-renderer",
+  "ytd-engagement-panel-section-list-renderer[target-id='engagement-panel-searchable-transcript']",
+  "ytd-engagement-panel-section-list-renderer[target-id*='transcript']",
+  "transcript-view-model",
+]
 
 type TranscriptSegment = {
   startMs: number
@@ -25,10 +40,15 @@ type TranscriptSegmentRootLike = {
 type TranscriptSegmentElementLike = {
   querySelector: (selector: string) => TranscriptTextNodeLike | null
   textContent?: string | null
+  closest?: (selectors: string) => { getAttribute: (name: string) => string | null } | null
 }
 
 type TranscriptTextNodeLike = {
   textContent: string | null
+}
+
+type TranscriptQueryRootLike = {
+  querySelectorAll: (selector: string) => Iterable<TranscriptSegmentElementLike>
 }
 
 type FetchTranscriptDomOptions = {
@@ -44,21 +64,23 @@ export async function fetchTranscriptDom({
   videoId = metadata.videoId,
   languageCode,
 }: FetchTranscriptDomOptions): Promise<FetchVttResult> {
-  let root = findTranscriptSegmentsRoot(document)
+  const container = findTranscriptContainer(document)
+  let rows = findTranscriptRows(container ?? document, videoId)
+  if (rows.length === 0 && container) rows = findTranscriptRows(document, videoId)
 
-  if (!hasTranscriptSegments(root)) {
+  if (rows.length === 0) {
     openTranscriptPanel(document)
-    root = await waitForTranscriptSegmentsRoot(document, videoId)
+    rows = await waitForTranscriptRows(document, videoId)
   }
 
-  if (!root || !hasTranscriptSegments(root)) {
+  if (rows.length === 0) {
     return unsupported(
       "captions_unavailable",
       "Unable to open or read the rendered YouTube transcript panel.",
     )
   }
 
-  const rawVtt = convertTranscriptDomToVtt(root)
+  const rawVtt = convertTranscriptDomToVtt(createTranscriptRowsRoot(rows))
 
   if (!rawVtt) {
     return unsupported(
@@ -104,25 +126,20 @@ export function convertTranscriptDomToVtt(root: TranscriptSegmentRootLike): stri
 }
 
 export function readTranscriptSegments(root: TranscriptSegmentRootLike): TranscriptSegment[] {
-  const elements = Array.from(
-    root.querySelectorAll([
-      "ytd-transcript-segment-renderer",
-      "ytd-transcript-segment-list-renderer ytd-transcript-segment-renderer",
-      "transcript-segment-view-model",
-      "ytm-transcript-segment-renderer",
-    ].join(", ")),
-  )
+  const elements = findTranscriptRows(root)
   const segments: TranscriptSegment[] = []
 
   for (const element of elements) {
     const timestampText = firstText(element, [
       ".segment-timestamp",
+      "span.ytwTranscriptSegmentViewModelTimestamp",
       ".ytwTranscriptSegmentViewModelTimestamp",
       "[class*='TranscriptSegmentViewModelTimestamp']",
       "[data-timestamp]",
     ])
     const text = firstText(element, [
       ".segment-text",
+      "span.ytAttributedStringHost[role='text']",
       ".ytwTranscriptSegmentViewModelText",
       "[class*='TranscriptSegmentViewModelText']",
       "[data-text]",
@@ -159,27 +176,20 @@ export function parseTranscriptTimestamp(timestampText: string): number | null {
   return ((hours * 60 * 60) + (minutes * 60) + seconds) * 1_000
 }
 
-function findTranscriptSegmentsRoot(document: Document) {
-  const selectors = [
-    "#segments-container",
-    ".ytd-transcript-search-panel-renderer #segments-container",
-    "ytd-transcript-renderer",
-    "transcript-segment-view-model",
-  ]
-  for (const selector of selectors) {
-    const root = document.querySelector<HTMLElement>(selector)
-    if (root && hasTranscriptSegments(root)) return root
+export function findTranscriptContainer(document: Document): Element | null {
+  let firstCandidate: Element | null = null
+  for (const selector of TRANSCRIPT_CONTAINER_SELECTORS) {
+    for (const candidate of Array.from(document.querySelectorAll(selector))) {
+      firstCandidate ??= candidate
+      if (findTranscriptRows(candidate).length > 0) return candidate
+    }
   }
-  return document.querySelector<HTMLElement>(selectors.join(", "))
+  return firstCandidate
 }
 
-function hasTranscriptSegments(root: Element | null) {
-  if (!root) return false
-  return [
-    "ytd-transcript-segment-renderer",
-    "transcript-segment-view-model",
-    "ytm-transcript-segment-renderer",
-  ].some((selector) => Boolean(root.querySelector(selector)))
+export function findTranscriptRows(container: TranscriptQueryRootLike, videoId?: string): TranscriptSegmentElementLike[] {
+  const rows = Array.from(container.querySelectorAll(TRANSCRIPT_ROW_SELECTOR))
+  return videoId ? rows.filter((row) => rowMatchesVideo(row, videoId)) : rows
 }
 
 function openTranscriptPanel(document: Document) {
@@ -206,28 +216,35 @@ function firstText(element: TranscriptSegmentElementLike, selectors: string[]): 
   return ""
 }
 
-async function waitForTranscriptSegmentsRoot(document: Document, videoId: string) {
+async function waitForTranscriptRows(document: Document, videoId: string): Promise<TranscriptSegmentElementLike[]> {
   const deadline = Date.now() + TRANSCRIPT_PANEL_TIMEOUT_MS
 
   while (Date.now() < deadline) {
-    const root = findTranscriptSegmentsRoot(document)
-
-    if (rootMatchesVideo(root, videoId) && hasTranscriptSegments(root)) {
-      return root
-    }
+    const container = findTranscriptContainer(document)
+    let rows = findTranscriptRows(container ?? document, videoId)
+    if (rows.length === 0 && container) rows = findTranscriptRows(document, videoId)
+    if (rows.length > 0) return rows
 
     await delay(TRANSCRIPT_PANEL_POLL_MS)
   }
 
-  const root = findTranscriptSegmentsRoot(document)
-  return rootMatchesVideo(root, videoId) ? root : null
+  const container = findTranscriptContainer(document)
+  let rows = findTranscriptRows(container ?? document, videoId)
+  if (rows.length === 0 && container) rows = findTranscriptRows(document, videoId)
+  return rows
 }
 
-function rootMatchesVideo(root: Element | null, videoId: string): boolean {
-  if (!root || !videoId) return Boolean(root)
-  const owner = root.closest("ytd-watch-flexy[video-id], ytd-player[video-id]")
+function rowMatchesVideo(row: TranscriptSegmentElementLike, videoId: string): boolean {
+  if (!videoId) return true
+  const owner = row.closest?.("ytd-watch-flexy[video-id], ytd-player[video-id]")
   const ownerId = owner?.getAttribute("video-id")
   return !ownerId || ownerId === videoId
+}
+
+function createTranscriptRowsRoot(rows: TranscriptSegmentElementLike[]): TranscriptSegmentRootLike {
+  return {
+    querySelectorAll: () => rows as TranscriptSegmentElementLike[],
+  }
 }
 
 function delay(milliseconds: number) {

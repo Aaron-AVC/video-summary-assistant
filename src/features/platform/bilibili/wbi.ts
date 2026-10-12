@@ -2,9 +2,9 @@
 // rule auditable and avoids any dependency on a browser crypto extension.
 const MIXIN_KEY_TABLE = [
   46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
-  27, 43, 5, 49, 33, 9, 1, 48, 44, 12, 17, 57, 6, 22, 11, 24,
-  28, 13, 4, 37, 39, 7, 56, 19, 14, 29, 34, 16, 30, 52, 36, 20,
-  51, 42, 55, 21, 54, 41, 40, 25, 26, 38, 0, 0, 0, 0, 0, 0,
+  27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13,
+  37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4,
+  22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
 ] as const
 
 export type WbiImageUrls = {
@@ -46,27 +46,36 @@ export function buildWbiSignedUrl(
   keys: WbiKeys,
   wts = Math.floor(Date.now() / 1_000),
 ): string {
-  const query = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) query.set(key, String(value))
-  query.set("wts", String(wts))
-
-  const sortedQuery = [...query.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${value}`)
+  const signedParams = { ...params, wts: String(wts) }
+  const canonicalQuery = Object.entries(signedParams)
+    .filter(([key]) => key !== "w_rid")
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value).replace(/[!'()*]/g, ""))}`)
     .join("&")
-  query.set("w_rid", md5(`${sortedQuery}${keys.mixinKey}`))
 
   const url = new URL(baseUrl)
-  url.search = query.toString()
+  url.search = `${canonicalQuery}&w_rid=${md5(`${canonicalQuery}${keys.mixinKey}`)}`
   return url.toString()
 }
 
 function extractKey(value: string): string | null {
-  const match = value.match(/\/([^/?]+?)(?:\.[^./?]+)?(?:\?|$)/)
-  return match?.[1] ?? null
+  try {
+    const url = new URL(value)
+    if (
+      url.protocol !== "https:"
+      || url.username
+      || url.password
+      || (url.port && url.port !== "443")
+      || !url.hostname.endsWith(".hdslb.com")
+    ) return null
+    const match = url.pathname.match(/^\/bfs\/wbi\/([A-Za-z0-9]{32})\.[A-Za-z0-9]+$/)
+    return match?.[1] ?? null
+  } catch {
+    return null
+  }
 }
 
-function md5(value: string): string {
+export function md5(value: string): string {
   const bytes = new TextEncoder().encode(value)
   const words = new Uint32Array(((bytes.length + 9 + 63) >> 6) * 16)
   for (let index = 0; index < bytes.length; index += 1) {

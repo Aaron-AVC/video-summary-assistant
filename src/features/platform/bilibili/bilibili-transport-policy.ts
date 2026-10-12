@@ -25,6 +25,7 @@ export function isAllowedBilibiliResourceUrl(value: unknown): boolean {
       || url.username
       || url.password
       || (url.port && url.port !== "443")
+      || hasPathTraversal(value)
     ) return false
 
     if (url.hostname === "api.bilibili.com") {
@@ -57,9 +58,7 @@ export function isAllowedBilibiliResourceUrl(value: unknown): boolean {
         && /^[a-f0-9]{32}$/i.test(url.searchParams.get("w_rid") ?? "")
     }
 
-    return url.hostname.endsWith(".hdslb.com")
-      && url.pathname.startsWith("/bfs/subtitle/")
-      && url.pathname.toLowerCase().endsWith(".json")
+    return isAllowedSubtitleCdnPath(url)
   } catch {
     return false
   }
@@ -75,10 +74,44 @@ export function isAllowedBilibiliSubtitleUrl(value: unknown): value is string {
   if (typeof value !== "string" || !isAllowedBilibiliResourceUrl(value)) return false
   try {
     const url = new URL(value)
-    return url.hostname.endsWith(".hdslb.com")
-      && url.pathname.startsWith("/bfs/subtitle/")
-      && url.pathname.toLowerCase().endsWith(".json")
+    return isAllowedSubtitleCdnPath(url)
   } catch {
     return false
   }
+}
+
+function isAllowedSubtitleCdnPath(url: URL): boolean {
+  if (!url.hostname.endsWith(".hdslb.com")) return false
+  const segments = url.pathname.split("/").slice(1)
+  if (segments.length < 3 || segments.some((segment) => !segment)) return false
+
+  if (segments[0] === "bfs" && segments[1] === "subtitle") {
+    return /^\/bfs\/subtitle\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.json$/i.test(url.pathname)
+  }
+
+  if (segments[0] === "bfs" && segments[1] === "ai_subtitle" && segments[2] === "prod") {
+    return segments.length >= 4
+      && segments.slice(3).every((segment) => /^[A-Za-z0-9_-]+$/.test(segment))
+  }
+
+  return false
+}
+
+function hasPathTraversal(value: string): boolean {
+  const match = value.match(/^https:\/\/[^/?#]*(\/[^?#]*)?/i)
+  const rawPath = match?.[1] ?? "/"
+  for (const rawSegment of rawPath.split("/")) {
+    let segment = rawSegment
+    for (let pass = 0; pass < 3; pass += 1) {
+      try {
+        const decoded = decodeURIComponent(segment)
+        if (decoded === segment) break
+        segment = decoded
+      } catch {
+        return true
+      }
+    }
+    if (segment === "." || segment === ".." || segment.includes("/") || segment.includes("\\")) return true
+  }
+  return false
 }

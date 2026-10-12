@@ -33,6 +33,7 @@ describe("Bilibili background transport allowlist", () => {
       "https://api.bilibili.com/x/v2/subtitle/web/view?oid=2&pid=9001&context_ext=%7B%22video_type%22%3A1%7D&type=1&cur_production_type=0",
       "https://aisubtitle.hdslb.com/bfs/subtitle/test.json",
       "https://i0.hdslb.com/bfs/subtitle/test.json",
+      "https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/11671464575180438961942083e762ac3b67f0743d3aff84578f36f1d5",
     ]) {
       expect(isAllowedBilibiliResourceUrl(url)).toBe(true)
       expect(isAllowedBilibiliTransport(url, VIDEO_URL)).toBe(true)
@@ -71,14 +72,25 @@ describe("Bilibili background transport allowlist", () => {
       .toBe("https://aisubtitle.hdslb.com/bfs/subtitle/a.json")
     expect(normalizeBilibiliSubtitleUrl("https://aisubtitle.hdslb.com/bfs/subtitle/a.json"))
       .toBe("https://aisubtitle.hdslb.com/bfs/subtitle/a.json")
+    expect(normalizeBilibiliSubtitleUrl(
+      "//aisubtitle.hdslb.com/bfs/ai_subtitle/prod/11671464575180438961942083e762ac3b67f0743d3aff84578f36f1d5",
+    )).toBe("https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/11671464575180438961942083e762ac3b67f0743d3aff84578f36f1d5")
     for (const url of [
       "http://aisubtitle.hdslb.com/a.json",
       "javascript:alert(1)",
       "data:application/json,{}",
       "https://evil.example/a.json",
       "//api.bilibili.com/x/player/v2",
+      "https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/",
+      "https://aisubtitle.hdslb.com/bfs/ai_subtitle/dev/opaque-id",
+      "https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/../opaque-id",
+      "https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/%2e%2e/opaque-id",
+      "https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/opaque%2Fid",
+      "https://aisubtitle.hdslb.com/bfs/arbitrary/prod/opaque-id",
+      "https://hdslb.com/bfs/ai_subtitle/prod/opaque-id",
     ]) {
       expect(normalizeBilibiliSubtitleUrl(url)).toBeNull()
+      if (url.startsWith("https://")) expect(isAllowedBilibiliResourceUrl(url)).toBe(false)
     }
   })
 })

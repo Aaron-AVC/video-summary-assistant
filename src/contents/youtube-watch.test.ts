@@ -145,12 +145,13 @@ function createTranscriptDocument(rows: Array<{ timestamp: string; text: string 
     documentElement: {
       outerHTML: createWatchHtml(),
     },
+    querySelectorAll: (selector: string) => selector === "#segments-container" ? [root] : [],
     querySelector: (selector: string) => (
       selector.includes("#segments-container")
         ? root
         : null
     ),
-  } as Document
+  } as unknown as Document
 }
 
 function createWatchHtml(): string {

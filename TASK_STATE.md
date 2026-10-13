@@ -153,6 +153,15 @@
 
 ## Completion gate
 
+## Task 9 — Analysis task lifecycle
+
+- 状态：implementation complete / awaiting independent review。
+- Analysis now has an independent one-active-task controller. Its immutable task snapshot captures source tab, content identity, source metadata, provider profile identity, and start time without storing API keys. The task owns its AbortController and survives active-tab/workspace changes while the Side Panel remains open.
+- RuntimeBridge exposes `activeTabId`; task transcript acquisition sends the captured `tabId` explicitly and accepts only a response matching both the captured source tab and task `contentKey`. A source-tab navigation or close during transcript capture fails closed instead of analyzing a different video.
+- Workspace resets still clear current transcript/analysis/Ask display state, but no longer abort a running analysis task. Completed tasks always persist their own source metadata and refresh Recent analyses; they update the visible workspace only when it still shows the task source video.
+- A compact global active-task banner is visible from any active tab and can cancel the task. A second Generate/Regenerate is rejected while another task is running. This scope intentionally does not survive Side Panel destruction, browser restart, or extension reload.
+- Chrome smoke：NOT RUN — environment limitation；本轮仅完成代码与自动化验证，未伪造真实浏览器结果。
+
 ## Task 8 — Persistence / cache identity
 
 - 状态：CR-06 follow-up / awaiting independent review；修复提交为 `fix: complete content-aware persistence identity`。

@@ -10,6 +10,7 @@ type SidePanelShellProps = {
   activeTab: SidePanelTab
   onTabChange: (tab: SidePanelTab) => void
   header: ReactNode
+  taskBanner?: ReactNode
   overview: ReactNode
   transcript: ReactNode
   ask: ReactNode
@@ -27,6 +28,7 @@ export function SidePanelShell({
   activeTab,
   onTabChange,
   header,
+  taskBanner,
   overview,
   transcript,
   ask,
@@ -35,6 +37,7 @@ export function SidePanelShell({
   return (
     <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-3">
       {header}
+      {taskBanner}
       <Tabs
         value={activeTab}
         onValueChange={(value) => onTabChange(selectSidePanelTab(activeTab, value))}

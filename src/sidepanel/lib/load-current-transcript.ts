@@ -18,6 +18,7 @@ type TranscriptResponse = RuntimeResponseMessage | RuntimeMessageParseError
 
 type LoadCurrentTranscriptOptions = {
   requestedContentKey: string
+  tabId?: number
   isCurrent: () => boolean
   sendMessage?: () => Promise<TranscriptResponse>
 }
@@ -58,10 +59,12 @@ export async function resolveCurrentTranscript({
 
 export async function loadCurrentTranscript({
   requestedContentKey,
+  tabId,
   isCurrent,
   sendMessage = () => sendRuntimeMessage({
     channel: RUNTIME_MESSAGE_NAMESPACE,
     type: FETCH_VIDEO_TRANSCRIPT,
+    ...(tabId === undefined ? {} : { tabId }),
   }),
 }: LoadCurrentTranscriptOptions): Promise<CurrentTranscriptResult> {
   const response = await sendMessage()
@@ -70,7 +73,11 @@ export async function loadCurrentTranscript({
   if (response.type !== FETCH_VIDEO_TRANSCRIPT) {
     throw new Error("The active video tab returned an unexpected transcript response.")
   }
-  if (response.video.contentKey !== requestedContentKey || !isCurrent()) {
+  if (
+    response.video.contentKey !== requestedContentKey
+    || (tabId !== undefined && response.tabId !== tabId)
+    || !isCurrent()
+  ) {
     throw new StaleTranscriptError()
   }
 

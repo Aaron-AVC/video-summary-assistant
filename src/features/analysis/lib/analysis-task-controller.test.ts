@@ -1,0 +1,63 @@
+import { describe, expect, it } from "bun:test"
+
+import {
+  AnalysisTaskAlreadyRunningError,
+  AnalysisTaskController,
+  type AnalysisTaskSnapshot,
+} from "@/features/analysis/lib/analysis-task-controller"
+
+const snapshot: Omit<AnalysisTaskSnapshot, "taskId" | "startedAt"> = {
+  sourceTabId: 11,
+  platform: "youtube",
+  videoId: "video-a",
+  partId: null,
+  contentKey: "youtube:video-a",
+  title: "Video A",
+  author: "Author A",
+  canonicalUrl: "https://www.youtube.com/watch?v=video-a",
+  providerProfileId: "provider-a",
+  providerBaseUrl: "https://api.example.com/v1",
+  providerModel: "model-a",
+}
+
+describe("AnalysisTaskController", () => {
+  it("owns one task, exposes phase changes, and releases after completion", async () => {
+    const controller = new AnalysisTaskController()
+    const phases: string[] = []
+    const unsubscribe = controller.subscribe(() => {
+      const task = controller.getSnapshot()
+      phases.push(task?.phase ?? "released")
+    })
+
+    let finish!: () => void
+    const promise = controller.start(snapshot, async ({ setPhase }) => {
+      setPhase("analyzing")
+      await new Promise<void>((resolve) => { finish = resolve })
+    })
+
+    expect(controller.getSnapshot()?.snapshot.contentKey).toBe("youtube:video-a")
+    await expect(() => controller.start(snapshot, async () => undefined)).toThrow(AnalysisTaskAlreadyRunningError)
+    finish()
+    await promise
+    expect(controller.getSnapshot()).toBeNull()
+    expect(phases).toEqual(["loading-transcript", "analyzing", "released"])
+    unsubscribe()
+  })
+
+  it("aborts the runner and reports cancelling", async () => {
+    const controller = new AnalysisTaskController()
+    let signal!: AbortSignal
+    let rejectRunner!: (error: Error) => void
+    const promise = controller.start(snapshot, async (input) => {
+      signal = input.signal
+      await new Promise<void>((_resolve, reject) => { rejectRunner = reject })
+    })
+
+    expect(controller.cancel()).toBe(true)
+    expect(controller.getSnapshot()?.phase).toBe("cancelling")
+    expect(signal.aborted).toBe(true)
+    rejectRunner(new Error("cancelled"))
+    await expect(promise).rejects.toThrow("cancelled")
+    expect(controller.getSnapshot()).toBeNull()
+  })
+})

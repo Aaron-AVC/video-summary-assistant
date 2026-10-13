@@ -83,6 +83,7 @@ export function deriveJumpToTimestampResult(
 type RuntimeBridgeContextValue = {
   status: RuntimeStatus
   videoContext: ActiveVideoContext
+  activeTabId: number | null
   lastError: string | null
   refreshCurrentVideo: () => Promise<void>
   openSidepanel: () => Promise<void>
@@ -101,6 +102,7 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
   const value = useMemo(() => SURFACE_CONFIG[surface], [surface])
   const [status, setStatus] = useState<RuntimeStatus>(surface === "options" ? "idle" : "loading")
   const [videoContext, setVideoContext] = useState<ActiveVideoContext>(EMPTY_CONTEXT)
+  const [activeTabId, setActiveTabId] = useState<number | null>(null)
   const videoContextGenerationRef = useRef(0)
   const [lastError, setLastError] = useState<string | null>(null)
 
@@ -112,6 +114,7 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
     }
 
     setLastError(null)
+    setActiveTabId(response.tabId)
     if (response.type === GET_ACTIVE_VIDEO_CONTEXT || response.type === ANALYZE_VIDEO) {
       setVideoContext(response.context)
       setStatus("ready")
@@ -164,9 +167,10 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
   useEffect(() => {
     if (surface === "options") return
 
-    const applyContext = (context: ActiveVideoContext) => {
+    const applyContext = (tabId: number, context: ActiveVideoContext) => {
       videoContextGenerationRef.current += 1
       setVideoContext(context)
+      setActiveTabId(tabId)
       setStatus("ready")
       setLastError(null)
     }
@@ -177,7 +181,7 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
     const handleRuntimeMessage = (message: unknown) => {
       if (!isActiveVideoContextChangedMessage(message)) return
       void chrome.tabs.query({ active: true, currentWindow: true }).then(([activeTab]) => {
-        if (activeTab?.id === message.tabId) applyContext(message.context)
+        if (activeTab?.id === message.tabId) applyContext(message.tabId, message.context)
       })
     }
     const handleTabActivated = (activeInfo: { tabId: number }) => {
@@ -200,12 +204,13 @@ export function ExtensionProviders({ surface, children }: ExtensionProvidersProp
   const runtimeValue = useMemo<RuntimeBridgeContextValue>(() => ({
     status,
     videoContext,
+    activeTabId,
     lastError,
     refreshCurrentVideo,
     openSidepanel,
     requestAnalysis,
     jumpToTimestamp,
-  }), [jumpToTimestamp, lastError, openSidepanel, refreshCurrentVideo, requestAnalysis, status, videoContext])
+  }), [activeTabId, jumpToTimestamp, lastError, openSidepanel, refreshCurrentVideo, requestAnalysis, status, videoContext])
 
   return (
     <ThemeProvider>

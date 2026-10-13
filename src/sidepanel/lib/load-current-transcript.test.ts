@@ -36,6 +36,30 @@ describe("loadCurrentTranscript", () => {
     expect(result.transcript.raw?.text).toBe("WEBVTT")
   })
 
+  it("sends an explicit source tab id and accepts the response while the active tab differs", async () => {
+    let request: unknown
+    const result = await loadCurrentTranscript({
+      requestedContentKey: "youtube:video-a",
+      tabId: 11,
+      isCurrent: () => true,
+      sendMessage: async () => {
+        request = { tabId: 11 }
+        return { ...successResponse, tabId: 11 }
+      }
+    })
+    expect(request).toEqual({ tabId: 11 })
+    expect(result.video.contentKey).toBe("youtube:video-a")
+  })
+
+  it("rejects a transcript returned from a different source tab", async () => {
+    await expect(loadCurrentTranscript({
+      requestedContentKey: "youtube:video-a",
+      tabId: 12,
+      isCurrent: () => true,
+      sendMessage: async () => successResponse
+    })).rejects.toBeInstanceOf(StaleTranscriptError)
+  })
+
   it("rejects a stale response before callers can display it", async () => {
     await expect(loadCurrentTranscript({
       requestedContentKey: "youtube:video-b",

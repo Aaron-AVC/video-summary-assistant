@@ -173,3 +173,12 @@
 
 - Task 2 已在 `9222f1cc555ed4ccc0611247884d985ea13ac07a` 完成 commit + push，并通过独立复审；不存在待发布的 CR-02 follow-up。
 - Task 3 `419898ed093be2beb32c8e49c727d9e9b9d52841` 已 commit + push，并通过独立复审；Task 4 已完成并发布；Task 5 已完成并发布。
+
+## Task 10 — Analysis task lifecycle race follow-up
+
+- 状态：implementation complete / awaiting independent review；追加修复提交为 `fix: close analysis task lifecycle races`。
+- Regenerate 只绕过 analysis cache，不再把 analysis force 误传为 transcript reload；已有 session/IndexedDB transcript 继续优先复用，显式 Reload transcript 仍走 force remote path。
+- Completion timestamps now distinguish task start, transcript capture, and actual post-provider completion. Completed analysis metadata uses the completion timestamp for `completedAt`/`analyzedAt`/`updatedAt`; task start remains the consistent creation/open time.
+- Added `finalizing` phase after the last abort check. Local completed-result persistence is non-cancellable once finalizing begins; the banner and Overview toolbar show Saving analysis and disable Cancel.
+- Added lifecycle policy, completion-clock, workspace-publication, finalizing-cancel, and regenerate transcript-reuse regressions. No platform, provider-timeout, subtitle, Ask history, or analysis-algorithm changes.
+- Chrome smoke：NOT RUN — environment limitation；未加载扩展、未修改 Chrome、未伪造 smoke 结果。

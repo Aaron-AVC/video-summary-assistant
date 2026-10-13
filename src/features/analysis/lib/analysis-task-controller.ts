@@ -1,6 +1,6 @@
 import type { VideoPlatform } from "@/features/platform/types"
 
-export type AnalysisTaskPhase = "loading-transcript" | "analyzing" | "cancelling"
+export type AnalysisTaskPhase = "loading-transcript" | "analyzing" | "finalizing" | "cancelling"
 
 export type AnalysisTaskSnapshot = {
   taskId: string
@@ -87,6 +87,7 @@ export class AnalysisTaskController {
 
   cancel(): boolean {
     if (!this.activeTask || !this.activeAbortController) return false
+    if (this.activeTask.phase === "finalizing") return false
     if (this.activeTask.phase !== "cancelling") {
       this.activeTask = { ...this.activeTask, phase: "cancelling" }
       this.notify()

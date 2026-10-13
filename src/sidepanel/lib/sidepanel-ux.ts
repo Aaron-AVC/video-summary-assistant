@@ -8,6 +8,7 @@ export type AnalysisPhase =
   | "idle"
   | "loading-transcript"
   | "analyzing"
+  | "finalizing"
   | "cancelling"
   | "completed"
   | "error"
@@ -33,11 +34,14 @@ export function getAnalysisAction({
   hasProvider,
   hasAnalysis,
   isAnalyzing,
+  isFinalizing,
 }: {
   hasProvider: boolean
   hasAnalysis: boolean
   isAnalyzing: boolean
+  isFinalizing: boolean
 }) {
+  if (isFinalizing) return { kind: "finalizing" as const, label: "Saving analysis…" }
   if (isAnalyzing) return { kind: "cancel" as const, label: "Cancel" }
   if (!hasProvider) {
     return { kind: "configure-provider" as const, label: "Configure provider" }
@@ -69,6 +73,8 @@ export function getAnalysisStatusLabel(phase: AnalysisPhase, hasAnalysis: boolea
       return "Loading transcript…"
     case "analyzing":
       return "Analyzing video…"
+    case "finalizing":
+      return "Saving analysis…"
     case "cancelling":
       return "Cancelling…"
     case "completed":

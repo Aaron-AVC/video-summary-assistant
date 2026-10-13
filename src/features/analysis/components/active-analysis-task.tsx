@@ -10,7 +10,14 @@ type ActiveAnalysisTaskBannerProps = {
 }
 export function ActiveAnalysisTaskBanner({ task, onCancel }: ActiveAnalysisTaskBannerProps) {
   const isCancelling = task.phase === "cancelling"
-  const phaseLabel = task.phase === "loading-transcript" ? "Loading transcript…" : isCancelling ? "Cancelling…" : "Analyzing…"
+  const isFinalizing = task.phase === "finalizing"
+  const phaseLabel = task.phase === "loading-transcript"
+    ? "Loading transcript…"
+    : isCancelling
+      ? "Cancelling…"
+      : isFinalizing
+        ? "Saving analysis…"
+        : "Analyzing…"
 
   return (
     <Card className="border-amber-500/40 bg-amber-500/10">
@@ -28,7 +35,7 @@ export function ActiveAnalysisTaskBanner({ task, onCancel }: ActiveAnalysisTaskB
           variant="destructive"
           size="sm"
           className="shrink-0 gap-2"
-          disabled={isCancelling}
+          disabled={isCancelling || isFinalizing}
           onClick={onCancel}
           aria-label="Cancel active analysis">
           <Square data-icon="inline-start" />

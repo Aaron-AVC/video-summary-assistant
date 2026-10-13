@@ -37,7 +37,8 @@ export function AnalysisToolbar({
   onConfigureProvider,
 }: AnalysisToolbarProps) {
   const isAnalyzing = status === "loading-transcript" || status === "analyzing" || status === "cancelling"
-  const action = getAnalysisAction({ hasProvider, hasAnalysis, isAnalyzing })
+  const isFinalizing = status === "finalizing"
+  const action = getAnalysisAction({ hasProvider, hasAnalysis, isAnalyzing, isFinalizing })
   const isCancelling = status === "cancelling"
   const statusLabel = getAnalysisStatusLabel(status, hasAnalysis)
 
@@ -72,6 +73,15 @@ export function AnalysisToolbar({
               aria-label="Cancel analysis">
               <Square data-icon="inline-start" />
               {isCancelling ? "Cancelling…" : "Cancel"}
+            </Button>
+          ) : action.kind === "finalizing" ? (
+            <Button
+              variant="secondary"
+              className="min-w-0 flex-1 gap-2"
+              disabled
+              aria-label="Saving analysis">
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+              Saving analysis…
             </Button>
           ) : (
             <Button

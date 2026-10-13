@@ -60,4 +60,19 @@ describe("AnalysisTaskController", () => {
     await expect(promise).rejects.toThrow("cancelled")
     expect(controller.getSnapshot()).toBeNull()
   })
+
+  it("does not abort a task once final persistence has started", async () => {
+    const controller = new AnalysisTaskController()
+    let finish!: () => void
+    const promise = controller.start(snapshot, async ({ setPhase }) => {
+      setPhase("finalizing")
+      await new Promise<void>((resolve) => { finish = resolve })
+    })
+
+    expect(controller.cancel()).toBe(false)
+    expect(controller.getSnapshot()?.phase).toBe("finalizing")
+    finish()
+    await promise
+    expect(controller.getSnapshot()).toBeNull()
+  })
 })

@@ -24,22 +24,26 @@ describe("Side Panel V1 state", () => {
     expect(selectSidePanelTab("transcript", "transcript")).toBe("transcript")
   })
 
-  it("chooses Generate, Regenerate, Cancel, and Configure provider deterministically", () => {
-    expect(getAnalysisAction({ hasProvider: false, hasAnalysis: false, isAnalyzing: false })).toEqual({
+  it("chooses Generate, Regenerate, Cancel, Saving, and Configure provider deterministically", () => {
+    expect(getAnalysisAction({ hasProvider: false, hasAnalysis: false, isAnalyzing: false, isFinalizing: false })).toEqual({
       kind: "configure-provider",
       label: "Configure provider"
     })
-    expect(getAnalysisAction({ hasProvider: true, hasAnalysis: false, isAnalyzing: false })).toEqual({
+    expect(getAnalysisAction({ hasProvider: true, hasAnalysis: false, isAnalyzing: false, isFinalizing: false })).toEqual({
       kind: "generate",
       label: "Generate analysis"
     })
-    expect(getAnalysisAction({ hasProvider: true, hasAnalysis: true, isAnalyzing: false })).toEqual({
+    expect(getAnalysisAction({ hasProvider: true, hasAnalysis: true, isAnalyzing: false, isFinalizing: false })).toEqual({
       kind: "regenerate",
       label: "Regenerate"
     })
-    expect(getAnalysisAction({ hasProvider: true, hasAnalysis: true, isAnalyzing: true })).toEqual({
+    expect(getAnalysisAction({ hasProvider: true, hasAnalysis: true, isAnalyzing: true, isFinalizing: false })).toEqual({
       kind: "cancel",
       label: "Cancel"
+    })
+    expect(getAnalysisAction({ hasProvider: true, hasAnalysis: true, isAnalyzing: false, isFinalizing: true })).toEqual({
+      kind: "finalizing",
+      label: "Saving analysis…"
     })
   })
 

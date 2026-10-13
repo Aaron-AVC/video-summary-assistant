@@ -14,7 +14,10 @@ import {
   type AnalysisStrategy
 } from "@/features/analysis/lib/analysis-plan"
 import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
-import { createOpenAICompatibleClient } from "@/features/analysis/lib/openai-compatible-client"
+import {
+  createOpenAICompatibleClient,
+  OpenAICompatibleClientError
+} from "@/features/analysis/lib/openai-compatible-client"
 import { normalizeVideoAnalysis } from "@/features/analysis/lib/normalize-video-analysis"
 import { parseVideoAnalysisPayload } from "@/features/analysis/lib/parse-video-analysis"
 import {
@@ -231,6 +234,7 @@ async function requestStructuredAnalysis(input: {
       if (repairError instanceof AnalysisAbortedError || signal?.aborted) {
         throw new AnalysisAbortedError()
       }
+      if (repairError instanceof OpenAICompatibleClientError) throw repairError
       const issue = repairError instanceof Error ? repairError.message : "invalid schema"
       throw new Error(
         `Provider returned invalid structured video analysis after one repair attempt. ${issue}`

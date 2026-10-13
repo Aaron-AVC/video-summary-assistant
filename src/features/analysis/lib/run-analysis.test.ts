@@ -12,7 +12,12 @@ import {
   type AnalysisBudgetPolicy
 } from "@/features/analysis/lib/analysis-budget"
 import type { EvidenceSummary } from "@/features/analysis/lib/prompts"
-import { runAnalysis } from "@/features/analysis/lib/run-analysis"
+import {
+  createOpenAICompatibleClient,
+  DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
+  OpenAICompatibleClientError
+} from "@/features/analysis/lib/openai-compatible-client"
+import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
 type Call = {
@@ -108,6 +113,109 @@ describe("runAnalysis", () => {
     expect(result.repairAttempted).toBe(true)
     expect(calls.map((call) => call.responseFormat)).toEqual(["json_object", "json_object"])
     expect(calls[1].user).toContain("chapters.0.detail")
+  })
+
+  it("uses the generation timeout for the initial analysis and structured repair", async () => {
+    const scheduledTimeouts: number[] = []
+    const responses = ["not json", validResponse()]
+    const client = createOpenAICompatibleClient(provider, {
+      setTimeoutImpl: (_callback, timeoutMs) => {
+        scheduledTimeouts.push(timeoutMs)
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async () => new Response(JSON.stringify({
+        choices: [{ message: { content: responses.shift() ?? "unexpected" } }]
+      }), { status: 200 })
+    })
+
+    const result = await runAnalysis({ provider, transcript: shortTranscript, client })
+    expect(result.repairAttempted).toBe(true)
+    expect(scheduledTimeouts).toEqual([
+      DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
+      DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS
+    ])
+  })
+
+  it("does not retry a provider timeout during analysis", async () => {
+    let fetchCount = 0
+    const client = createOpenAICompatibleClient(provider, {
+      setTimeoutImpl: (callback) => {
+        callback()
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        fetchCount += 1
+        if (init?.signal?.aborted) throw new Error("aborted")
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+      }
+    })
+
+    await expect(runAnalysis({ provider, transcript: shortTranscript, client })).rejects.toMatchObject({
+      name: "OpenAICompatibleClientError",
+      message: `Provider generation request timed out after ${DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS / 1000} seconds.`
+    })
+    expect(fetchCount).toBe(1)
+  })
+
+  it("reports parent cancellation through the existing AnalysisAbortedError flow", async () => {
+    const controller = new AbortController()
+    let markFetchStarted: (() => void) | undefined
+    const fetchStarted = new Promise<void>((resolve) => { markFetchStarted = resolve })
+    const client = createOpenAICompatibleClient(provider, {
+      setTimeoutImpl: () => 1,
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        markFetchStarted?.()
+        if (init?.signal?.aborted) throw new Error("aborted by user")
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted by user")), { once: true })
+        })
+      }
+    })
+
+    const analysis = runAnalysis({
+      provider,
+      transcript: shortTranscript,
+      client,
+      signal: controller.signal
+    })
+    await fetchStarted
+    controller.abort("user cancelled")
+    await expect(analysis).rejects.toBeInstanceOf(AnalysisAbortedError)
+  })
+
+  it("preserves a generation timeout from structured repair", async () => {
+    const responses = ["not json"]
+    const scheduledTimeouts: number[] = []
+    const client = createOpenAICompatibleClient(provider, {
+      setTimeoutImpl: (callback, timeoutMs) => {
+        scheduledTimeouts.push(timeoutMs)
+        if (scheduledTimeouts.length === 2) callback()
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("aborted")
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: responses.shift() ?? "unexpected" } }]
+        }), { status: 200 })
+      }
+    })
+
+    const error = await runAnalysis({ provider, transcript: shortTranscript, client })
+      .then(() => null, (cause: unknown) => cause)
+    expect(error).toBeInstanceOf(OpenAICompatibleClientError)
+    expect(error).toMatchObject({
+      message: `Provider generation request timed out after ${DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS / 1000} seconds.`
+    })
+    expect(scheduledTimeouts).toEqual([
+      DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
+      DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS
+    ])
   })
 
   it("repairs CR-05 grounding failures and fails after the second invalid response", async () => {

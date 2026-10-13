@@ -4,7 +4,10 @@ import {
   type AskVideoAnswer,
   type TimestampRange
 } from "@/features/analysis/lib/analysis-schema"
-import { createOpenAICompatibleClient } from "@/features/analysis/lib/openai-compatible-client"
+import {
+  createOpenAICompatibleClient,
+  OpenAICompatibleClientError
+} from "@/features/analysis/lib/openai-compatible-client"
 import {
   TRANSCRIPT_BEGIN_MARKER,
   TRANSCRIPT_END_MARKER
@@ -184,6 +187,7 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
       })
       answer = parseAskVideoAnswerPayload(rawResponse, options.transcript.cues)
     } catch (repairError) {
+      if (repairError instanceof OpenAICompatibleClientError) throw repairError
       const issue = repairError instanceof Error ? repairError.message : conciseStructuredIssues(repairError)
       throw new Error(`Provider returned invalid Ask AI response after one repair attempt. ${issue}`)
     }

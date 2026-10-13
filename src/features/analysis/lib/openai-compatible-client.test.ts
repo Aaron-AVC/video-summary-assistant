@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test"
 
 import {
   createOpenAICompatibleClient,
+  DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS,
+  DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
   OpenAICompatibleClientError,
   buildProviderEndpoint,
   fetchProviderModels,
@@ -214,6 +216,273 @@ describe("provider transport boundaries", () => {
     })
   })
 
+  it("uses the control timeout for model discovery by default", async () => {
+    let scheduledTimeoutMs = 0
+    await fetchProviderModels({
+      baseUrl: "https://models.example/v1",
+      apiKey: "sk-model-sentinel",
+    }, {
+      setTimeoutImpl: (callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        callback()
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("aborted")
+        await new Promise<void>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+        throw new Error("unreachable")
+      }
+    })
+    expect(scheduledTimeoutMs).toBe(DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS)
+  })
+
+  it("allows an explicit timeoutMs override for model discovery", async () => {
+    let scheduledTimeoutMs = 0
+    await fetchProviderModels({
+      baseUrl: "https://models.example/v1",
+      apiKey: "sk-model-sentinel",
+    }, {
+      timeoutMs: 11,
+      setTimeoutImpl: (_callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async () => new Response(JSON.stringify({ data: [{ id: "model-a" }] }), { status: 200 })
+    })
+    expect(scheduledTimeoutMs).toBe(11)
+  })
+
+  it("uses the control timeout for test connection by default", async () => {
+    let scheduledTimeoutMs = 0
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      setTimeoutImpl: (callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        callback()
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("aborted")
+        await new Promise<void>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+        throw new Error("unreachable")
+      }
+    })
+
+    await expect(client.testConnection()).resolves.toMatchObject({
+      ok: false,
+      error: `Provider control request timed out after ${DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS / 1000} seconds.`
+    })
+    expect(scheduledTimeoutMs).toBe(DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS)
+  })
+
+  it("uses the generation timeout for chat completion by default", async () => {
+    let scheduledTimeoutMs = 0
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      setTimeoutImpl: (callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        callback()
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("aborted")
+        await new Promise<void>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+        throw new Error("unreachable")
+      }
+    })
+
+    await expect(client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }]
+    })).rejects.toThrow(
+      `Provider generation request timed out after ${DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS / 1000} seconds.`
+    )
+    expect(scheduledTimeoutMs).toBe(DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS)
+    expect(scheduledTimeoutMs).toBeGreaterThan(30_000)
+  })
+
+  it("allows generation requests to run beyond the former 30-second boundary", async () => {
+    const timers = createManualTimers()
+    let resolveResponse: ((response: Response) => void) | undefined
+    let requestSignal: AbortSignal | undefined
+    let markFetchStarted: (() => void) | undefined
+    const fetchStarted = new Promise<void>((resolve) => { markFetchStarted = resolve })
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      setTimeoutImpl: timers.setTimeoutImpl,
+      clearTimeoutImpl: timers.clearTimeoutImpl,
+      fetchImpl: async (_input, init) => {
+        requestSignal = init?.signal
+        markFetchStarted?.()
+        return new Promise<Response>((resolve) => { resolveResponse = resolve })
+      }
+    })
+
+    const completion = client.createChatCompletion({ messages: [{ role: "user", content: "hi" }] })
+    await fetchStarted
+    timers.advanceBy(30_001)
+
+    expect(requestSignal?.aborted).toBe(false)
+    expect(timers.scheduledTimeouts()).toEqual([DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS])
+    resolveResponse?.(new Response(JSON.stringify({
+      choices: [{ message: { content: "completed" } }]
+    }), { status: 200 }))
+    await expect(completion).resolves.toBe("completed")
+  })
+
+  it("lets explicit timeoutMs override both control and generation defaults", async () => {
+    let scheduledTimeoutMs = 0
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      timeoutMs: 5,
+      setTimeoutImpl: (callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        callback()
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("aborted")
+        await new Promise<void>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+        throw new Error("unreachable")
+      }
+    })
+
+    await expect(client.testConnection()).resolves.toMatchObject({
+      error: "Provider control request timed out after 5 ms."
+    })
+    expect(scheduledTimeoutMs).toBe(5)
+
+    await expect(client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }]
+    })).rejects.toThrow("Provider generation request timed out after 5 ms.")
+    expect(scheduledTimeoutMs).toBe(5)
+  })
+
+  it("does not misreport parent cancellation as a provider timeout", async () => {
+    let scheduledTimeoutMs = 0
+    let timeoutCallback: (() => void) | undefined
+    let markFetchStarted: (() => void) | undefined
+    const fetchStarted = new Promise<void>((resolve) => { markFetchStarted = resolve })
+    const controller = new AbortController()
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      setTimeoutImpl: (callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        timeoutCallback = callback
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        markFetchStarted?.()
+        if (init?.signal?.aborted) throw new Error("aborted by user")
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted by user")), { once: true })
+        })
+      }
+    })
+
+    const request = client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }],
+      signal: controller.signal
+    })
+    await fetchStarted
+    controller.abort("user cancelled")
+    await expect(request).rejects.toMatchObject({
+      name: "OpenAICompatibleClientError",
+      message: "aborted by user"
+    })
+    expect(scheduledTimeoutMs).toBe(DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS)
+    expect(timeoutCallback).toBeDefined()
+    timeoutCallback?.()
+  })
+
+  it("does not automatically retry a generation timeout", async () => {
+    const timers = createManualTimers()
+    let fetchCount = 0
+    let markFetchStarted: (() => void) | undefined
+    const fetchStarted = new Promise<void>((resolve) => { markFetchStarted = resolve })
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      setTimeoutImpl: timers.setTimeoutImpl,
+      clearTimeoutImpl: timers.clearTimeoutImpl,
+      fetchImpl: async (_input, init) => {
+        fetchCount += 1
+        markFetchStarted?.()
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+      }
+    })
+
+    const completion = client.createChatCompletion({ messages: [{ role: "user", content: "hi" }] })
+    await fetchStarted
+    timers.advanceBy(DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS)
+
+    await expect(completion).rejects.toThrow(
+      `Provider generation request timed out after ${DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS / 1000} seconds.`
+    )
+    expect(fetchCount).toBe(1)
+  })
+
+  it("supports the explicit per-request timeout override", async () => {
+    let scheduledTimeoutMs = 0
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      setTimeoutImpl: (callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        callback()
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("aborted")
+        await new Promise<void>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+        throw new Error("unreachable")
+      }
+    })
+
+    await expect(client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }],
+      timeoutMs: 7
+    })).rejects.toThrow("Provider generation request timed out after 7 ms.")
+    expect(scheduledTimeoutMs).toBe(7)
+  })
+
   it("shares timeout handling across provider requests", async () => {
     const client = createOpenAICompatibleClient({
       baseUrl: "https://timeout.example/v1",
@@ -228,7 +497,7 @@ describe("provider transport boundaries", () => {
 
     await expect(client.testConnection()).resolves.toMatchObject({
       ok: false,
-      error: "Provider request timed out."
+      error: "Provider control request timed out after 5 ms."
     })
   })
 
@@ -260,3 +529,30 @@ describe("provider transport boundaries", () => {
     if (result.ok === false) expect(result.error).not.toContain(secret)
   })
 })
+
+function createManualTimers() {
+  type ManualTimer = { callback: () => void, dueAt: number, cancelled: boolean }
+  const timers: ManualTimer[] = []
+  let now = 0
+
+  return {
+    setTimeoutImpl: (callback: () => void, timeoutMs: number) => {
+      const timer = { callback, dueAt: now + timeoutMs, cancelled: false }
+      timers.push(timer)
+      return timer
+    },
+    clearTimeoutImpl: (handle: unknown) => {
+      ;(handle as unknown as ManualTimer).cancelled = true
+    },
+    advanceBy: (durationMs: number) => {
+      now += durationMs
+      for (const timer of timers) {
+        if (!timer.cancelled && timer.dueAt <= now) {
+          timer.cancelled = true
+          timer.callback()
+        }
+      }
+    },
+    scheduledTimeouts: () => timers.filter((timer) => !timer.cancelled).map((timer) => timer.dueAt),
+  }
+}

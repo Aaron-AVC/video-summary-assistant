@@ -15,10 +15,11 @@ type ChatCompletionMessage = {
 }
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
-
 type OpenAICompatibleClientOptions = {
   fetchImpl?: FetchLike
   timeoutMs?: number
+  setTimeoutImpl?: (callback: () => void, timeoutMs: number) => unknown
+  clearTimeoutImpl?: (handle: unknown) => void
 }
 
 type ChatCompletionOptions = {
@@ -26,6 +27,8 @@ type ChatCompletionOptions = {
   temperature?: number
   responseFormat?: "json_object" | "text"
   signal?: AbortSignal
+  timeoutMs?: number
+  timeoutPurpose?: "control" | "generation"
 }
 
 export type ConnectionTestResult =
@@ -48,7 +51,8 @@ export type ProviderModelsResult = {
   error?: string
 }
 
-const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000
+export const DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS = 30_000
+export const DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS = 180_000
 const MANUAL_MODEL_FALLBACK_MESSAGE = "Model list unavailable — enter a model ID manually."
 
 type OpenAICompatibleResponse = {
@@ -83,10 +87,16 @@ export function redactProviderError(value: unknown, apiKey?: string): string {
     .replace(/\bheaders?\s*[:=]\s*\{[^}]*\}/gi, "headers: [REDACTED]")
 }
 
-function createRequestSignal(parentSignal: AbortSignal | undefined, timeoutMs: number) {
+function createRequestSignal(
+  parentSignal: AbortSignal | undefined,
+  timeoutMs: number,
+  timers: Pick<OpenAICompatibleClientOptions, "setTimeoutImpl" | "clearTimeoutImpl"> = {},
+) {
   const controller = new AbortController()
   let timedOut = false
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  let timeoutHandle: unknown
+  const setTimeoutImpl = timers.setTimeoutImpl ?? setTimeout
+  const clearTimeoutImpl = timers.clearTimeoutImpl ?? clearTimeout
 
   const abortFromParent = () => controller.abort(parentSignal?.reason)
   if (parentSignal) {
@@ -94,8 +104,9 @@ function createRequestSignal(parentSignal: AbortSignal | undefined, timeoutMs: n
     else parentSignal.addEventListener("abort", abortFromParent, { once: true })
   }
 
-  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
-    timeoutHandle = setTimeout(() => {
+  if (!controller.signal.aborted && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    timeoutHandle = setTimeoutImpl(() => {
+      if (controller.signal.aborted) return
       timedOut = true
       controller.abort()
     }, timeoutMs)
@@ -105,10 +116,18 @@ function createRequestSignal(parentSignal: AbortSignal | undefined, timeoutMs: n
     signal: controller.signal,
     didTimeout: () => timedOut,
     cleanup: () => {
-      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+      if (timeoutHandle !== undefined) clearTimeoutImpl(timeoutHandle)
       parentSignal?.removeEventListener("abort", abortFromParent)
     },
   }
+}
+
+function formatTimeoutDuration(timeoutMs: number): string {
+  return timeoutMs % 1000 === 0 ? `${timeoutMs / 1000} seconds` : `${timeoutMs} ms`
+}
+
+function providerTimeoutMessage(timeoutPurpose: "control" | "generation", timeoutMs: number): string {
+  return `Provider ${timeoutPurpose} request timed out after ${formatTimeoutDuration(timeoutMs)}.`
 }
 
 export async function assertProviderHostPermission(baseUrl: string): Promise<void> {
@@ -125,7 +144,8 @@ export async function fetchProviderModels(
 ): Promise<ProviderModelsResult> {
   const provider = parseProviderModelDiscoveryInput(input)
   const fetchImpl = options.fetchImpl ?? fetch
-  const request = createRequestSignal(undefined, options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS)
+  const timeoutMs = options.timeoutMs ?? DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS
+  const request = createRequestSignal(undefined, timeoutMs, options)
   try {
     await assertProviderHostPermission(provider.baseUrl)
     const response = await fetchImpl(buildProviderEndpoint(provider.baseUrl, "models"), {
@@ -167,7 +187,7 @@ export async function fetchProviderModels(
   } catch (error) {
     return {
       models: [],
-      error: `${MANUAL_MODEL_FALLBACK_MESSAGE} ${request.didTimeout() ? "The request timed out." : redactProviderError(error, provider.apiKey)}`
+      error: `${MANUAL_MODEL_FALLBACK_MESSAGE} ${request.didTimeout() ? providerTimeoutMessage("control", timeoutMs) : redactProviderError(error, provider.apiKey)}`
     }
   } finally {
     request.cleanup()
@@ -180,18 +200,20 @@ export function createOpenAICompatibleClient(
 ) {
   const provider = parseProviderConnectionInput(input)
   const fetchImpl = options.fetchImpl ?? fetch
-  const timeoutMs = options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS
 
   async function createChatCompletion({
     messages,
     temperature = 0.2,
     responseFormat = "text",
-    signal
+    signal,
+    timeoutMs: requestTimeoutOverride,
+    timeoutPurpose = "generation"
   }: ChatCompletionOptions): Promise<string> {
     await assertProviderHostPermission(provider.baseUrl)
     let response: Response
     let payload: OpenAICompatibleResponse
-    const request = createRequestSignal(signal, timeoutMs)
+    const timeoutMs = requestTimeoutOverride ?? options.timeoutMs ?? DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS
+    const request = createRequestSignal(signal, timeoutMs, options)
     try {
       response = await fetchImpl(buildProviderEndpoint(provider.baseUrl, "chat/completions"), {
         method: "POST",
@@ -209,8 +231,11 @@ export function createOpenAICompatibleClient(
       })
       payload = (await response.json()) as OpenAICompatibleResponse
     } catch (error) {
+      if (signal?.aborted) {
+        throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))
+      }
       if (request.didTimeout()) {
-        throw new OpenAICompatibleClientError("Provider request timed out.")
+        throw new OpenAICompatibleClientError(providerTimeoutMessage(timeoutPurpose, timeoutMs))
       }
       throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))
     } finally {
@@ -238,7 +263,9 @@ export function createOpenAICompatibleClient(
           { role: "user", content: 'Reply with the single word "pong".' }
         ],
         temperature: 0,
-        responseFormat: "text"
+        responseFormat: "text",
+        timeoutMs: options.timeoutMs ?? DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS,
+        timeoutPurpose: "control"
       })
       return { ok: true, model: provider.model, baseUrl: provider.baseUrl, latencyMs: Date.now() - startedAt }
     } catch (error) {

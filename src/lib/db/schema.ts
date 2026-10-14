@@ -4,6 +4,8 @@ import type {
   AnalysisRunEntity,
   AnalysisCacheEntity,
   QaAnswerEntity,
+  QaMessageEntity,
+  QaThreadEntity,
   ProviderConfigEntity,
   RecentVideoEntity,
   SegmentSummaryEntity,
@@ -59,4 +61,6 @@ export type DatabaseSchema = {
   transcriptCache: Table<TranscriptCacheEntity, string>
   analysisCache: Table<AnalysisCacheEntity, string>
   qaAnswers: Table<QaAnswerEntity, string>
+  qaThreads: Table<QaThreadEntity, string>
+  qaMessages: Table<QaMessageEntity, string>
 }

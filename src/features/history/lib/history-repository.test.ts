@@ -65,6 +65,9 @@ function buildFakeDatabase() {
   const analysisRuns = new FakeTable<AnalysisRunEntity & Row>()
   const segmentSummaries = new FakeTable<SegmentSummaryEntity & Row>()
   const recentVideos = new FakeTable<RecentVideoEntity & Row>()
+  const qaThreads = new FakeTable<any>()
+  const qaMessages = new FakeTable<any>()
+  const qaAnswers = new FakeTable<any>()
 
   return {
     providerConfigs,
@@ -72,6 +75,9 @@ function buildFakeDatabase() {
     analysisRuns,
     segmentSummaries,
     recentVideos,
+    qaThreads,
+    qaMessages,
+    qaAnswers,
     transaction: async (
       _mode: string,
       _tables: unknown[],
@@ -399,5 +405,64 @@ describe("historyRepository.saveTranscriptSnapshot rawVtt retention", () => {
     // Cues remain intact so previously-saved analyses keep rendering.
     expect(oldSnapshot?.cues).toEqual([{ startSec: 0, endSec: 1, text: "hi" }])
     expect(newSnapshot?.rawVtt).toBe("WEBVTT new")
+  })
+})
+
+describe("historyRepository Ask Video persistence", () => {
+  it("exports and clears qaThreads and qaMessages without leaving cache rows", async () => {
+    const fake = buildFakeDatabase()
+    fake.qaThreads.rows.push({
+      id: "thread-1",
+      contentKey: "youtube:video",
+      platform: "youtube",
+      videoId: "video",
+      partId: null,
+      title: "Why?",
+      analysisRunId: "run-1",
+      transcriptFingerprint: "fp-1",
+      providerProfileId: "provider",
+      providerBaseUrl: "https://api.example.com/v1",
+      providerModel: "model",
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    fake.qaMessages.rows.push({
+      id: "message-1",
+      threadId: "thread-1",
+      sequence: 0,
+      role: "user",
+      content: "Why?",
+      createdAt: NOW
+    })
+    fake.qaAnswers.rows.push({
+      cacheKey: "qa-1",
+      contentKey: "youtube:video",
+      transcriptFingerprint: "fp-1",
+      analysisRunId: "run-1",
+      providerProfileId: "provider",
+      providerBaseUrl: "https://api.example.com/v1",
+      providerModel: "model",
+      question: "Why?",
+      schemaVersion: 1,
+      promptVersion: "video-qa-v2",
+      answer: {
+        answer: "Because.",
+        citations: [{ text: "Evidence", startSec: 1, endSec: 2 }],
+        suggestedJumps: [],
+        followUps: []
+      },
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    const exported = await repo.exportLocalData()
+    expect(exported.qaThreads).toHaveLength(1)
+    expect(exported.qaMessages).toHaveLength(1)
+
+    await repo.clearAll()
+    expect(fake.qaThreads.rows).toHaveLength(0)
+    expect(fake.qaMessages.rows).toHaveLength(0)
+    expect(fake.qaAnswers.rows).toHaveLength(0)
   })
 })

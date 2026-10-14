@@ -35,6 +35,8 @@ type DataInventory = {
   analysisRuns: number
   segmentSummaries: number
   recentVideos: number
+  qaThreads: number
+  qaMessages: number
   diagnosticLogs: number
 }
 
@@ -44,6 +46,8 @@ const EMPTY_INVENTORY: DataInventory = {
   analysisRuns: 0,
   segmentSummaries: 0,
   recentVideos: 0,
+  qaThreads: 0,
+  qaMessages: 0,
   diagnosticLogs: 0
 }
 
@@ -127,6 +131,8 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         inventory.analysisRuns,
         inventory.segmentSummaries,
         inventory.recentVideos,
+        inventory.qaThreads,
+        inventory.qaMessages,
         inventory.diagnosticLogs
       ].reduce((sum, count) => sum + count, 0),
     [inventory]
@@ -141,6 +147,8 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       analysisRuns: localData.analysisRuns.length,
       segmentSummaries: localData.segmentSummaries.length,
       recentVideos: localData.recentVideos.length,
+      qaThreads: localData.qaThreads?.length ?? 0,
+      qaMessages: localData.qaMessages?.length ?? 0,
       diagnosticLogs: diagnosticLogs.length
     })
   }
@@ -194,7 +202,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       setFeedback({
         state: "success",
         title: "Local data cleared",
-        message: "Saved providers, transcripts, runs, recent video history, and diagnostic logs were removed."
+        message: "Saved providers, transcripts, runs, recent video history, Ask Video conversations, and diagnostic logs were removed."
       })
     } catch (error) {
       setFeedback({
@@ -222,12 +230,14 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8">
           <InventoryStat label="Providers" value={inventory.providerConfigs} />
           <InventoryStat label="Transcripts" value={inventory.transcriptSnapshots} />
           <InventoryStat label="Runs" value={inventory.analysisRuns} />
           <InventoryStat label="Segments" value={inventory.segmentSummaries} />
           <InventoryStat label="Recent videos" value={inventory.recentVideos} />
+          <InventoryStat label="QA threads" value={inventory.qaThreads} />
+          <InventoryStat label="QA messages" value={inventory.qaMessages} />
           <InventoryStat label="Diagnostic logs" value={inventory.diagnosticLogs} />
         </div>
 

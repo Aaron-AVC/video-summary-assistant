@@ -9,6 +9,8 @@ import type {
   AnalysisRunEntity,
   AnalysisCacheEntity,
   QaAnswerEntity,
+  QaMessageEntity,
+  QaThreadEntity,
   ProviderConfigEntity,
   RecentVideoEntity,
   SegmentSummaryEntity,
@@ -27,6 +29,8 @@ export class YoutubeSummarizerDatabase extends Dexie {
   transcriptCache!: Table<TranscriptCacheEntity, string>
   analysisCache!: Table<AnalysisCacheEntity, string>
   qaAnswers!: Table<QaAnswerEntity, string>
+  qaThreads!: Table<QaThreadEntity, string>
+  qaMessages!: Table<QaMessageEntity, string>
 
   constructor(name = DATABASE_NAME) {
     super(name)
@@ -42,6 +46,8 @@ export class YoutubeSummarizerDatabase extends Dexie {
     this.transcriptCache = this.table("transcriptCache")
     this.analysisCache = this.table("analysisCache")
     this.qaAnswers = this.table("qaAnswers")
+    this.qaThreads = this.table("qaThreads")
+    this.qaMessages = this.table("qaMessages")
   }
 }
 

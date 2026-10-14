@@ -12,9 +12,9 @@ can continue to open existing user data. Legacy storage keys such as
 identifiers. They must not be renamed as a branding cleanup because doing so
 could strand existing data.
 
-The shipped schema has append-only migration blocks through v3. v1 and v2 are
-left unchanged. v3 adds content-aware stores and copies legacy YouTube rows
-without deleting the original compatibility rows.
+The shipped schema has append-only migration blocks through v4. v1, v2, and v3
+are left unchanged. v3 adds content-aware stores and v4 adds `qaThreads` and
+`qaMessages` without deleting the original compatibility rows or `qaAnswers`.
 
 ## Canonical identity
 
@@ -47,7 +47,9 @@ contentKey, and language metadata remain so history can still be grounded.
 identity metadata. `qaAnswers` stores independently validated Ask answers.
 `analysisRuns` and `segmentSummaries` preserve historical analysis runs and
 chapter details. `recentVideos` and `transcriptSnapshots` remain for legacy
-history compatibility.
+history compatibility. `qaThreads` and `qaMessages` are the local-only Ask
+Video conversation store; `qaAnswers` remains an independent exact-request
+optimization cache.
 
 ## Analysis cache identity
 
@@ -82,7 +84,9 @@ not rewrite the evidence used to display an older analysis.
 ## Ask cache
 
 An Ask cache key includes `contentKey`, transcript fingerprint, `analysisRunId`,
-provider identity, model, trimmed question, and the Ask schema/prompt version.
+provider identity, model, trimmed question, bounded conversation-context
+fingerprint when history exists, and the Ask schema/prompt version. Legacy
+single-turn rows are only eligible when no conversation history is present.
 The answer is parsed and validated again when loaded. A corrupt QA row is
 ignored and Ask is sent again; it is never rendered directly from unchecked
 stored JSON.
@@ -95,8 +99,10 @@ the v1/v2 tables readable. Legacy analysis rows may have null fingerprint or
 provider metadata; those rows remain historical compatibility data and do not
 masquerade as current exact cache hits.
 
-No v4 migration is part of V1. A future schema change must append a new
-version and preserve the existing migration blocks.
+The v3-to-v4 migration only creates empty conversation stores. Existing
+`qaAnswers`, analysis, transcript, and video rows remain untouched. A future
+schema change must append a new version and preserve the existing migration
+blocks.
 
 ## Secrets and exports
 

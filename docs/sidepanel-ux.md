@@ -29,7 +29,9 @@ before requesting a model. An exact analysis cache hit restores the canonical
 result without a provider call. Regenerate deliberately bypasses the hit and
 stores a new run while preserving older history. YouTube and each Bilibili part
 use independent `videoRecords`; P1 and P2 never share rows. Transcript loading
-writes only the separate transcript cache. Ask answers use `qaAnswers` and are
+writes only the separate transcript cache. Ask answers use the separate
+`qaAnswers` exact cache and local `qaThreads` / `qaMessages` conversation
+history and are
 reused only after persisted schema validation; corrupt rows are ignored and
 re-requested.
 

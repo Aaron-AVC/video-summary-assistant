@@ -11,6 +11,8 @@ import {
   segmentSummarySchema,
   analysisCacheSchema,
   qaAnswerSchema,
+  qaMessageSchema,
+  qaThreadSchema,
   transcriptCacheSchema,
   transcriptSnapshotSchema,
   videoRecordSchema
@@ -620,6 +622,12 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       const qaAnswers = (await optionalRows("qaAnswers")).flatMap((row) => {
         try { return [qaAnswerSchema.parse(row)] } catch { return [] }
       })
+      const qaThreads = (await optionalRows("qaThreads")).flatMap((row) => {
+        try { return [qaThreadSchema.parse(row)] } catch { return [] }
+      })
+      const qaMessages = (await optionalRows("qaMessages")).flatMap((row) => {
+        try { return [qaMessageSchema.parse(row)] } catch { return [] }
+      })
       return {
         providerConfigs: providerConfigs.map(sanitizeProviderConfigForExport),
         transcriptSnapshots,
@@ -629,7 +637,9 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         videoRecords,
         transcriptCache,
         analysisCache,
-        qaAnswers
+        qaAnswers,
+        qaThreads,
+        qaMessages
       }
     },
     async clearAll() {
@@ -641,7 +651,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
           "analysisRuns",
           "segmentSummaries",
           "recentVideos"
-          ,"videoRecords", "transcriptCache", "analysisCache", "qaAnswers"
+          ,"videoRecords", "transcriptCache", "analysisCache", "qaAnswers", "qaThreads", "qaMessages"
         ],
         async () => {
           await Promise.all([
@@ -654,6 +664,8 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
             ,(database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache?.clear()
             ,(database as typeof database & { analysisCache?: typeof database.analysisRuns }).analysisCache?.clear()
             ,(database as typeof database & { qaAnswers?: typeof database.analysisRuns }).qaAnswers?.clear()
+            ,(database as typeof database & { qaThreads?: typeof database.analysisRuns }).qaThreads?.clear()
+            ,(database as typeof database & { qaMessages?: typeof database.analysisRuns }).qaMessages?.clear()
           ])
         }
       )

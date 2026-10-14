@@ -16,7 +16,8 @@ against the selected analysis.
 - OpenAI-compatible Provider Profiles with a configurable HTTPS endpoint,
   model ID, and optional loopback HTTP endpoint for local development.
 - Local IndexedDB persistence for video history, transcript snapshots, exact
-  analysis cache entries, analysis runs, and validated Ask answers.
+  analysis cache entries, analysis runs, validated Ask answers, and local Ask
+  Video conversation threads/messages.
 - A Chrome Side Panel with Overview, Transcript, Ask, and Settings tabs.
 
 V1 is transcript-based. It does not include ASR/Whisper, vision, frame
@@ -57,7 +58,9 @@ analysis run while keeping older history available.
 
 ## Local data and privacy
 
-Transcript, analysis, history, and cache data are stored locally in IndexedDB.
+Transcript, analysis, history, cache data, and Ask Video conversation history
+are stored locally in IndexedDB. Conversation history is local-only; there is
+no cloud sync.
 The existing IndexedDB name `youtube-summarizer` is retained as a migration
 compatibility identifier. Provider metadata and the API-key secret map are
 stored locally in `chrome.storage.local`; API keys are not included in Settings

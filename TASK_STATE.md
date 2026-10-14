@@ -1,5 +1,11 @@
 # TASK_STATE
 
+- 当前任务：Task 11 — Ask Video Conversation History；实现已完成，等待独立复审。
+- 本任务追加了 Dexie v4 的 `qaThreads` / `qaMessages`，保留 v3 及既有 `qaAnswers` exact cache；Ask conversation 仅存本地 IndexedDB，不做 cloud sync。
+- 回归覆盖 conversation repository、bounded multi-turn context、context-aware QA cache identity、v3→v4 非破坏迁移、历史 analysis run 恢复、Ask 消息导出/clear 与 assistant citation persistence。
+- 当前自动化验证：定向新增回归 15 pass；完整 `bun test`、typecheck、build、diff-check 与 manifest gate 仍待最终执行。
+- Browser smoke：NOT RUN — environment limitation；未伪造真实浏览器结果。
+
 - 最后完成：Task 8 — CLOSED / PASS（最终 HEAD `ac3fb3038df3e9af6a2a01fcbf430b4fd52bf1f3`）
 - 当前任务：Task 9 — implementation complete / awaiting independent review
 - Task 8 最终 HEAD：`ac3fb3038df3e9af6a2a01fcbf430b4fd52bf1f3` (`fix: restore latest active transcript cache`)

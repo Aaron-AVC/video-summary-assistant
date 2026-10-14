@@ -116,4 +116,21 @@ describe("content-aware persistence identities", () => {
     }
     expect(await computeAnalysisCacheKey(base)).toBe(await computeAnalysisCacheKey({ ...base, generationTimeoutSec: 1800 } as never))
   })
+
+  it("separates the same question across conversation contexts while retaining legacy empty identity", async () => {
+    const base = {
+      contentKey: "youtube:video",
+      transcriptFingerprint: "fp",
+      analysisRunId: "run",
+      providerProfileId: "provider",
+      baseUrl: "https://api.example.com/v1",
+      model: "model",
+      question: "Why?"
+    }
+    const empty = await computeQaCacheKey(base)
+    const first = await computeQaCacheKey({ ...base, conversationContextFingerprint: "context-a" })
+    const second = await computeQaCacheKey({ ...base, conversationContextFingerprint: "context-b" })
+    expect(first).not.toBe(second)
+    expect(first).not.toBe(empty)
+  })
 })

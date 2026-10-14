@@ -1,6 +1,7 @@
 import { Loader2, MessageCircleQuestion, Play, Send } from "lucide-react"
 
 import type { AskVideoAnswer } from "@/features/analysis/lib/analysis-schema"
+import type { QaMessageEntity } from "@/lib/schemas/persistence"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,6 +16,7 @@ import { Input } from "@/components/ui/input"
 type AskAiPanelProps = {
   question: string
   answer: AskVideoAnswer | null
+  messages?: QaMessageEntity[]
   isAsking: boolean
   canAsk: boolean
   disabledReason?: string | null
@@ -29,6 +31,7 @@ type AskAiPanelProps = {
 export function AskAiPanel({
   question,
   answer,
+  messages = [],
   isAsking,
   canAsk,
   disabledReason = null,
@@ -78,13 +81,25 @@ export function AskAiPanel({
             {errorMessage}
           </p>
         ) : null}
-        {answer ? (
+        {messages.length > 0 || answer ? (
           <div className="flex min-w-0 flex-col gap-3">
-            <p className="max-w-full text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{answer.answer}</p>
-            <div className="flex min-w-0 flex-col gap-2">
-              {answer.citations.map((citation, index) => (
+            {(messages.length > 0 ? messages : answer ? [{
+              id: "current-answer",
+              threadId: "current",
+              sequence: 0,
+              role: "assistant" as const,
+              content: answer.answer,
+              citations: answer.citations,
+              followUps: answer.followUps,
+              createdAt: new Date().toISOString()
+            }] : []).map((message) => (
+              <div key={message.id} className={`rounded-lg border p-3 ${message.role === "user" ? "ml-6 border-primary/20 bg-primary/5" : "mr-2 border-border/70 bg-background/80"}`}>
+                <p className="max-w-full whitespace-pre-wrap text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{message.content}</p>
+                {message.role === "assistant" && message.citations?.length ? (
+                  <div className="mt-3 flex min-w-0 flex-col gap-2">
+              {message.citations.map((citation, index) => (
                 <div
-                  key={`${citation.startSec}-${citation.endSec}-${index}`}
+                  key={`${message.id}-${citation.startSec}-${citation.endSec}-${index}`}
                   className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 overflow-hidden rounded-lg border border-border/70 bg-background/80 p-3">
                   <div className="min-w-0 max-w-full">
                     <Badge variant="secondary" className="w-fit max-w-full rounded-full px-2 py-0.5">
@@ -104,36 +119,29 @@ export function AskAiPanel({
                   </Button>
                 </div>
               ))}
-            </div>
-            {answer.suggestedJumps.length > 0 ? (
+                  </div>
+                ) : null}
+                {message.role === "assistant" && message.suggestedJumps?.length ? (
+                  <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+                    {message.suggestedJumps.map((jump, index) => (
+                      <Button key={`${message.id}-${jump.title}-${index}`} variant="secondary" size="sm" className="h-auto max-w-full shrink gap-2 whitespace-normal text-left leading-5" onClick={() => onJump(jump.startSec)}>
+                        <Play data-icon="inline-start" />
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{jump.title}</span>
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+                {message.role === "assistant" && message.followUps?.length ? (
               <div className="flex min-w-0 flex-wrap gap-2">
-                {answer.suggestedJumps.map((jump, index) => (
-                  <Button
-                    key={`${jump.title}-${index}`}
-                    variant="secondary"
-                    size="sm"
-                    className="h-auto max-w-full shrink gap-2 whitespace-normal text-left leading-5"
-                    onClick={() => onJump(jump.startSec)}>
-                    <Play data-icon="inline-start" />
-                    <span className="min-w-0 [overflow-wrap:anywhere]">{jump.title}</span>
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-            {answer.followUps.length > 0 ? (
-              <div className="flex min-w-0 flex-wrap gap-2">
-                {answer.followUps.map((followUp) => (
-                  <Button
-                    key={followUp}
-                    variant="outline"
-                    size="sm"
-                    className="h-auto max-w-full whitespace-normal text-left leading-5"
-                    onClick={() => onFollowUp(followUp)}>
+                {message.followUps.map((followUp) => (
+                  <Button key={followUp} variant="outline" size="sm" className="h-auto max-w-full whitespace-normal text-left leading-5" onClick={() => onFollowUp(followUp)}>
                     <span className="min-w-0 [overflow-wrap:anywhere]">{followUp}</span>
                   </Button>
                 ))}
               </div>
-            ) : null}
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : (
           <p className="max-w-full text-sm text-muted-foreground [overflow-wrap:anywhere]">

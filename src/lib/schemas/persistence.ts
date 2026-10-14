@@ -188,6 +188,53 @@ export const qaAnswerSchema = z.object({
   updatedAt: isoDateTimeSchema
 })
 
+export const qaThreadSchema = z.object({
+  id: z.string().min(1),
+  contentKey: z.string().trim().min(1),
+  platform: z.enum(["youtube", "bilibili"]),
+  videoId: z.string().trim().min(1),
+  partId: z.string().trim().min(1).nullable(),
+  title: z.string().trim().min(1),
+  analysisRunId: z.string().min(1),
+  transcriptFingerprint: z.string().trim().min(1),
+  providerProfileId: z.string().trim().min(1),
+  providerBaseUrl: z.string().trim().url(),
+  providerModel: z.string().trim().min(1),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema
+})
+
+export const qaMessageCitationSchema = z.object({
+  text: z.string().optional(),
+  startSec: z.number().min(0),
+  endSec: z.number().min(0).optional()
+}).refine((citation) => citation.endSec === undefined || citation.endSec >= citation.startSec, {
+  message: "Citation end must be greater than or equal to its start",
+  path: ["endSec"]
+})
+
+export const qaMessageSuggestedJumpSchema = z.object({
+  title: z.string().trim().min(1),
+  reason: z.string().trim().min(1),
+  startSec: z.number().min(0),
+  endSec: z.number().min(0)
+}).refine((jump) => jump.endSec >= jump.startSec, {
+  message: "Suggested jump end must be greater than or equal to its start",
+  path: ["endSec"]
+})
+
+export const qaMessageSchema = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  sequence: z.number().int().nonnegative(),
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1),
+  citations: z.array(qaMessageCitationSchema).optional(),
+  suggestedJumps: z.array(qaMessageSuggestedJumpSchema).optional(),
+  followUps: z.array(z.string().trim().min(1)).optional(),
+  createdAt: isoDateTimeSchema
+})
+
 export const persistenceExportSchema = z.object({
   providerConfigs: z.array(providerConfigExportSchema),
   transcriptSnapshots: z.array(transcriptSnapshotSchema),
@@ -197,7 +244,9 @@ export const persistenceExportSchema = z.object({
   videoRecords: z.array(videoRecordSchema).optional(),
   transcriptCache: z.array(transcriptCacheSchema).optional(),
   analysisCache: z.array(analysisCacheSchema).optional(),
-  qaAnswers: z.array(qaAnswerSchema).optional()
+  qaAnswers: z.array(qaAnswerSchema).optional(),
+  qaThreads: z.array(qaThreadSchema).optional(),
+  qaMessages: z.array(qaMessageSchema).optional()
 })
 
 export type PersistedRunStatus = z.infer<typeof persistedRunStatusSchema>
@@ -213,3 +262,7 @@ export type VideoRecordEntity = z.infer<typeof videoRecordSchema>
 export type TranscriptCacheEntity = z.infer<typeof transcriptCacheSchema>
 export type AnalysisCacheEntity = z.infer<typeof analysisCacheSchema>
 export type QaAnswerEntity = z.infer<typeof qaAnswerSchema>
+export type QaThreadEntity = z.infer<typeof qaThreadSchema>
+export type QaMessageCitation = z.infer<typeof qaMessageCitationSchema>
+export type QaMessageSuggestedJump = z.infer<typeof qaMessageSuggestedJumpSchema>
+export type QaMessageEntity = z.infer<typeof qaMessageSchema>

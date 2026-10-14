@@ -8,7 +8,7 @@ import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 /** Bump when the canonical cue serialization changes. */
 export const TRANSCRIPT_FINGERPRINT_VERSION = 2
 export const VIDEO_QA_SCHEMA_VERSION = 1
-export const VIDEO_QA_PROMPT_VERSION = "video-qa-v1"
+export const VIDEO_QA_PROMPT_VERSION = "video-qa-v2"
 
 export type AnalysisCacheIdentityInput = {
   contentKey: string
@@ -28,6 +28,7 @@ export type QaCacheIdentityInput = {
   baseUrl: string
   model: string
   question: string
+  conversationContextFingerprint?: string | null
   schemaVersion?: number
   promptVersion?: string
 }
@@ -127,7 +128,7 @@ export function isExactCurrentAnalysis(
 }
 
 export function buildQaCacheIdentity(input: QaCacheIdentityInput) {
-  return {
+  const identity = {
     contentKey: input.contentKey,
     transcriptFingerprint: input.transcriptFingerprint,
     analysisRunId: input.analysisRunId,
@@ -138,6 +139,9 @@ export function buildQaCacheIdentity(input: QaCacheIdentityInput) {
     schemaVersion: input.schemaVersion ?? VIDEO_QA_SCHEMA_VERSION,
     promptVersion: input.promptVersion ?? VIDEO_QA_PROMPT_VERSION
   }
+  return input.conversationContextFingerprint
+    ? { ...identity, conversationContextFingerprint: input.conversationContextFingerprint }
+    : identity
 }
 
 export async function computeQaCacheKey(input: QaCacheIdentityInput): Promise<string> {

@@ -80,6 +80,21 @@ describe("ask video", () => {
     expect(prompt.userPrompt).toContain("suggestedJumps")
   })
 
+  it("includes bounded conversation history as auxiliary context", () => {
+    const prompt = buildAskVideoPrompt({
+      question: "Why?",
+      videoId: "video-1",
+      transcriptCues: TRANSCRIPT_CUES,
+      conversationHistory: [
+        { role: "user", content: "What happened first?" },
+        { role: "assistant", content: "The setup." }
+      ]
+    })
+    expect(prompt.systemPrompt).toContain("conversation history")
+    expect(prompt.userPrompt).toContain("User: What happened first?")
+    expect(prompt.userPrompt).toContain("Assistant: The setup.")
+  })
+
   it("parses structured answers and validates citation ranges", () => {
     expect(
       parseAskVideoAnswerPayload(

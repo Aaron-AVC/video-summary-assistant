@@ -12,6 +12,11 @@ import type {
 } from "@/features/analysis/lib/analysis-schema"
 import { askVideo } from "@/features/analysis/lib/ask-video"
 import {
+  boundQaConversationContext,
+  computeConversationContextFingerprint,
+} from "@/features/analysis/lib/qa-conversation-context"
+import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
+import {
   captureAnalysisCompletionTimes,
   getAnalysisTaskExecutionPolicy,
   shouldPublishAnalysisToWorkspace,
@@ -77,6 +82,7 @@ import {
   type AnalysisPhase,
   type SidePanelTab,
 } from "@/sidepanel/lib/sidepanel-ux"
+import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -160,6 +166,9 @@ function SidepanelWorkspace() {
   const [isTranscriptLoading, setIsTranscriptLoading] = useState(false)
   const [askQuestion, setAskQuestion] = useState("")
   const [askAnswer, setAskAnswer] = useState<AskVideoAnswer | null>(null)
+  const [qaThreadId, setQaThreadId] = useState<string | null>(null)
+  const [qaThreads, setQaThreads] = useState<QaThreadEntity[]>([])
+  const [qaMessages, setQaMessages] = useState<QaMessageEntity[]>([])
   const [askError, setAskError] = useState<string | null>(null)
   const [isAsking, setIsAsking] = useState(false)
   const [isBootstrapping, setIsBootstrapping] = useState(true)
@@ -176,7 +185,44 @@ function SidepanelWorkspace() {
   const transcriptLoadGenerationRef = useRef(0)
   const askGenerationRef = useRef(0)
   const loadWorkspaceGenerationRef = useRef(0)
+  const qaLoadGenerationRef = useRef(0)
   const activeAnalysisContentKeyRef = useRef<string | null>(null)
+
+  const clearQaWorkspace = useCallback(() => {
+    setQaThreadId(null)
+    setQaThreads([])
+    setQaMessages([])
+    setAskAnswer(null)
+  }, [])
+
+  const restoreQaConversation = useCallback(async (
+    contentKey: string,
+    analysisRunId: string | null | undefined,
+    generation: number,
+  ) => {
+    if (!analysisRunId) {
+      if (generation === loadWorkspaceGenerationRef.current) clearQaWorkspace()
+      return
+    }
+    const threads = await qaConversationRepository.listQaThreadsForVideo(contentKey, analysisRunId)
+    const current = threads[0] ?? null
+    const messages = current ? await qaConversationRepository.listQaMessages(current.id) : []
+    if (generation !== loadWorkspaceGenerationRef.current) return
+    setQaThreads(threads)
+    setQaThreadId(current?.id ?? null)
+    setQaMessages(messages)
+    const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant")
+    setAskAnswer(latestAssistant?.citations ? {
+      answer: latestAssistant.content,
+      citations: latestAssistant.citations.map((citation) => ({
+        text: citation.text,
+        startSec: citation.startSec,
+        endSec: citation.endSec ?? citation.startSec,
+      })),
+      followUps: latestAssistant.followUps ?? [],
+      suggestedJumps: latestAssistant.suggestedJumps ?? [],
+    } : null)
+  }, [clearQaWorkspace])
 
   useEffect(() => analysisTaskController.subscribe(() => {
     setActiveAnalysisTask(analysisTaskController.getSnapshot())
@@ -276,6 +322,7 @@ function SidepanelWorkspace() {
       if (!analysis) {
         setAnalysisView(null)
         setAnalysisPhase("idle")
+        clearQaWorkspace()
         return
       }
 
@@ -299,12 +346,13 @@ function SidepanelWorkspace() {
         errorMessage: analysis.errorMessage,
       })
       setAnalysisPhase("completed")
+      await restoreQaConversation(identity.contentKey, analysis.id, generation)
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) {
         setIsAnalysisFetching(false)
       }
     }
-  }, [])
+  }, [clearQaWorkspace, restoreQaConversation])
 
   const loadSavedAnalysisForContext = useCallback(async (
     context: ActiveVideoContext,
@@ -333,6 +381,7 @@ function SidepanelWorkspace() {
       if (!analysis) {
         setAnalysisView(null)
         setAnalysisPhase("idle")
+        clearQaWorkspace()
         return
       }
       const canonical = persistedLegacyAnalysisToVideoAnalysis(analysis, analysis.segments)
@@ -354,10 +403,11 @@ function SidepanelWorkspace() {
         errorMessage: analysis.errorMessage,
       })
       setAnalysisPhase("completed")
+      await restoreQaConversation(context.contentKey, analysis.id, generation)
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [])
+  }, [clearQaWorkspace, restoreQaConversation])
 
   const loadSavedAnalysisRun = useCallback(async (analysisRunId: string, generation: number) => {
     setIsAnalysisFetching(true)
@@ -404,10 +454,11 @@ function SidepanelWorkspace() {
         errorMessage: analysisRun.errorMessage,
       })
       setAnalysisPhase("completed")
+      await restoreQaConversation(contentKey, analysisRun.id, generation)
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [])
+  }, [restoreQaConversation])
 
   const loadWorkspace = useCallback(async () => {
     const generation = ++loadWorkspaceGenerationRef.current
@@ -448,6 +499,7 @@ function SidepanelWorkspace() {
 
   useEffect(() => {
     loadWorkspaceGenerationRef.current += 1
+    qaLoadGenerationRef.current += 1
     transcriptLoadGenerationRef.current += 1
     askGenerationRef.current += 1
 
@@ -462,11 +514,11 @@ function SidepanelWorkspace() {
     setTranscriptError(null)
     setIsTranscriptLoading(false)
     setAskQuestion("")
-    setAskAnswer(null)
+    clearQaWorkspace()
     setAskError(null)
     setIsAsking(false)
     setIsAnalysisFetching(false)
-  }, [videoContext.contentKey])
+  }, [clearQaWorkspace, videoContext.contentKey])
 
   useEffect(() => {
     void loadWorkspace()
@@ -816,6 +868,7 @@ function SidepanelWorkspace() {
                   errorMessage: null,
                 })
                 setAnalysisPhase("completed")
+                await restoreQaConversation(sourceVideo.contentKey, cached.analysisRunId, loadWorkspaceGenerationRef.current)
               }
               await refreshRecentAnalyses()
               toast.success(`Loaded cached analysis: ${sourceVideo.title}`)
@@ -961,6 +1014,7 @@ function SidepanelWorkspace() {
               errorMessage: null,
             })
             setAnalysisPhase("completed")
+            await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current)
           }
           toast.success(`Analysis completed: ${sourceVideo.title}`)
         })
@@ -990,7 +1044,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisTaskController, loadTranscriptForTask, provider, refreshRecentAnalyses, videoContext])
+  }, [activeAnalysisTask, activeTabId, analysisTaskController, loadTranscriptForTask, provider, refreshRecentAnalyses, restoreQaConversation, videoContext])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()
@@ -1067,6 +1121,7 @@ function SidepanelWorkspace() {
   const handleAsk = useCallback(async () => {
     if (!analysisView || !provider || !hasMatchingTranscript) return
     const requestedContentKey = analysisView.contentKey
+    const requestedAnalysisRunId = analysisView.analysisRunId ?? "legacy"
     const generation = ++askGenerationRef.current
     const isCurrentAsk = () => (
       askGenerationRef.current === generation
@@ -1074,12 +1129,41 @@ function SidepanelWorkspace() {
     )
 
     setIsAsking(true)
-    setAskAnswer(null)
     setAskError(null)
+    const submittedQuestion = askQuestion.trim()
     try {
       const resolvedProviderForAsk = await settingsStorage.resolveProvider(provider.id)
       const transcriptFingerprint = analysisView.transcriptFingerprint
         ?? await computeTranscriptFingerprint(transcriptCues)
+      let thread = qaThreadId ? await qaConversationRepository.getQaThread(qaThreadId) : null
+      if (!thread || thread.contentKey !== requestedContentKey || thread.analysisRunId !== requestedAnalysisRunId) {
+        thread = await qaConversationRepository.createQaThread({
+          contentKey: requestedContentKey,
+          platform: analysisView.platform,
+          videoId: analysisView.videoId,
+          partId: analysisView.partId,
+          title: submittedQuestion.slice(0, 60),
+          analysisRunId: requestedAnalysisRunId,
+          transcriptFingerprint,
+          providerProfileId: provider.id,
+          providerBaseUrl: resolvedProviderForAsk.profile.baseUrl,
+          providerModel: resolvedProviderForAsk.profile.model,
+        })
+        setQaThreadId(thread.id)
+        setQaThreads((current) => [thread!, ...current.filter((item) => item.id !== thread!.id)])
+      }
+      const previousMessages = await qaConversationRepository.listQaMessages(thread.id)
+      const conversationHistory = boundQaConversationContext(previousMessages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })))
+      const userMessage = await qaConversationRepository.appendQaMessage({
+        threadId: thread.id,
+        role: "user",
+        content: submittedQuestion,
+      })
+      setQaMessages((current) => [...current.filter((message) => message.id !== userMessage.id), userMessage])
+      const conversationContextFingerprint = await computeConversationContextFingerprint(conversationHistory)
       const qaCacheKey = await computeQaCacheKey({
         contentKey: requestedContentKey,
         transcriptFingerprint,
@@ -1087,13 +1171,22 @@ function SidepanelWorkspace() {
         providerProfileId: provider.id,
         baseUrl: resolvedProviderForAsk.profile.baseUrl,
         model: resolvedProviderForAsk.profile.model,
-        question: askQuestion,
+        question: submittedQuestion,
+        conversationContextFingerprint,
       })
       const cachedAnswer = await historyRepository.getQaAnswer(qaCacheKey)
       if (cachedAnswer) {
+        const assistantMessage = await qaConversationRepository.appendQaMessage({
+          threadId: thread.id,
+          role: "assistant",
+          content: cachedAnswer.answer.answer,
+          citations: cachedAnswer.answer.citations,
+          suggestedJumps: cachedAnswer.answer.suggestedJumps.map((jump) => ({ ...jump, reason: jump.reason ?? "" })),
+          followUps: cachedAnswer.answer.followUps,
+        })
         if (!isCurrentAsk()) return
+        setQaMessages((current) => [...current, assistantMessage])
         setAskAnswer(cachedAnswer.answer)
-        setIsAsking(false)
         toast.success("Loaded cached answer.")
         return
       }
@@ -1104,15 +1197,15 @@ function SidepanelWorkspace() {
           model: resolvedProviderForAsk.profile.model,
           generationTimeoutSec: resolvedProviderForAsk.profile.generationTimeoutSec ?? 600,
         },
-        question: askQuestion,
+        question: submittedQuestion,
         transcript: {
           videoId: analysisView.videoId,
           title: analysisView.title,
           cues: transcriptCues,
         },
         analysis: analysisView.analysis,
+        conversationHistory,
       })
-      if (!isCurrentAsk()) return
       await historyRepository.saveQaAnswer({
         cacheKey: qaCacheKey,
         contentKey: requestedContentKey,
@@ -1121,13 +1214,23 @@ function SidepanelWorkspace() {
         providerProfileId: provider.id,
         providerBaseUrl: resolvedProviderForAsk.profile.baseUrl,
         providerModel: resolvedProviderForAsk.profile.model,
-        question: askQuestion.trim(),
+        question: submittedQuestion,
         schemaVersion: VIDEO_QA_SCHEMA_VERSION,
         promptVersion: VIDEO_QA_PROMPT_VERSION,
         answer: result.answer,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
+      const assistantMessage = await qaConversationRepository.appendQaMessage({
+        threadId: thread.id,
+        role: "assistant",
+        content: result.answer.answer,
+        citations: result.answer.citations,
+        suggestedJumps: result.answer.suggestedJumps.map((jump) => ({ ...jump, reason: jump.reason ?? "" })),
+        followUps: result.answer.followUps,
+      })
+      if (!isCurrentAsk()) return
+      setQaMessages((current) => [...current, assistantMessage])
       setAskAnswer(result.answer)
       toast.success("Ask Video answer ready.")
     } catch (error) {
@@ -1138,7 +1241,44 @@ function SidepanelWorkspace() {
     } finally {
       if (isCurrentAsk()) setIsAsking(false)
     }
-  }, [analysisView, askQuestion, hasMatchingTranscript, provider, transcriptCues])
+  }, [analysisView, askQuestion, hasMatchingTranscript, provider, qaThreadId, transcriptCues])
+
+  const handleNewQaChat = useCallback(() => {
+    askGenerationRef.current += 1
+    qaLoadGenerationRef.current += 1
+    setQaThreadId(null)
+    setQaMessages([])
+    setAskAnswer(null)
+    setAskQuestion("")
+    setAskError(null)
+    setIsAsking(false)
+  }, [])
+
+  const handleOpenQaThread = useCallback(async (threadId: string) => {
+    const requestedContentKey = analysisView?.contentKey
+    const requestedAnalysisRunId = analysisView?.analysisRunId ?? "legacy"
+    const generation = ++qaLoadGenerationRef.current
+    const thread = await qaConversationRepository.getQaThread(threadId)
+    if (!thread || thread.contentKey !== requestedContentKey || thread.analysisRunId !== requestedAnalysisRunId) return
+    const messages = await qaConversationRepository.listQaMessages(threadId)
+    if (qaLoadGenerationRef.current !== generation || activeAnalysisContentKeyRef.current !== requestedContentKey) return
+    setQaThreadId(threadId)
+    setQaMessages(messages)
+    setAskQuestion("")
+    const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant")
+    setAskAnswer(latestAssistant?.citations ? {
+      answer: latestAssistant.content,
+      citations: latestAssistant.citations.map((citation) => ({ text: citation.text, startSec: citation.startSec, endSec: citation.endSec ?? citation.startSec })),
+      suggestedJumps: latestAssistant.suggestedJumps ?? [],
+      followUps: latestAssistant.followUps ?? [],
+    } : null)
+  }, [analysisView?.analysisRunId, analysisView?.contentKey])
+
+  const handleDeleteQaThread = useCallback(async (threadId: string) => {
+    await qaConversationRepository.deleteQaThread(threadId)
+    setQaThreads((current) => current.filter((thread) => thread.id !== threadId))
+    if (qaThreadId === threadId) handleNewQaChat()
+  }, [handleNewQaChat, qaThreadId])
 
   const jumpWithIdentity = useCallback(async (
     identity: VideoIdentity | null,
@@ -1279,6 +1419,9 @@ function SidepanelWorkspace() {
             hasTranscript={hasMatchingTranscript}
             question={askQuestion}
             answer={askAnswer}
+            messages={qaMessages}
+            threads={qaThreads}
+            currentThreadId={qaThreadId}
             isAsking={isAsking}
             canAsk={canAsk}
             errorMessage={askError}
@@ -1286,6 +1429,9 @@ function SidepanelWorkspace() {
             onQuestionChange={setAskQuestion}
             onAsk={handleAsk}
             onFollowUp={setAskQuestion}
+            onNewChat={handleNewQaChat}
+            onOpenThread={handleOpenQaThread}
+            onDeleteThread={handleDeleteQaThread}
             onJump={handleAnalysisJump}
             onOpenSettings={() => setActiveTab("settings")}
             onOpenOverview={() => setActiveTab("overview")}

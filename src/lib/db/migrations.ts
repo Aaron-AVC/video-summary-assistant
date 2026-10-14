@@ -191,6 +191,22 @@ export const MIGRATION_BLOCKS: MigrationBlock[] = [
       // Legacy rows remain authoritative for compatibility. They are not
       // deleted during v3 so a failed/partial copy cannot destroy history.
     }
+  },
+  {
+    version: 4,
+    stores: {
+      providerConfigs: "id, name, updatedAt",
+      transcriptSnapshots: "id, videoId, updatedAt, [videoId+updatedAt]",
+      analysisRuns: "id, videoId, status, updatedAt, [videoId+updatedAt]",
+      segmentSummaries: "id, analysisRunId, videoId, [videoId+startSec]",
+      recentVideos: "videoId, updatedAt, status",
+      videoRecords: "&contentKey, platform, videoId, updatedAt, [platform+updatedAt]",
+      transcriptCache: "id, contentKey, fingerprint, updatedAt, [contentKey+fingerprint], [contentKey+updatedAt]",
+      analysisCache: "&cacheKey, contentKey, transcriptFingerprint, providerProfileId, updatedAt, [contentKey+updatedAt]",
+      qaAnswers: "&cacheKey, contentKey, analysisRunId, question, updatedAt, [contentKey+updatedAt]",
+      qaThreads: "&id, contentKey, analysisRunId, updatedAt, [contentKey+updatedAt], [contentKey+analysisRunId]",
+      qaMessages: "&id, threadId, sequence, [threadId+sequence], createdAt"
+    }
   }
 ]
 

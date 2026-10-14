@@ -215,7 +215,7 @@ export const qaMessageCitationSchema = z.object({
 
 export const qaMessageSuggestedJumpSchema = z.object({
   title: z.string().trim().min(1),
-  reason: z.string().trim().min(1),
+  reason: z.string().trim().min(1).optional(),
   startSec: z.number().min(0),
   endSec: z.number().min(0)
 }).refine((jump) => jump.endSec >= jump.startSec, {

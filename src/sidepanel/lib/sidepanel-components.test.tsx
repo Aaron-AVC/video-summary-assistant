@@ -190,6 +190,57 @@ describe("Side Panel V1 components", () => {
     expect(answer).toContain("Jump")
   })
 
+  it("disables Ask conversation switching while an answer is in flight", () => {
+    const markup = renderToStaticMarkup(
+      <AskTab
+        hasProvider
+        hasAnalysis
+        hasTranscript
+        question="What happened?"
+        answer={null}
+        messages={[{
+          id: "message-1",
+          threadId: "thread-1",
+          sequence: 0,
+          role: "user",
+          content: "Earlier question",
+          createdAt: "2026-10-14T00:00:00.000Z",
+        }]}
+        threads={[{
+          id: "thread-1",
+          contentKey: "youtube:video",
+          platform: "youtube",
+          videoId: "video",
+          partId: null,
+          title: "Earlier question",
+          analysisRunId: "run-1",
+          transcriptFingerprint: "fp-1",
+          providerProfileId: "provider-a",
+          providerBaseUrl: "https://api.example.com/v1",
+          providerModel: "model-a",
+          createdAt: "2026-10-14T00:00:00.000Z",
+          updatedAt: "2026-10-14T00:00:00.000Z",
+        }]}
+        currentThreadId="thread-1"
+        isAsking
+        canAsk={false}
+        errorMessage={null}
+        isTranscriptLoading={false}
+        onQuestionChange={noop}
+        onAsk={noop}
+        onFollowUp={noop}
+        onJump={noop}
+        onOpenSettings={noop}
+        onOpenOverview={noop}
+        onLoadTranscript={noop}
+        formatTimestamp={formatTimestamp}
+      />,
+    )
+
+    expect(markup).toContain('aria-label="Delete Earlier question"')
+    expect(markup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+
   it("renders transcript rows in a bounded panel and disables fake VTT download", () => {
     const markup = renderToStaticMarkup(
       <TranscriptTab

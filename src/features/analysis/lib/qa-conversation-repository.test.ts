@@ -120,4 +120,24 @@ describe("Ask Video conversation repository", () => {
       followUps: ["What next?"]
     }))
   })
+
+  it("persists and restores suggested jumps without an optional reason", async () => {
+    const fake = database()
+    const repo = createQaConversationRepository(fake as never, {
+      now: () => new Date(time),
+      runTransaction: async (_mode, _tables, callback) => callback()
+    })
+    const thread = await repo.createQaThread(threadInput)
+    const message = await repo.appendQaMessage({
+      threadId: thread.id,
+      role: "assistant",
+      content: "Because.",
+      suggestedJumps: [{ title: "Evidence", startSec: 1, endSec: 2 }],
+    })
+
+    expect(message.suggestedJumps).toEqual([{ title: "Evidence", startSec: 1, endSec: 2 }])
+    expect(await repo.listQaMessages(thread.id)).toEqual([expect.objectContaining({
+      suggestedJumps: [{ title: "Evidence", startSec: 1, endSec: 2 }],
+    })])
+  })
 })

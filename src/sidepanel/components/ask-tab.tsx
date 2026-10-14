@@ -106,10 +106,10 @@ export function AskTab({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium"><MessageCircleQuestion className="h-4 w-4 text-primary" /> Ask Video</div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onNewChat}><Plus className="h-4 w-4" /> New chat</Button>
+          <Button variant="outline" size="sm" disabled={isAsking} onClick={onNewChat}><Plus className="h-4 w-4" /> New chat</Button>
           <details>
             <summary className="inline-flex h-9 cursor-pointer list-none items-center rounded-md border border-input bg-background px-3 text-sm font-medium">History</summary>
-            <div className="absolute z-20 mt-2 w-[min(92vw,28rem)]"><QaThreadHistory currentThreadId={currentThreadId} threads={threads} onOpen={onOpenThread} onDelete={onDeleteThread} /></div>
+            <div className="absolute z-20 mt-2 w-[min(92vw,28rem)]"><QaThreadHistory disabled={isAsking} currentThreadId={currentThreadId} threads={threads} onOpen={onOpenThread} onDelete={onDeleteThread} /></div>
           </details>
         </div>
       </div>

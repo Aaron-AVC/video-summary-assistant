@@ -58,6 +58,7 @@ import type {
 } from "@/features/platform/types"
 import {
   settingsStorage,
+  type ResolvedProvider,
   type ProviderConfigRecord,
 } from "@/features/settings/lib/settings-storage"
 import { downloadRawVtt } from "@/features/transcript/lib/download-vtt"
@@ -82,6 +83,10 @@ import {
   type AnalysisPhase,
   type SidePanelTab,
 } from "@/sidepanel/lib/sidepanel-ux"
+import {
+  getFrozenQaProviderRequest,
+  matchesQaThreadIdentity,
+} from "@/sidepanel/lib/ask-conversation-identity"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 
 type AnalysisView = {
@@ -187,8 +192,10 @@ function SidepanelWorkspace() {
   const loadWorkspaceGenerationRef = useRef(0)
   const qaLoadGenerationRef = useRef(0)
   const activeAnalysisContentKeyRef = useRef<string | null>(null)
+  const activeQaThreadIdRef = useRef<string | null>(null)
 
   const clearQaWorkspace = useCallback(() => {
+    activeQaThreadIdRef.current = null
     setQaThreadId(null)
     setQaThreads([])
     setQaMessages([])
@@ -199,16 +206,19 @@ function SidepanelWorkspace() {
     contentKey: string,
     analysisRunId: string | null | undefined,
     generation: number,
+    transcriptFingerprint?: string | null,
   ) => {
     if (!analysisRunId) {
       if (generation === loadWorkspaceGenerationRef.current) clearQaWorkspace()
       return
     }
-    const threads = await qaConversationRepository.listQaThreadsForVideo(contentKey, analysisRunId)
+    const threads = (await qaConversationRepository.listQaThreadsForVideo(contentKey, analysisRunId))
+      .filter((thread) => !transcriptFingerprint || thread.transcriptFingerprint === transcriptFingerprint)
     const current = threads[0] ?? null
     const messages = current ? await qaConversationRepository.listQaMessages(current.id) : []
     if (generation !== loadWorkspaceGenerationRef.current) return
     setQaThreads(threads)
+    activeQaThreadIdRef.current = current?.id ?? null
     setQaThreadId(current?.id ?? null)
     setQaMessages(messages)
     const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant")
@@ -279,6 +289,10 @@ function SidepanelWorkspace() {
     activeAnalysisContentKeyRef.current = analysisView?.contentKey ?? null
   }, [analysisView?.contentKey])
 
+  useEffect(() => {
+    activeQaThreadIdRef.current = qaThreadId
+  }, [qaThreadId])
+
   const refreshRecentAnalyses = useCallback(async () => {
     const recent = await historyRepository.listRecentAnalyses(10) as HistoryEntry[]
     setRecentItems(
@@ -346,7 +360,7 @@ function SidepanelWorkspace() {
         errorMessage: analysis.errorMessage,
       })
       setAnalysisPhase("completed")
-      await restoreQaConversation(identity.contentKey, analysis.id, generation)
+      await restoreQaConversation(identity.contentKey, analysis.id, generation, analysis.transcriptFingerprint)
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) {
         setIsAnalysisFetching(false)
@@ -403,7 +417,7 @@ function SidepanelWorkspace() {
         errorMessage: analysis.errorMessage,
       })
       setAnalysisPhase("completed")
-      await restoreQaConversation(context.contentKey, analysis.id, generation)
+      await restoreQaConversation(context.contentKey, analysis.id, generation, analysis.transcriptFingerprint)
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
@@ -454,7 +468,7 @@ function SidepanelWorkspace() {
         errorMessage: analysisRun.errorMessage,
       })
       setAnalysisPhase("completed")
-      await restoreQaConversation(contentKey, analysisRun.id, generation)
+      await restoreQaConversation(contentKey, analysisRun.id, generation, analysisRun.transcriptFingerprint)
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
@@ -868,7 +882,7 @@ function SidepanelWorkspace() {
                   errorMessage: null,
                 })
                 setAnalysisPhase("completed")
-                await restoreQaConversation(sourceVideo.contentKey, cached.analysisRunId, loadWorkspaceGenerationRef.current)
+                await restoreQaConversation(sourceVideo.contentKey, cached.analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
               }
               await refreshRecentAnalyses()
               toast.success(`Loaded cached analysis: ${sourceVideo.title}`)
@@ -1014,7 +1028,7 @@ function SidepanelWorkspace() {
               errorMessage: null,
             })
             setAnalysisPhase("completed")
-            await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current)
+            await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
           }
           toast.success(`Analysis completed: ${sourceVideo.title}`)
         })
@@ -1122,21 +1136,41 @@ function SidepanelWorkspace() {
     if (!analysisView || !provider || !hasMatchingTranscript) return
     const requestedContentKey = analysisView.contentKey
     const requestedAnalysisRunId = analysisView.analysisRunId ?? "legacy"
+    const requestedThreadId = qaThreadId ?? activeQaThreadIdRef.current
     const generation = ++askGenerationRef.current
+    let requestThreadId = requestedThreadId
     const isCurrentAsk = () => (
       askGenerationRef.current === generation
       && activeAnalysisContentKeyRef.current === requestedContentKey
+      && activeQaThreadIdRef.current === requestThreadId
     )
 
     setIsAsking(true)
     setAskError(null)
     const submittedQuestion = askQuestion.trim()
     try {
-      const resolvedProviderForAsk = await settingsStorage.resolveProvider(provider.id)
       const transcriptFingerprint = analysisView.transcriptFingerprint
         ?? await computeTranscriptFingerprint(transcriptCues)
-      let thread = qaThreadId ? await qaConversationRepository.getQaThread(qaThreadId) : null
-      if (!thread || thread.contentKey !== requestedContentKey || thread.analysisRunId !== requestedAnalysisRunId) {
+      let thread = requestThreadId
+        ? await qaConversationRepository.getQaThread(requestThreadId)
+        : null
+      const canReuseThread = matchesQaThreadIdentity(thread, {
+        contentKey: requestedContentKey,
+        analysisRunId: requestedAnalysisRunId,
+        transcriptFingerprint,
+      })
+
+      if (!isCurrentAsk()) return
+
+      let resolvedProviderForAsk: ResolvedProvider
+      if (canReuseThread && thread) {
+        try {
+          resolvedProviderForAsk = await settingsStorage.resolveProvider(thread.providerProfileId)
+        } catch {
+          throw new Error("The provider used by this conversation is no longer available. Start a new chat to use the current provider.")
+        }
+      } else {
+        resolvedProviderForAsk = await settingsStorage.resolveProvider(provider.id)
         thread = await qaConversationRepository.createQaThread({
           contentKey: requestedContentKey,
           platform: analysisView.platform,
@@ -1149,9 +1183,18 @@ function SidepanelWorkspace() {
           providerBaseUrl: resolvedProviderForAsk.profile.baseUrl,
           providerModel: resolvedProviderForAsk.profile.model,
         })
+        requestThreadId = thread.id
+        activeQaThreadIdRef.current = thread.id
         setQaThreadId(thread.id)
         setQaThreads((current) => [thread!, ...current.filter((item) => item.id !== thread!.id)])
       }
+      if (!thread || !isCurrentAsk()) return
+
+      const threadProviderProfileId = thread.providerProfileId
+      const threadProviderBaseUrl = thread.providerBaseUrl
+      const threadProviderModel = thread.providerModel
+      const frozenProviderRequest = getFrozenQaProviderRequest(thread, resolvedProviderForAsk)
+      const threadTranscriptFingerprint = thread.transcriptFingerprint
       const previousMessages = await qaConversationRepository.listQaMessages(thread.id)
       const conversationHistory = boundQaConversationContext(previousMessages.map((message) => ({
         role: message.role,
@@ -1162,15 +1205,16 @@ function SidepanelWorkspace() {
         role: "user",
         content: submittedQuestion,
       })
+      if (!isCurrentAsk()) return
       setQaMessages((current) => [...current.filter((message) => message.id !== userMessage.id), userMessage])
       const conversationContextFingerprint = await computeConversationContextFingerprint(conversationHistory)
       const qaCacheKey = await computeQaCacheKey({
         contentKey: requestedContentKey,
-        transcriptFingerprint,
-        analysisRunId: analysisView.analysisRunId ?? "legacy",
-        providerProfileId: provider.id,
-        baseUrl: resolvedProviderForAsk.profile.baseUrl,
-        model: resolvedProviderForAsk.profile.model,
+        transcriptFingerprint: threadTranscriptFingerprint,
+        analysisRunId: thread.analysisRunId,
+        providerProfileId: threadProviderProfileId,
+        baseUrl: threadProviderBaseUrl,
+        model: threadProviderModel,
         question: submittedQuestion,
         conversationContextFingerprint,
       })
@@ -1181,7 +1225,7 @@ function SidepanelWorkspace() {
           role: "assistant",
           content: cachedAnswer.answer.answer,
           citations: cachedAnswer.answer.citations,
-          suggestedJumps: cachedAnswer.answer.suggestedJumps.map((jump) => ({ ...jump, reason: jump.reason ?? "" })),
+          suggestedJumps: cachedAnswer.answer.suggestedJumps,
           followUps: cachedAnswer.answer.followUps,
         })
         if (!isCurrentAsk()) return
@@ -1192,10 +1236,7 @@ function SidepanelWorkspace() {
       }
       const result = await askVideo({
         provider: {
-          baseUrl: resolvedProviderForAsk.profile.baseUrl,
-          apiKey: resolvedProviderForAsk.apiKey,
-          model: resolvedProviderForAsk.profile.model,
-          generationTimeoutSec: resolvedProviderForAsk.profile.generationTimeoutSec ?? 600,
+          ...frozenProviderRequest,
         },
         question: submittedQuestion,
         transcript: {
@@ -1209,11 +1250,11 @@ function SidepanelWorkspace() {
       await historyRepository.saveQaAnswer({
         cacheKey: qaCacheKey,
         contentKey: requestedContentKey,
-        transcriptFingerprint,
-        analysisRunId: analysisView.analysisRunId ?? "legacy",
-        providerProfileId: provider.id,
-        providerBaseUrl: resolvedProviderForAsk.profile.baseUrl,
-        providerModel: resolvedProviderForAsk.profile.model,
+        transcriptFingerprint: threadTranscriptFingerprint,
+        analysisRunId: thread.analysisRunId,
+        providerProfileId: threadProviderProfileId,
+        providerBaseUrl: threadProviderBaseUrl,
+        providerModel: threadProviderModel,
         question: submittedQuestion,
         schemaVersion: VIDEO_QA_SCHEMA_VERSION,
         promptVersion: VIDEO_QA_PROMPT_VERSION,
@@ -1226,7 +1267,7 @@ function SidepanelWorkspace() {
         role: "assistant",
         content: result.answer.answer,
         citations: result.answer.citations,
-        suggestedJumps: result.answer.suggestedJumps.map((jump) => ({ ...jump, reason: jump.reason ?? "" })),
+        suggestedJumps: result.answer.suggestedJumps,
         followUps: result.answer.followUps,
       })
       if (!isCurrentAsk()) return
@@ -1244,24 +1285,35 @@ function SidepanelWorkspace() {
   }, [analysisView, askQuestion, hasMatchingTranscript, provider, qaThreadId, transcriptCues])
 
   const handleNewQaChat = useCallback(() => {
+    if (isAsking) return
     askGenerationRef.current += 1
     qaLoadGenerationRef.current += 1
+    activeQaThreadIdRef.current = null
     setQaThreadId(null)
     setQaMessages([])
     setAskAnswer(null)
     setAskQuestion("")
     setAskError(null)
-    setIsAsking(false)
-  }, [])
+  }, [isAsking])
 
   const handleOpenQaThread = useCallback(async (threadId: string) => {
+    if (isAsking) return
     const requestedContentKey = analysisView?.contentKey
     const requestedAnalysisRunId = analysisView?.analysisRunId ?? "legacy"
+    const requestedTranscriptFingerprint = analysisView?.transcriptFingerprint
+      ?? (transcriptCues.length > 0 ? await computeTranscriptFingerprint(transcriptCues) : null)
+    askGenerationRef.current += 1
     const generation = ++qaLoadGenerationRef.current
     const thread = await qaConversationRepository.getQaThread(threadId)
-    if (!thread || thread.contentKey !== requestedContentKey || thread.analysisRunId !== requestedAnalysisRunId) return
+    if (
+      !thread
+      || thread.contentKey !== requestedContentKey
+      || thread.analysisRunId !== requestedAnalysisRunId
+      || (requestedTranscriptFingerprint && thread.transcriptFingerprint !== requestedTranscriptFingerprint)
+    ) return
     const messages = await qaConversationRepository.listQaMessages(threadId)
     if (qaLoadGenerationRef.current !== generation || activeAnalysisContentKeyRef.current !== requestedContentKey) return
+    activeQaThreadIdRef.current = threadId
     setQaThreadId(threadId)
     setQaMessages(messages)
     setAskQuestion("")
@@ -1272,13 +1324,14 @@ function SidepanelWorkspace() {
       suggestedJumps: latestAssistant.suggestedJumps ?? [],
       followUps: latestAssistant.followUps ?? [],
     } : null)
-  }, [analysisView?.analysisRunId, analysisView?.contentKey])
+  }, [analysisView, isAsking, transcriptCues])
 
   const handleDeleteQaThread = useCallback(async (threadId: string) => {
+    if (isAsking) return
     await qaConversationRepository.deleteQaThread(threadId)
     setQaThreads((current) => current.filter((thread) => thread.id !== threadId))
-    if (qaThreadId === threadId) handleNewQaChat()
-  }, [handleNewQaChat, qaThreadId])
+    if (qaThreadId === threadId || activeQaThreadIdRef.current === threadId) handleNewQaChat()
+  }, [handleNewQaChat, isAsking, qaThreadId])
 
   const jumpWithIdentity = useCallback(async (
     identity: VideoIdentity | null,

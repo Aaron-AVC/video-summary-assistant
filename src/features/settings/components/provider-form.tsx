@@ -33,6 +33,7 @@ import { Switch } from "@/components/ui/switch"
 import { type ProviderConnectionStatus } from "@/features/settings/components/connection-test"
 import { SettingsSection } from "@/features/common/components/settings-ui"
 import {
+  DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
   parseProviderModelDiscoveryInput,
   parseProviderProfileInput,
   type ProviderProfileInput
@@ -67,6 +68,7 @@ const EMPTY_DRAFT: ProviderDraft = {
   baseUrl: "",
   apiKey: "",
   model: "",
+  generationTimeoutSec: DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
   isDefault: false,
   hasApiKey: false,
   modelOptions: []
@@ -192,7 +194,8 @@ export function ProviderForm({
         id: providerId,
         name: parsed.name,
         baseUrl: parsed.baseUrl,
-        model: parsed.model
+        model: parsed.model,
+        generationTimeoutSec: parsed.generationTimeoutSec,
       }, draft.apiKey.trim() || undefined)
 
       if (draft.isDefault) {
@@ -217,7 +220,7 @@ export function ProviderForm({
           const fieldName = issue.path[0]
 
           if (
-            (fieldName === "name" || fieldName === "baseUrl" || fieldName === "apiKey" || fieldName === "model") &&
+            (fieldName === "name" || fieldName === "baseUrl" || fieldName === "apiKey" || fieldName === "model" || fieldName === "generationTimeoutSec") &&
             !nextFieldErrors[fieldName]
           ) {
             nextFieldErrors[fieldName] = issue.message
@@ -444,6 +447,28 @@ export function ProviderForm({
                   value={draft.apiKey}
                 />
               </ProviderField>
+              <ProviderField
+                description="Maximum time allowed for each individual AI generation request. Long-video analysis may make multiple requests."
+                error={fieldErrors.generationTimeoutSec}
+                id="provider-generation-timeout"
+                label="Generation timeout"
+                disabled={isLoading || isSaving}>
+                <Select
+                  disabled={isLoading || isSaving}
+                  onValueChange={(value) => updateDraft("generationTimeoutSec", Number(value))}
+                  value={String(draft.generationTimeoutSec ?? DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC)}>
+                  <SelectTrigger className="h-11 min-w-0 rounded-xl" id="provider-generation-timeout">
+                    <SelectValue placeholder="Select timeout" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="180">3 minutes</SelectItem>
+                    <SelectItem value="300">5 minutes</SelectItem>
+                    <SelectItem value="600">10 minutes</SelectItem>
+                    <SelectItem value="1200">20 minutes</SelectItem>
+                    <SelectItem value="1800">30 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </ProviderField>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   className="rounded-xl"
@@ -612,6 +637,7 @@ export function mapProviderToDraft(provider: ProviderConfigRecord | null): Provi
     baseUrl: provider.baseUrl,
     apiKey: "",
     model: provider.model,
+    generationTimeoutSec: provider.generationTimeoutSec ?? DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
     isDefault: provider.isDefault,
     hasApiKey: provider.hasApiKey,
     modelOptions: []

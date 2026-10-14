@@ -15,6 +15,7 @@ export type AnalysisTaskSnapshot = {
   providerProfileId: string
   providerBaseUrl: string
   providerModel: string
+  generationTimeoutSec: number
   startedAt: string
 }
 export type ActiveAnalysisTask = {

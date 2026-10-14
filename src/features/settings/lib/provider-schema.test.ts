@@ -22,7 +22,8 @@ describe("provider schema", () => {
       name: "Local provider",
       baseUrl: "https://api.example.com/v1",
       apiKey: "sk-test-placeholder",
-      model: "gpt-4.1-mini"
+      model: "gpt-4.1-mini",
+      generationTimeoutSec: 600
     })
   })
 
@@ -44,6 +45,28 @@ describe("provider schema", () => {
       baseUrl: "https://api.example.com/v1",
       apiKey: "sk-discovery-placeholder",
     })
+  })
+
+  it("defaults and validates generation timeout presets", () => {
+    expect(parseProviderProfileInput({
+      name: "Provider",
+      baseUrl: "https://api.example.com/v1",
+      model: "model",
+    }).generationTimeoutSec).toBe(600)
+    for (const seconds of [60, 180, 300, 600, 1200, 1800]) {
+      expect(parseProviderProfileInput({
+        name: "Provider",
+        baseUrl: "https://api.example.com/v1",
+        model: "model",
+        generationTimeoutSec: seconds,
+      }).generationTimeoutSec).toBe(seconds)
+    }
+    expect(() => parseProviderProfileInput({
+      name: "Provider", baseUrl: "https://api.example.com/v1", model: "model", generationTimeoutSec: 59,
+    })).toThrow()
+    expect(() => parseProviderProfileInput({
+      name: "Provider", baseUrl: "https://api.example.com/v1", model: "model", generationTimeoutSec: 1801,
+    })).toThrow()
   })
 })
 

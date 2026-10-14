@@ -67,6 +67,7 @@ export function ConnectionTest({
         baseUrl: resolved.profile.baseUrl,
         apiKey: resolved.apiKey,
         model: resolved.profile.model,
+        generationTimeoutSec: resolved.profile.generationTimeoutSec ?? 600,
       })
       const result = await client.testConnection()
 

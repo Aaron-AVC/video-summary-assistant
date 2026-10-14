@@ -1,4 +1,9 @@
 import { sanitizeProviderConfigForExport } from "@/lib/export/provider-config-export"
+import {
+  DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
+  MAX_PROVIDER_GENERATION_TIMEOUT_SEC,
+  MIN_PROVIDER_GENERATION_TIMEOUT_SEC,
+} from "@/features/settings/lib/provider-schema"
 
 export type ThemePreference = "light" | "dark" | "system"
 
@@ -7,6 +12,7 @@ export type ProviderProfile = {
   name: string
   baseUrl: string
   model: string
+  generationTimeoutSec: number
   createdAt: string
   updatedAt: string
 }
@@ -121,11 +127,17 @@ function normalizeProfile(value: unknown): ProviderProfile | null {
   ) return null
 
   const now = new Date().toISOString()
+  const generationTimeoutSec = Number.isInteger(record.generationTimeoutSec)
+    && Number(record.generationTimeoutSec) >= MIN_PROVIDER_GENERATION_TIMEOUT_SEC
+    && Number(record.generationTimeoutSec) <= MAX_PROVIDER_GENERATION_TIMEOUT_SEC
+    ? Number(record.generationTimeoutSec)
+    : DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC
   return {
     id: record.id.trim(),
     name: record.name.trim(),
     baseUrl: record.baseUrl.trim().replace(/\/+$/, ""),
     model: record.model.trim(),
+    generationTimeoutSec,
     createdAt: typeof record.createdAt === "string" ? record.createdAt : now,
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : now,
   }
@@ -161,6 +173,7 @@ function legacyProfile(value: unknown): { profile: ProviderProfile; apiKey: stri
     name: record.name,
     baseUrl: record.baseUrl,
     model: record.model,
+    generationTimeoutSec: record.generationTimeoutSec,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   })
@@ -300,8 +313,8 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       return (await readSnapshot()).providerConfigs.find((profile) => profile.id === providerId) ?? null
     },
     async saveProviderProfile(
-      input: Omit<ProviderProfile, "createdAt" | "updatedAt"> &
-        Partial<Pick<ProviderProfile, "createdAt" | "updatedAt">>,
+      input: Omit<ProviderProfile, "createdAt" | "updatedAt" | "generationTimeoutSec"> &
+        Partial<Pick<ProviderProfile, "createdAt" | "updatedAt" | "generationTimeoutSec">>,
       apiKey?: string,
     ): Promise<ProviderProfileView> {
       const snapshot = await readSnapshot()
@@ -312,14 +325,15 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
         name: input.name,
         baseUrl: input.baseUrl,
         model: input.model,
+        generationTimeoutSec: normalizeGenerationTimeoutSec(input.generationTimeoutSec),
         createdAt: input.createdAt ?? existing?.createdAt ?? now,
         updatedAt: input.updatedAt ?? now,
       }
       const profiles: ProviderProfile[] = [
         ...snapshot.providerConfigs.filter((entry) => entry.id !== profile.id),
         profile,
-      ].map(({ id, name, baseUrl, model, createdAt, updatedAt }) => ({
-        id, name, baseUrl, model, createdAt, updatedAt,
+      ].map(({ id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt }) => ({
+        id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt,
       }))
       const defaultProviderId = snapshot.defaultProviderId ?? profile.id
       const secrets = await readSecrets()
@@ -338,8 +352,8 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       const snapshot = await readSnapshot()
       const profiles: ProviderProfile[] = snapshot.providerConfigs
         .filter((profile) => profile.id !== providerId)
-        .map(({ id, name, baseUrl, model, createdAt, updatedAt }) => ({
-          id, name, baseUrl, model, createdAt, updatedAt,
+        .map(({ id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt }) => ({
+          id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt,
         }))
       const defaultProviderId = snapshot.defaultProviderId === providerId
         ? profiles[0]?.id ?? null
@@ -398,8 +412,9 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     async getProviderConfigs() {
       return (await readSnapshot()).providerConfigs
     },
-    async saveProviderConfig(input: Omit<ProviderProfile, "createdAt" | "updatedAt"> & {
+    async saveProviderConfig(input: Omit<ProviderProfile, "createdAt" | "updatedAt" | "generationTimeoutSec"> & {
       apiKey: string
+      generationTimeoutSec?: number
       createdAt?: string
       updatedAt?: string
     }) {
@@ -430,6 +445,14 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       migrationPromise = null
     }
   }
+}
+
+function normalizeGenerationTimeoutSec(value: unknown): number {
+  return Number.isInteger(value)
+    && Number(value) >= MIN_PROVIDER_GENERATION_TIMEOUT_SEC
+    && Number(value) <= MAX_PROVIDER_GENERATION_TIMEOUT_SEC
+    ? Number(value)
+    : DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC
 }
 
 export const settingsStorage = createSettingsStorage()

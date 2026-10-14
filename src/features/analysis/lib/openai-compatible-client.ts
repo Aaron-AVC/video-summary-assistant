@@ -5,6 +5,7 @@ import {
   normalizeProviderBaseUrl,
   parseProviderConnectionInput,
   parseProviderModelDiscoveryInput,
+  DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
   type ProviderModelDiscoveryInput,
   type ProviderConnectionInput
 } from "@/features/settings/lib/provider-schema"
@@ -52,7 +53,7 @@ export type ProviderModelsResult = {
 }
 
 export const DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS = 30_000
-export const DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS = 180_000
+export const DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS = DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC * 1000
 const MANUAL_MODEL_FALLBACK_MESSAGE = "Model list unavailable — enter a model ID manually."
 
 type OpenAICompatibleResponse = {
@@ -212,7 +213,9 @@ export function createOpenAICompatibleClient(
     await assertProviderHostPermission(provider.baseUrl)
     let response: Response
     let payload: OpenAICompatibleResponse
-    const timeoutMs = requestTimeoutOverride ?? options.timeoutMs ?? DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS
+    const timeoutMs = requestTimeoutOverride
+      ?? options.timeoutMs
+      ?? (provider.generationTimeoutSec ?? DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC) * 1000
     const request = createRequestSignal(signal, timeoutMs, options)
     try {
       response = await fetchImpl(buildProviderEndpoint(provider.baseUrl, "chat/completions"), {

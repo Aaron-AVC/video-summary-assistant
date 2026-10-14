@@ -1,10 +1,12 @@
 import type { ProviderConfigExportEntity } from "@/lib/schemas/persistence"
+import { DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC } from "@/features/settings/lib/provider-schema"
 
 type ProviderConfigExportSource = {
   id: string
   name: string
   baseUrl: string
   model: string
+  generationTimeoutSec?: unknown
   createdAt: string
   updatedAt: string
   isDefault?: boolean
@@ -21,6 +23,9 @@ export function sanitizeProviderConfigForExport(
     name: provider.name,
     baseUrl: provider.baseUrl,
     model: provider.model,
+    generationTimeoutSec: typeof provider.generationTimeoutSec === "number"
+      ? provider.generationTimeoutSec
+      : DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
     createdAt: provider.createdAt,
     updatedAt: provider.updatedAt,
     hasApiKey: typeof provider.hasApiKey === "boolean"

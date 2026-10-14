@@ -45,7 +45,7 @@ describe("createSettingsStorage", () => {
 
     expect(await storage.getThemePreference()).toBe("dark")
     expect(await storage.getProviderConfigs()).toEqual([
-      expect.objectContaining({ id: "provider-1", isDefault: true })
+      expect.objectContaining({ id: "provider-1", isDefault: true, generationTimeoutSec: 600 })
     ])
     expect(await storage.setDefaultProviderConfig("provider-1")).toBe("provider-1")
   })
@@ -62,12 +62,14 @@ describe("createSettingsStorage", () => {
       model: "gpt-4.1"
     })
 
-    expect(await storage.exportSettings()).toEqual(
+    const exported = await storage.exportSettings()
+    expect(exported).toEqual(
       expect.objectContaining({
         theme: "light",
-        providerConfigs: [expect.objectContaining({ id: "provider-1" })]
+        providerConfigs: [expect.objectContaining({ id: "provider-1", generationTimeoutSec: 600 })]
       })
     )
+    expect(JSON.stringify(exported)).not.toContain("sk-test-placeholder")
 
     await storage.clearSettings()
 
@@ -142,6 +144,18 @@ describe("createSettingsStorage", () => {
       apiKey: "sk-original",
       profile: { name: "Renamed", model: "model-b" },
     })
+  })
+
+  it("normalizes invalid generation timeout metadata to 600 seconds", async () => {
+    const storage = createSettingsStorage(createAdapter())
+    await storage.saveProviderProfile({
+      id: "provider-timeout",
+      name: "Provider",
+      baseUrl: "https://api.example.com/v1",
+      model: "model",
+      generationTimeoutSec: 30,
+    })
+    await expect(storage.getProviderProfile("provider-timeout")).resolves.toMatchObject({ generationTimeoutSec: 600 })
   })
 
   it("keeps the legacy secret-bearing record when migration writes fail", async () => {

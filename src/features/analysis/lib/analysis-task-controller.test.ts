@@ -18,6 +18,7 @@ const snapshot: Omit<AnalysisTaskSnapshot, "taskId" | "startedAt"> = {
   providerProfileId: "provider-a",
   providerBaseUrl: "https://api.example.com/v1",
   providerModel: "model-a",
+  generationTimeoutSec: 600,
 }
 
 describe("AnalysisTaskController", () => {
@@ -42,6 +43,17 @@ describe("AnalysisTaskController", () => {
     expect(controller.getSnapshot()).toBeNull()
     expect(phases).toEqual(["loading-transcript", "analyzing", "released"])
     unsubscribe()
+  })
+
+  it("freezes the provider generation timeout in the task snapshot", async () => {
+    const controller = new AnalysisTaskController()
+    let finish!: () => void
+    const promise = controller.start({ ...snapshot, generationTimeoutSec: 1800 }, async () => {
+      await new Promise<void>((resolve) => { finish = resolve })
+    })
+    expect(controller.getSnapshot()?.snapshot.generationTimeoutSec).toBe(1800)
+    finish()
+    await promise
   })
 
   it("aborts the runner and reports cancelling", async () => {

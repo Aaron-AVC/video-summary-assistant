@@ -316,6 +316,32 @@ describe("provider transport boundaries", () => {
     expect(scheduledTimeoutMs).toBeGreaterThan(30_000)
   })
 
+  it("uses the configured provider generation timeout without sending it in the request body", async () => {
+    let scheduledTimeoutMs = 0
+    let body = ""
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+      generationTimeoutSec: 1800,
+    }, {
+      setTimeoutImpl: (_callback, timeoutMs) => {
+        scheduledTimeoutMs = timeoutMs
+        return 1
+      },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        body = String(init?.body)
+        return new Response(JSON.stringify({ choices: [{ message: { content: "done" } }] }), { status: 200 })
+      }
+    })
+
+    await expect(client.createChatCompletion({ messages: [{ role: "user", content: "hi" }] })).resolves.toBe("done")
+    expect(scheduledTimeoutMs).toBe(1_800_000)
+    expect(body).not.toContain("generationTimeout")
+    expect(body).not.toContain("timeoutSec")
+  })
+
   it("allows generation requests to run beyond the former 30-second boundary", async () => {
     const timers = createManualTimers()
     let resolveResponse: ((response: Response) => void) | undefined

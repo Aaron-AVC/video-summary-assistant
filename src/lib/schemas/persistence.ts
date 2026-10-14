@@ -6,6 +6,11 @@ import {
   askVideoAnswerSchema,
   videoAnalysisSchema
 } from "@/features/analysis/lib/analysis-schema"
+import {
+  DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
+  MAX_PROVIDER_GENERATION_TIMEOUT_SEC,
+  MIN_PROVIDER_GENERATION_TIMEOUT_SEC,
+} from "@/features/settings/lib/provider-schema"
 
 export const persistedRunStatusSchema = z.enum([
   "queued",
@@ -30,6 +35,7 @@ export const providerConfigSchema = z.object({
   name: z.string().trim().min(1),
   baseUrl: z.string().trim().url(),
   model: z.string().trim().min(1),
+  generationTimeoutSec: z.number().int().min(MIN_PROVIDER_GENERATION_TIMEOUT_SEC).max(MAX_PROVIDER_GENERATION_TIMEOUT_SEC).default(DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema
 })
@@ -39,6 +45,7 @@ export const providerConfigExportSchema = z.object({
   name: z.string().trim().min(1),
   baseUrl: z.string().trim().url(),
   model: z.string().trim().min(1),
+  generationTimeoutSec: z.number().int().min(MIN_PROVIDER_GENERATION_TIMEOUT_SEC).max(MAX_PROVIDER_GENERATION_TIMEOUT_SEC).default(DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
   isDefault: z.boolean().optional(),

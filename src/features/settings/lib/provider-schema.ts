@@ -1,5 +1,17 @@
 import { z } from "zod"
 
+export const DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC = 600
+export const MIN_PROVIDER_GENERATION_TIMEOUT_SEC = 60
+export const MAX_PROVIDER_GENERATION_TIMEOUT_SEC = 1800
+
+const providerGenerationTimeoutSchema = z
+  .number()
+  .int("Generation timeout must be a whole number of seconds.")
+  .min(MIN_PROVIDER_GENERATION_TIMEOUT_SEC, `Generation timeout must be at least ${MIN_PROVIDER_GENERATION_TIMEOUT_SEC} seconds.`)
+  .max(MAX_PROVIDER_GENERATION_TIMEOUT_SEC, `Generation timeout must be at most ${MAX_PROVIDER_GENERATION_TIMEOUT_SEC} seconds.`)
+  .optional()
+  .transform((value) => value ?? DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC)
+
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"])
 
 function normalizeProviderBaseUrl(value: string): string {
@@ -46,7 +58,8 @@ const providerUrlSchema = z
 export const providerProfileInputSchema = z.object({
   name: z.string().trim().min(1, "Provider name is required."),
   baseUrl: providerUrlSchema,
-  model: z.string().trim().min(1, "Model is required.")
+  model: z.string().trim().min(1, "Model is required."),
+  generationTimeoutSec: providerGenerationTimeoutSchema,
 })
 
 export const providerConfigInputSchema = providerProfileInputSchema.extend({
@@ -56,7 +69,8 @@ export const providerConfigInputSchema = providerProfileInputSchema.extend({
 export const providerConnectionInputSchema = z.object({
   baseUrl: providerUrlSchema,
   apiKey: z.string().trim().min(1, "API key is required."),
-  model: z.string().trim().min(1, "Model is required.")
+  model: z.string().trim().min(1, "Model is required."),
+  generationTimeoutSec: providerGenerationTimeoutSchema,
 })
 
 export const providerModelDiscoveryInputSchema = z.object({
@@ -64,24 +78,24 @@ export const providerModelDiscoveryInputSchema = z.object({
   apiKey: z.string().trim().min(1, "API key is required.")
 })
 
-export type ProviderProfileInput = z.infer<typeof providerProfileInputSchema>
-export type ProviderConfigInput = z.infer<typeof providerConfigInputSchema>
-export type ProviderConnectionInput = z.infer<typeof providerConnectionInputSchema>
-export type ProviderModelDiscoveryInput = z.infer<typeof providerModelDiscoveryInputSchema>
+export type ProviderProfileInput = z.input<typeof providerProfileInputSchema>
+export type ProviderConfigInput = z.input<typeof providerConfigInputSchema>
+export type ProviderConnectionInput = z.input<typeof providerConnectionInputSchema>
+export type ProviderModelDiscoveryInput = z.input<typeof providerModelDiscoveryInputSchema>
 
-export function parseProviderProfileInput(input: unknown): ProviderProfileInput {
+export function parseProviderProfileInput(input: unknown): z.output<typeof providerProfileInputSchema> {
   return providerProfileInputSchema.parse(input)
 }
 
-export function parseProviderConfigInput(input: unknown): ProviderConfigInput {
+export function parseProviderConfigInput(input: unknown): z.output<typeof providerConfigInputSchema> {
   return providerConfigInputSchema.parse(input)
 }
 
-export function parseProviderConnectionInput(input: unknown): ProviderConnectionInput {
+export function parseProviderConnectionInput(input: unknown): z.output<typeof providerConnectionInputSchema> {
   return providerConnectionInputSchema.parse(input)
 }
 
-export function parseProviderModelDiscoveryInput(input: unknown): ProviderModelDiscoveryInput {
+export function parseProviderModelDiscoveryInput(input: unknown): z.output<typeof providerModelDiscoveryInputSchema> {
   return providerModelDiscoveryInputSchema.parse(input)
 }
 

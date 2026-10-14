@@ -105,4 +105,15 @@ describe("content-aware persistence identities", () => {
     expect(JSON.stringify(buildAnalysisCacheIdentity(base))).not.toContain("apiKey")
     expect(JSON.stringify(buildAnalysisCacheIdentity(base))).not.toContain("generatedAt")
   })
+
+  it("does not include the provider generation timeout", async () => {
+    const base = {
+      contentKey: "youtube:a",
+      transcriptFingerprint: "fp-a",
+      providerProfileId: "profile-a",
+      baseUrl: "https://api.example.com/v1",
+      model: "model-a",
+    }
+    expect(await computeAnalysisCacheKey(base)).toBe(await computeAnalysisCacheKey({ ...base, generationTimeoutSec: 1800 } as never))
+  })
 })

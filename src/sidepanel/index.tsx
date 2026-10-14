@@ -710,6 +710,7 @@ function SidepanelWorkspace() {
       providerProfileId: requestedProvider.id,
       providerBaseUrl: requestedProvider.baseUrl,
       providerModel: requestedProvider.model,
+      generationTimeoutSec: requestedProvider.generationTimeoutSec ?? 600,
     }
     setAnalysisError(null)
     setAskAnswer(null)
@@ -827,6 +828,7 @@ function SidepanelWorkspace() {
               baseUrl: task.snapshot.providerBaseUrl,
               apiKey: resolvedProvider.apiKey,
               model: task.snapshot.providerModel,
+              generationTimeoutSec: task.snapshot.generationTimeoutSec,
             },
             transcript: {
               videoId: sourceVideo.videoId,
@@ -1100,6 +1102,7 @@ function SidepanelWorkspace() {
           baseUrl: resolvedProviderForAsk.profile.baseUrl,
           apiKey: resolvedProviderForAsk.apiKey,
           model: resolvedProviderForAsk.profile.model,
+          generationTimeoutSec: resolvedProviderForAsk.profile.generationTimeoutSec ?? 600,
         },
         question: askQuestion,
         transcript: {

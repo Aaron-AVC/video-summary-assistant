@@ -9,6 +9,7 @@ describe("ProviderForm secret boundary", () => {
       name: "Provider",
       baseUrl: "https://api.example.com/v1",
       model: "model-id",
+      generationTimeoutSec: 600,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
       isDefault: true,

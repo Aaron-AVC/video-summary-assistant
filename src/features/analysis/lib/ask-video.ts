@@ -43,6 +43,8 @@ export type AskVideoOptions = {
   analysis?: VideoAnalysis | null
   conversationHistory?: QaConversationContextMessage[]
   client?: AskVideoClient
+  signal?: AbortSignal
+  onRepairStart?: () => void
 }
 
 export type AskVideoResult = {
@@ -190,7 +192,8 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
         content: prompt.userPrompt
       }
     ],
-    responseFormat: "json_object"
+    responseFormat: "json_object",
+    signal: options.signal
   })
 
   let repairAttempted = false
@@ -199,6 +202,7 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
     answer = parseAskVideoAnswerPayload(rawResponse, options.transcript.cues)
   } catch (initialError) {
     repairAttempted = true
+    options.onRepairStart?.()
     const repairPrompt = buildAskRepairPrompt({
       originalTask: prompt.userPrompt,
       validationError: initialError,
@@ -211,7 +215,8 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
           ...prompt.boundedHistory,
           { role: "user", content: repairPrompt.userPrompt }
         ],
-        responseFormat: "json_object"
+        responseFormat: "json_object",
+        signal: options.signal
       })
       answer = parseAskVideoAnswerPayload(rawResponse, options.transcript.cues)
     } catch (repairError) {

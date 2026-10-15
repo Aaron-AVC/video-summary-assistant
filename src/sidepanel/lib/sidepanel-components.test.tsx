@@ -239,6 +239,8 @@ describe("Side Panel V1 components", () => {
 
     expect(markup).toContain('aria-label="Delete Earlier question"')
     expect(markup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(markup).toContain("max-w-[calc(100vw-1.5rem)]")
+    expect(markup).toContain("overflow-x-hidden")
   })
 
   it("renders transcript rows in a bounded panel and disables fake VTT download", () => {

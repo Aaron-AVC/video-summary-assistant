@@ -1,5 +1,12 @@
 # TASK_STATE
 
+- 当前任务：Ask lifecycle/UI follow-up — implementation complete，待独立复审。
+- 修复：新增单一 active Ask task controller，提交用户消息成功后立即清空输入；Ask 请求冻结 transcript/analysis/thread/provider identity，可跨 browser tab/context 继续执行；支持 answering/repairing/finalizing/cancelling 阶段、用户取消与 repair signal 传递、全局 active Ask banner；完成后始终写回原 thread/cache，仅在 workspace identity 仍匹配时更新当前 UI；Conversation History popup 与列表增加窄宽边界，避免横向溢出。
+- 未修改 CR-12D citation quality、prompt/citation policy、DB migration/history deletion/i18n、AnalysisTaskController、Provider timeout、YouTube/Bilibili/transcript acquisition、manifest permissions 或 broad architecture。
+- 自动化验证：`bun test` PASS（358 tests / 0 fail / 1152 expect calls）；项目内 `tsc.exe --noEmit` PASS；项目内 `plasmo.exe build` PASS；`git diff --check` PASS；manifest permissions unchanged。
+- `bun run typecheck` 与 `bun run build` 包装命令在本机触发 Bun `CouldntReadCurrentDirectory`，已使用项目内等价命令完成验证。
+- Browser smoke：NOT RUN — environment limitation；未伪造真实浏览器结果。
+
 - 当前任务：CR-12A/B/C — Ask answer quality, citation provenance, and reference robustness；实现完成，待追加 commit 并等待独立复审。
 - 修复：Ask prompt 以当前问题为中心，明确 discourse reference、因果证据边界与 transcript 优先级；provider 使用真实 chat roles 发送 bounded conversation history；structured repair 保留同一 history 与 grounding 约束。
 - Citation provenance：忽略模型生成的 citation.text，按最终 clamp 后时间范围从 transcript cues 派生，进行 whitespace normalization、相邻重复 cue 去重、空 cue 丢弃与确定性长度限制；派生文本随 qaAnswers/qaMessages 现有持久化路径保存。

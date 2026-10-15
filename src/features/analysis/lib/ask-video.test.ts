@@ -53,6 +53,28 @@ describe("ask video", () => {
     expect(calls).toEqual(["json_object", "json_object"])
   })
 
+  it("passes the same abort signal to the initial and repair requests", async () => {
+    const signalController = new AbortController()
+    const signals: AbortSignal[] = []
+    const responses = ["not json", validAnswer]
+    const client = {
+      provider: { baseUrl: "https://api.example.com/v1", apiKey: "sk-test-placeholder", model: "gpt-4.1-mini" },
+      testConnection: async () => ({ ok: true as const, baseUrl: "https://api.example.com/v1", model: "gpt-4.1-mini", latencyMs: 1 }),
+      createChatCompletion: async ({ signal }: { signal?: AbortSignal }) => {
+        if (signal) signals.push(signal)
+        return responses.shift() ?? "unexpected"
+      }
+    }
+    await askVideo({
+      provider: client.provider,
+      question: "Where does the demo start?",
+      transcript: { videoId: "video-1", cues: TRANSCRIPT_CUES },
+      client: client as never,
+      signal: signalController.signal,
+    })
+    expect(signals).toEqual([signalController.signal, signalController.signal])
+  })
+
   it("repairs citation grounding failures and errors after the second invalid response", async () => {
     const responses = [
       JSON.stringify({ answer: "Outside", citations: [{ startSec: 50, endSec: 60 }] }),

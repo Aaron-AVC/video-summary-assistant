@@ -2,11 +2,13 @@ import { describe, expect, it } from "bun:test"
 
 import {
   buildAnalysisCacheIdentity,
+  buildQaCacheIdentity,
   computeAnalysisCacheKey,
   computeQaCacheKey,
   computeTranscriptFingerprint,
   isExactCurrentAnalysis,
-  normalizeCacheBaseUrl
+  normalizeCacheBaseUrl,
+  VIDEO_QA_PROMPT_VERSION
 } from "@/lib/persistence/cache-identity"
 
 const cues = [
@@ -132,5 +134,22 @@ describe("content-aware persistence identities", () => {
     const second = await computeQaCacheKey({ ...base, conversationContextFingerprint: "context-b" })
     expect(first).not.toBe(second)
     expect(first).not.toBe(empty)
+  })
+
+  it("bumps the Ask prompt identity without deleting the previous cache namespace", async () => {
+    const base = {
+      contentKey: "youtube:video",
+      transcriptFingerprint: "fp",
+      analysisRunId: "run",
+      providerProfileId: "provider",
+      baseUrl: "https://api.example.com/v1",
+      model: "model",
+      question: "Why?"
+    }
+    expect(VIDEO_QA_PROMPT_VERSION).toBe("video-qa-v3")
+    expect(buildQaCacheIdentity({ ...base, promptVersion: "video-qa-v2" }).promptVersion)
+      .toBe("video-qa-v2")
+    expect(await computeQaCacheKey({ ...base, promptVersion: "video-qa-v2" }))
+      .not.toBe(await computeQaCacheKey({ ...base, promptVersion: VIDEO_QA_PROMPT_VERSION }))
   })
 })

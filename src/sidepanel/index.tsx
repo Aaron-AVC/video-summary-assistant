@@ -13,7 +13,7 @@ import type {
 import { askVideo } from "@/features/analysis/lib/ask-video"
 import {
   boundQaConversationContext,
-  computeConversationContextFingerprint,
+  computeBoundedConversationContextFingerprint,
 } from "@/features/analysis/lib/qa-conversation-context"
 import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
 import {
@@ -1295,7 +1295,7 @@ function SidepanelWorkspace() {
       })
       if (!isCurrentAsk()) return
       setQaMessages((current) => [...current.filter((message) => message.id !== userMessage.id), userMessage])
-      const conversationContextFingerprint = await computeConversationContextFingerprint(conversationHistory)
+      const conversationContextFingerprint = await computeBoundedConversationContextFingerprint(conversationHistory)
       const qaCacheKey = await computeQaCacheKey({
         contentKey: requestedContentKey,
         transcriptFingerprint: threadTranscriptFingerprint,

@@ -31,8 +31,19 @@ export async function computeConversationContextFingerprint(
   messages: QaConversationContextMessage[],
 ) {
   const bounded = boundQaConversationContext(messages)
-  if (bounded.length === 0) return null
-  return sha256Hex(canonicalJson({ version: 1, messages: bounded }))
+  return computeBoundedConversationContextFingerprint(bounded)
+}
+
+/**
+ * Hash the exact bounded history that will be sent to the provider.
+ * Callers that already selected the provider history should use this helper
+ * so the cache identity and transport payload cannot drift independently.
+ */
+export async function computeBoundedConversationContextFingerprint(
+  boundedMessages: QaConversationContextMessage[],
+) {
+  if (boundedMessages.length === 0) return null
+  return sha256Hex(canonicalJson({ version: 1, messages: boundedMessages }))
 }
 
 export function formatQaConversationContext(messages: QaConversationContextMessage[]) {

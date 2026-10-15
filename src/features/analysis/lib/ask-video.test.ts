@@ -3,6 +3,8 @@ import { describe, expect, it } from "bun:test"
 import {
   askVideo,
   buildAskVideoPrompt,
+  deriveTranscriptCitationText,
+  MAX_CITATION_TEXT_CHARS,
   parseAskVideoAnswerPayload
 } from "@/features/analysis/lib/ask-video"
 import {
@@ -10,6 +12,11 @@ import {
   DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
   OpenAICompatibleClientError
 } from "@/features/analysis/lib/openai-compatible-client"
+import {
+  boundQaConversationContext,
+  computeBoundedConversationContextFingerprint,
+  computeConversationContextFingerprint,
+} from "@/features/analysis/lib/qa-conversation-context"
 
 const TRANSCRIPT_CUES = [
   { startSec: 0, endSec: 10, text: "Intro and setup" },
@@ -78,6 +85,9 @@ describe("ask video", () => {
     expect(prompt.userPrompt).toContain("10s-20s")
     expect(prompt.userPrompt).toContain("citations")
     expect(prompt.userPrompt).toContain("suggestedJumps")
+    expect(prompt.systemPrompt).toContain("prefer the discourse topic established by the user's previous turns")
+    expect(prompt.systemPrompt).toContain("does not directly explain")
+    expect(prompt.systemPrompt).toContain("smallest transcript span")
   })
 
   it("includes bounded conversation history as auxiliary context", () => {
@@ -91,8 +101,66 @@ describe("ask video", () => {
       ]
     })
     expect(prompt.systemPrompt).toContain("conversation history")
-    expect(prompt.userPrompt).toContain("User: What happened first?")
-    expect(prompt.userPrompt).toContain("Assistant: The setup.")
+    expect(prompt.userPrompt).not.toContain("Recent conversation history")
+    expect(prompt.boundedHistory).toEqual([
+      { role: "user", content: "What happened first?" },
+      { role: "assistant", content: "The setup." }
+    ])
+  })
+
+  it("uses real chat roles and sends bounded history exactly once", async () => {
+    let capturedMessages: Array<{ role: string; content: string }> = []
+    const history = Array.from({ length: 8 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" as const : "assistant" as const,
+      content: `message-${index}`
+    }))
+    await askVideo({
+      provider: {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-test-placeholder",
+        model: "gpt-4.1-mini"
+      },
+      question: "What happened next?",
+      transcript: { videoId: "video-1", cues: TRANSCRIPT_CUES },
+      conversationHistory: history,
+      client: {
+        provider: {
+          baseUrl: "https://api.example.com/v1",
+          apiKey: "sk-test-placeholder",
+          model: "gpt-4.1-mini"
+        },
+        testConnection: async () => ({ ok: true as const, baseUrl: "https://api.example.com/v1", model: "gpt-4.1-mini", latencyMs: 1 }),
+        createChatCompletion: async ({ messages }) => {
+          capturedMessages = messages
+          return validAnswer
+        }
+      }
+    })
+    expect(capturedMessages.map((message) => message.role)).toEqual([
+      "system", "user", "assistant", "user", "assistant", "user", "assistant", "user"
+    ])
+    expect(capturedMessages.filter((message) => message.content.includes("Recent conversation history")).length).toBe(0)
+    expect(capturedMessages.at(-1)?.content).toContain("What happened next?")
+    expect(capturedMessages.slice(1, -1).map((message) => message.content)).toEqual([
+      "message-2", "message-3", "message-4", "message-5", "message-6", "message-7"
+    ])
+  })
+
+  it("keeps the bounded provider history identical to the fingerprint input", async () => {
+    const history = Array.from({ length: 8 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" as const : "assistant" as const,
+      content: `message-${index}`
+    }))
+    const prompt = buildAskVideoPrompt({
+      question: "What happened next?",
+      videoId: "video-1",
+      transcriptCues: TRANSCRIPT_CUES,
+      conversationHistory: history
+    })
+    const bounded = boundQaConversationContext(history)
+    expect(prompt.boundedHistory).toEqual(bounded)
+    expect(await computeBoundedConversationContextFingerprint(prompt.boundedHistory))
+      .toBe(await computeConversationContextFingerprint(history))
   })
 
   it("parses structured answers and validates citation ranges", () => {
@@ -100,13 +168,7 @@ describe("ask video", () => {
       parseAskVideoAnswerPayload(
         JSON.stringify({
           answer: "The demo starts after setup.",
-          citations: [
-            {
-              text: "Demo begins",
-              startSec: 10,
-              endSec: 20
-            }
-          ],
+          citations: [{ text: "1059年...1139年...1274年...", startSec: 10, endSec: 20 }],
           suggestedJumps: [
             {
               title: "Demo",
@@ -138,6 +200,40 @@ describe("ask video", () => {
       ],
       followUps: ["What happens next?"]
     })
+  })
+
+  it("derives citation text from overlapping transcript cues and ignores model prose", () => {
+    const answer = parseAskVideoAnswerPayload(
+      JSON.stringify({
+        answer: "The demo starts after setup.",
+        citations: [{ text: "1059年...1139年...1274年...", startSec: 5, endSec: 25 }],
+        suggestedJumps: [],
+        followUps: []
+      }),
+      [
+        { startSec: 0, endSec: 10, text: "Intro and setup" },
+        { startSec: 10, endSec: 20, text: "Demo begins" },
+        { startSec: 20, endSec: 30, text: "Wrap up" }
+      ]
+    )
+    expect(answer.citations[0].text).toBe("Intro and setup Demo begins Wrap up")
+    expect(answer.citations[0].text).not.toContain("1059年")
+  })
+
+  it("deduplicates adjacent identical cues and truncates excerpts deterministically", () => {
+    const repeated = "A source sentence with punctuation. "
+    const cues = [
+      { startSec: 0, endSec: 5, text: repeated },
+      { startSec: 5, endSec: 10, text: repeated },
+      { startSec: 10, endSec: 15, text: "…… source punctuation stays intact" },
+      { startSec: 15, endSec: 20, text: "x".repeat(400) }
+    ]
+    const excerpt = deriveTranscriptCitationText({ startSec: 0, endSec: 20, transcriptCues: cues })
+    expect(excerpt).toContain("A source sentence with punctuation.")
+    expect(excerpt).toContain("…… source punctuation stays intact")
+    expect(excerpt.length).toBeLessThanOrEqual(MAX_CITATION_TEXT_CHARS)
+    expect(excerpt.endsWith("…")).toBe(true)
+    expect(excerpt.slice(0, -1).endsWith("…")).toBe(false)
   })
 
   it("rejects malformed JSON and drops citations that don't overlap any cue", () => {
@@ -175,6 +271,16 @@ describe("ask video", () => {
           { startSec: 0, endSec: 10, text: "Intro" },
           { startSec: 20, endSec: 30, text: "Wrap up" }
         ]
+      )
+    ).toThrow("Ask AI returned no citations that line up with the transcript.")
+
+    expect(() =>
+      parseAskVideoAnswerPayload(
+        {
+          answer: "Blank",
+          citations: [{ startSec: 0, endSec: 10 }]
+        },
+        [{ startSec: 0, endSec: 10, text: "   " }]
       )
     ).toThrow("Ask AI returned no citations that line up with the transcript.")
   })

@@ -1,5 +1,14 @@
 # TASK_STATE
 
+- 当前任务：CR-12A/B/C — Ask answer quality, citation provenance, and reference robustness；实现完成，待追加 commit 并等待独立复审。
+- 修复：Ask prompt 以当前问题为中心，明确 discourse reference、因果证据边界与 transcript 优先级；provider 使用真实 chat roles 发送 bounded conversation history；structured repair 保留同一 history 与 grounding 约束。
+- Citation provenance：忽略模型生成的 citation.text，按最终 clamp 后时间范围从 transcript cues 派生，进行 whitespace normalization、相邻重复 cue 去重、空 cue 丢弃与确定性长度限制；派生文本随 qaAnswers/qaMessages 现有持久化路径保存。
+- Cache identity：Ask prompt version 从 `video-qa-v2` 升级为 `video-qa-v3`；旧 v2 identity 仍可读取且与 v3 分 namespace。Side Panel 使用 provider 实际发送的同一份 bounded history 计算 conversation fingerprint，避免重复裁剪漂移。
+- 未修改 Provider/timeout、analysis lifecycle、YouTube/Bilibili/transcript acquisition、DB schema/version、V2、i18n 或 manifest permissions。
+- 自动化验证：`bun test` PASS（353 tests / 0 fail / 1136 expect calls）；项目内 `tsc --noEmit` PASS；生产 Plasmo build PASS；`git diff --check` PASS；manifest permissions unchanged。
+- `bun run typecheck` 与 `bun run build` 包装命令在本机触发 Bun `CouldntReadCurrentDirectory`，分别使用项目内 `tsc.exe --noEmit` 与 `plasmo.exe build` 完成等价验证。
+- Browser smoke：NOT RUN — environment limitation；上一轮用户已确认 Ask 多轮 smoke，本轮未新增真实浏览器 smoke，未伪造结果。
+
 - 当前任务：Task 11D — Ask transcript fingerprint authority；实现完成，待追加 commit 并等待独立复审。
 - 修复：Ask 以实际当前 transcript cues 的 fingerprint 为唯一 transcript authority；modern analysis 与当前 transcript fingerprint 不一致时禁止 Ask；thread/history/cache identity 均绑定实际 fingerprint；active transcript reload 与 analysis-run 变化会使旧 Ask 结果失效且不污染当前 UI；historical run 继续按 run-bound transcript snapshot 恢复。
 - 新增 `src/sidepanel/lib/ask-transcript-identity.ts` helper 及回归测试；Ask mismatch UI 显示 “Transcript changed since this analysis” 和 “Go to Overview”。未修改 Provider identity、analysis lifecycle、平台字幕、DB schema/version、i18n、history deletion、analysis algorithm 或 prompt 内容。

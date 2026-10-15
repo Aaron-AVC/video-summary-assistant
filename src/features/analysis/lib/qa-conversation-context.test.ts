@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test"
 
 import {
   boundQaConversationContext,
+  computeBoundedConversationContextFingerprint,
   computeConversationContextFingerprint,
   formatQaConversationContext
 } from "@/features/analysis/lib/qa-conversation-context"
@@ -22,5 +23,14 @@ describe("Ask Video conversation context", () => {
     const empty = await computeConversationContextFingerprint([])
     expect(first).not.toBe(second)
     expect(empty).toBeNull()
+  })
+
+  it("hashes the exact already-bounded history without trimming it again", async () => {
+    const bounded = Array.from({ length: 8 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" as const : "assistant" as const,
+      content: `message-${index}`
+    }))
+    expect(await computeBoundedConversationContextFingerprint(bounded))
+      .not.toBe(await computeConversationContextFingerprint(bounded))
   })
 })

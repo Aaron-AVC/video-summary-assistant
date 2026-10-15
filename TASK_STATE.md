@@ -1,5 +1,11 @@
 # TASK_STATE
 
+- 当前任务：Task 11D — Ask transcript fingerprint authority；实现完成，待追加 commit 并等待独立复审。
+- 修复：Ask 以实际当前 transcript cues 的 fingerprint 为唯一 transcript authority；modern analysis 与当前 transcript fingerprint 不一致时禁止 Ask；thread/history/cache identity 均绑定实际 fingerprint；active transcript reload 与 analysis-run 变化会使旧 Ask 结果失效且不污染当前 UI；historical run 继续按 run-bound transcript snapshot 恢复。
+- 新增 `src/sidepanel/lib/ask-transcript-identity.ts` helper 及回归测试；Ask mismatch UI 显示 “Transcript changed since this analysis” 和 “Go to Overview”。未修改 Provider identity、analysis lifecycle、平台字幕、DB schema/version、i18n、history deletion、analysis algorithm 或 prompt 内容。
+- 自动化验证：`bun test` 347 pass / 0 fail，`bun run typecheck` PASS，授权环境 `bun run build` PASS，`git diff --check` PASS，manifest permissions unchanged。
+- Browser smoke：NOT RUN — environment limitation；未伪造真实浏览器结果。
+
 - 当前任务：Task 11 CR-11 follow-up — Ask Conversation correctness；已完成实现，待追加 commit 并等待独立复审。
 - 修复 suggested jump optional `reason` 持久化、冻结既有 thread 的 provider identity、transcript fingerprint thread 隔离，以及 Ask 进行中的 New chat/History 切换 race；未修改平台字幕、analysis task lifecycle 或 Provider timeout。
 - 新增回归覆盖 optional suggested jump persistence、thread identity matching/provider A→B projection、in-flight conversation switching disabled；既有 conversation/cache/migration/export/clearAll 回归保持。

@@ -12,6 +12,7 @@ type AskTabProps = {
   hasProvider: boolean
   hasAnalysis: boolean
   hasTranscript: boolean
+  transcriptMismatch?: boolean
   question: string
   answer: AskVideoAnswer | null
   messages?: QaMessageEntity[]
@@ -38,6 +39,7 @@ export function AskTab({
   hasProvider,
   hasAnalysis,
   hasTranscript,
+  transcriptMismatch = false,
   question,
   answer,
   messages = [],
@@ -81,6 +83,18 @@ export function AskTab({
         title="Generate analysis first"
         description="Ask Video needs the canonical analysis context before it can answer follow-up questions."
         action={<Button onClick={onOpenOverview}>Generate analysis first</Button>}
+      />
+    )
+  }
+
+  if (transcriptMismatch && hasProvider && hasAnalysis) {
+    return (
+      <EmptyState
+        className="border border-dashed border-border/70 bg-card/70"
+        icon={<FileText />}
+        title="Transcript changed since this analysis"
+        description="Regenerate the analysis before continuing Ask Video."
+        action={<Button onClick={onOpenOverview}>Go to Overview</Button>}
       />
     )
   }

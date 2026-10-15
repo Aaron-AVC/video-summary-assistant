@@ -261,6 +261,36 @@ describe("Side Panel V1 components", () => {
     expect(markup).toContain("disabled")
   })
 
+  it("shows an analysis/transcript identity mismatch instead of a misleading load prompt", () => {
+    const markup = renderToStaticMarkup(
+      <AskTab
+        hasProvider
+        hasAnalysis
+        hasTranscript={false}
+        transcriptMismatch
+        question=""
+        answer={null}
+        isAsking={false}
+        canAsk={false}
+        errorMessage={null}
+        isTranscriptLoading={false}
+        onQuestionChange={noop}
+        onAsk={noop}
+        onFollowUp={noop}
+        onJump={noop}
+        onOpenSettings={noop}
+        onOpenOverview={noop}
+        onLoadTranscript={noop}
+        formatTimestamp={formatTimestamp}
+      />,
+    )
+
+    expect(markup).toContain("Transcript changed since this analysis")
+    expect(markup).toContain("Regenerate the analysis before continuing Ask Video.")
+    expect(markup).toContain("Go to Overview")
+    expect(markup).not.toContain("Load transcript")
+  })
+
   it("embeds the existing Provider form and Connection Test in Settings", () => {
     const markup = renderToStaticMarkup(<SettingsTab onProvidersChange={noop} />)
     expect(markup).toContain("Provider configuration")

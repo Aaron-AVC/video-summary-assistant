@@ -192,7 +192,6 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
         content: prompt.userPrompt
       }
     ],
-    responseFormat: "json_object",
     signal: options.signal
   })
 
@@ -215,7 +214,6 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
           ...prompt.boundedHistory,
           { role: "user", content: repairPrompt.userPrompt }
         ],
-        responseFormat: "json_object",
         signal: options.signal
       })
       answer = parseAskVideoAnswerPayload(rawResponse, options.transcript.cues)

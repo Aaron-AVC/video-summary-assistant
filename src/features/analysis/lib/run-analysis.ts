@@ -118,7 +118,6 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     })
     const summary = await requestCompletion(client, {
       messages: promptMessages(prompt),
-      responseFormat: "text",
       signal
     }, signal)
     chunkSummaries.push({
@@ -153,7 +152,6 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
       const prompt = buildSummaryReductionPrompt({ level: nextLevel, summaries: group })
       const summary = await requestCompletion(client, {
         messages: promptMessages(prompt),
-        responseFormat: "text",
         signal
       }, signal)
       reduced.push({
@@ -194,7 +192,6 @@ async function requestStructuredAnalysis(input: {
   throwIfAborted(signal)
   let rawResponse = await requestCompletion(input.client, {
     messages: promptMessages(input.prompt),
-    responseFormat: "json_object",
     signal
   }, signal)
   let repairAttempted = false
@@ -222,7 +219,6 @@ async function requestStructuredAnalysis(input: {
       throwIfAborted(signal)
       rawResponse = await requestCompletion(input.client, {
         messages: promptMessages(repairPrompt),
-        responseFormat: "json_object",
         signal
       }, signal)
       return {

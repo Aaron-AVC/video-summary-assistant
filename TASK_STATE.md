@@ -1,5 +1,11 @@
 # TASK_STATE
 
+- 当前任务：Provider transport follow-up — avoid provider native JSON mode；实现完成，待追加 commit 并等待独立复审。
+- 修复：移除 V1 OpenAI-compatible transport 对 `response_format`/native JSON mode 的依赖；Analysis、Ask、structured repair 继续通过 JSON prompt + 本地 parse/validation + 单次 repair 完成结构化输出。transport 只读取 `message.content`，不会把 `reasoning_content`、`reasoning` 或 `thinking` 当作 assistant 输出；`content` 缺失时明确报错。
+- 未修改 Provider schema、timeout policy、cache/version、DB、manifest permissions、YouTube/Bilibili、字幕链路、Analysis/Ask lifecycle、map-reduce 算法或 prompt 内容边界。
+- 自动化验证：`bun test` PASS（360 tests / 0 fail / 1160 expect calls）；项目内 `tsc.exe --noEmit` PASS；项目内 `plasmo.exe build` PASS；`git diff --check` PASS；build manifest permissions 与 `package.json` 配置一致且未变化。`bun run typecheck` 与 `bun run build` 在本机触发 Bun `CouldntReadCurrentDirectory`，已使用项目内等价命令完成验证。
+- Browser smoke：NOT RUN — environment limitation；未伪造真实浏览器结果。
+
 - 当前任务：Ask lifecycle/UI follow-up — implementation complete，待独立复审。
 - 修复：新增单一 active Ask task controller，提交用户消息成功后立即清空输入；Ask 请求冻结 transcript/analysis/thread/provider identity，可跨 browser tab/context 继续执行；支持 answering/repairing/finalizing/cancelling 阶段、用户取消与 repair signal 传递、全局 active Ask banner；完成后始终写回原 thread/cache，仅在 workspace identity 仍匹配时更新当前 UI；Conversation History popup 与列表增加窄宽边界，避免横向溢出。
 - 未修改 CR-12D citation quality、prompt/citation policy、DB migration/history deletion/i18n、AnalysisTaskController、Provider timeout、YouTube/Bilibili/transcript acquisition、manifest permissions 或 broad architecture。

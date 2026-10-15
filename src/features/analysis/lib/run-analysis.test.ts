@@ -21,7 +21,7 @@ import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-a
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
 type Call = {
-  responseFormat?: "json_object" | "text"
+  structured: boolean
   system: string
   user: string
   signal?: AbortSignal
@@ -65,13 +65,13 @@ function createClient(
       model: provider.model,
       latencyMs: 1
     }),
-    createChatCompletion: async ({ messages, responseFormat, signal }: {
+    createChatCompletion: async ({ messages, signal }: {
       messages: Array<{ role: string, content: string }>
-      responseFormat?: "json_object" | "text"
       signal?: AbortSignal
     }) => {
+      const promptText = messages.map((message) => message.content).join("\n")
       const call: Call = {
-        responseFormat,
+        structured: /JSON only|valid JSON object/i.test(promptText),
         system: messages[0]?.content ?? "",
         user: messages[1]?.content ?? "",
         signal
@@ -93,7 +93,7 @@ describe("runAnalysis", () => {
     expect(result.reductionLevels).toBe(0)
     expect(result.chunkSummaries).toEqual([])
     expect(result.repairAttempted).toBe(false)
-    expect(calls.map((call) => call.responseFormat)).toEqual(["json_object"])
+    expect(calls.map((call) => call.structured)).toEqual([true])
     expect(calls[0].user).toContain("1. 0s-10s: Transcript")
   })
 
@@ -111,12 +111,13 @@ describe("runAnalysis", () => {
     const result = await runAnalysis({ provider, transcript: shortTranscript, client: client as never })
     expect(result.strategy).toBe("single-pass")
     expect(result.repairAttempted).toBe(true)
-    expect(calls.map((call) => call.responseFormat)).toEqual(["json_object", "json_object"])
+    expect(calls.map((call) => call.structured)).toEqual([true, true])
     expect(calls[1].user).toContain("chapters.0.detail")
   })
 
   it("uses the generation timeout for the initial analysis and structured repair", async () => {
     const scheduledTimeouts: number[] = []
+    const bodies: string[] = []
     const responses = ["not json", validResponse()]
     const client = createOpenAICompatibleClient(provider, {
       setTimeoutImpl: (_callback, timeoutMs) => {
@@ -124,9 +125,12 @@ describe("runAnalysis", () => {
         return 1
       },
       clearTimeoutImpl: () => undefined,
-      fetchImpl: async () => new Response(JSON.stringify({
-        choices: [{ message: { content: responses.shift() ?? "unexpected" } }]
-      }), { status: 200 })
+      fetchImpl: async (_input, init) => {
+        bodies.push(String(init?.body))
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: responses.shift() ?? "unexpected" } }]
+        }), { status: 200 })
+      }
     })
 
     const result = await runAnalysis({ provider, transcript: shortTranscript, client })
@@ -135,6 +139,7 @@ describe("runAnalysis", () => {
       DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
       DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS
     ])
+    expect(bodies.every((body) => !body.includes("response_format"))).toBe(true)
   })
 
   it("does not retry a provider timeout during analysis", async () => {
@@ -259,7 +264,7 @@ describe("runAnalysis", () => {
     )
     const calls: Call[] = []
     const client = createClient(calls, (call) =>
-      call.responseFormat === "json_object" ? validResponse(cues.at(-1)!.endSec) : "brief map summary"
+      call.structured ? validResponse(cues.at(-1)!.endSec) : "brief map summary"
     )
     const result = await runAnalysis({
       provider,
@@ -274,8 +279,8 @@ describe("runAnalysis", () => {
     expect(result.chunkSummaries).toHaveLength(scenario.chunkCount)
     expect(result.chunkSummaries[0].startSec).toBe(0)
     expect(result.chunkSummaries.at(-1)!.endSec).toBe(cues.at(-1)!.endSec)
-    expect(calls.slice(0, -1).every((call) => call.responseFormat === "text")).toBe(true)
-    expect(calls.at(-1)!.responseFormat).toBe("json_object")
+    expect(calls.slice(0, -1).every((call) => !call.structured)).toBe(true)
+    expect(calls.at(-1)!.structured).toBe(true)
     expect(calls).toHaveLength(scenario.chunkCount + 1)
   })
 
@@ -288,7 +293,7 @@ describe("runAnalysis", () => {
     )
     const calls: Call[] = []
     const client = createClient(calls, (call) => {
-      if (call.responseFormat === "json_object") return validResponse(cues.at(-1)!.endSec)
+      if (call.structured) return validResponse(cues.at(-1)!.endSec)
       if (call.user.includes("Reduction level:")) return reducedSummary
       return mapSummary
     })
@@ -322,7 +327,7 @@ describe("runAnalysis", () => {
     )
     const calls: Call[] = []
     const client = createClient(calls, (call) => {
-      if (call.responseFormat === "json_object") return validResponse(cues.at(-1)!.endSec)
+      if (call.structured) return validResponse(cues.at(-1)!.endSec)
       if (call.user.includes("Reduction level:")) return reducedSummary
       return mapSummary
     })
@@ -335,7 +340,7 @@ describe("runAnalysis", () => {
     expect(result.reductionLevels).toBeGreaterThanOrEqual(2)
     expect(calls.some((call) => call.user.includes("Reduction level: 1"))).toBe(true)
     expect(calls.some((call) => call.user.includes("Reduction level: 2"))).toBe(true)
-    expect(calls.at(-1)!.responseFormat).toBe("json_object")
+    expect(calls.at(-1)!.structured).toBe(true)
   })
 
   it("fails before provider calls for an oversized cue", async () => {
@@ -366,7 +371,7 @@ describe("runAnalysis", () => {
       client: client as never
     })).rejects.toThrow(ReductionCannotProgressError)
     expect(calls).toHaveLength(scenario.chunkCount)
-    expect(calls.every((call) => call.responseFormat === "text")).toBe(true)
+    expect(calls.every((call) => !call.structured)).toBe(true)
   })
 
   it("stops subsequent calls when cancelled during map or reduction", async () => {
@@ -411,7 +416,7 @@ describe("runAnalysis", () => {
       client: reduceClient as never
     })).rejects.toThrow("cancelled")
     expect(reduceCalls.filter((call) => call.user.includes("Reduction level:"))).toHaveLength(1)
-    expect(reduceCalls.some((call) => call.responseFormat === "json_object")).toBe(false)
+    expect(reduceCalls.some((call) => call.structured)).toBe(false)
   })
 
   it("keeps CR-05 repair on the map-reduce final result", async () => {
@@ -433,7 +438,7 @@ describe("runAnalysis", () => {
     })
     const structuredResponses = [ungrounded, validResponse(cues.at(-1)!.endSec)]
     const client = createClient(calls, (call) =>
-      call.responseFormat === "json_object" ? structuredResponses.shift()! : "brief"
+      call.structured ? structuredResponses.shift()! : "brief"
     )
     const result = await runAnalysis({
       provider,
@@ -443,7 +448,7 @@ describe("runAnalysis", () => {
     })
     expect(result.strategy).toBe("map-reduce")
     expect(result.repairAttempted).toBe(true)
-    expect(calls.filter((call) => call.responseFormat === "json_object")).toHaveLength(2)
+    expect(calls.filter((call) => call.structured)).toHaveLength(2)
     expect(calls.at(-1)!.system).toContain("<<<PARTIAL_ANALYSES_BEGIN>>>")
     expect(calls.at(-1)!.system).toContain("untrusted model-derived evidence")
   })

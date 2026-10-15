@@ -26,7 +26,6 @@ type OpenAICompatibleClientOptions = {
 type ChatCompletionOptions = {
   messages: ChatCompletionMessage[]
   temperature?: number
-  responseFormat?: "json_object" | "text"
   signal?: AbortSignal
   timeoutMs?: number
   timeoutPurpose?: "control" | "generation"
@@ -205,7 +204,6 @@ export function createOpenAICompatibleClient(
   async function createChatCompletion({
     messages,
     temperature = 0.2,
-    responseFormat = "text",
     signal,
     timeoutMs: requestTimeoutOverride,
     timeoutPurpose = "generation"
@@ -227,8 +225,7 @@ export function createOpenAICompatibleClient(
         body: JSON.stringify({
           model: provider.model,
           temperature,
-          messages,
-          ...(responseFormat === "json_object" ? { response_format: { type: "json_object" } } : {})
+          messages
         }),
         signal: request.signal
       })
@@ -266,7 +263,6 @@ export function createOpenAICompatibleClient(
           { role: "user", content: 'Reply with the single word "pong".' }
         ],
         temperature: 0,
-        responseFormat: "text",
         timeoutMs: options.timeoutMs ?? DEFAULT_PROVIDER_CONTROL_TIMEOUT_MS,
         timeoutPurpose: "control"
       })

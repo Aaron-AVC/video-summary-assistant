@@ -55,6 +55,53 @@ describe("createOpenAICompatibleClient", () => {
         Authorization: "Bearer sk-test-placeholder"
       })
     )
+    expect(JSON.parse(String(requests[0]?.body))).not.toHaveProperty("response_format")
+  })
+
+  it("keeps final content compatible when a relay misroutes native JSON mode output", async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    const client = createOpenAICompatibleClient(
+      {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-test-placeholder",
+        model: "step-5-preview"
+      },
+      {
+        fetchImpl: async (_input, init) => {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+          bodies.push(body)
+          const message = Object.prototype.hasOwnProperty.call(body, "response_format")
+            ? { content: null, reasoning_content: '{"ok":true}' }
+            : { content: '{"ok":true}', reasoning_content: "actual reasoning" }
+          return new Response(JSON.stringify({ choices: [{ message }] }), { status: 200 })
+        }
+      }
+    )
+
+    await expect(client.createChatCompletion({
+      messages: [{ role: "user", content: "Return JSON." }]
+    })).resolves.toBe('{"ok":true}')
+    expect(bodies).toHaveLength(1)
+    expect(bodies[0]).not.toHaveProperty("response_format")
+  })
+
+  it("does not treat reasoning content as assistant output when content is absent", async () => {
+    const client = createOpenAICompatibleClient(
+      {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-test-placeholder",
+        model: "step-5-preview"
+      },
+      {
+        fetchImpl: async () => new Response(JSON.stringify({
+          choices: [{ message: { content: null, reasoning_content: '{"ok":true}' } }]
+        }), { status: 200 })
+      }
+    )
+
+    await expect(client.createChatCompletion({
+      messages: [{ role: "user", content: "Return JSON." }]
+    })).rejects.toThrow("Provider response did not include assistant content.")
   })
 
   it("flattens structured text content", async () => {
@@ -89,8 +136,7 @@ describe("createOpenAICompatibleClient", () => {
 
     await expect(
       client.createChatCompletion({
-        messages: [{ role: "user", content: "hi" }],
-        responseFormat: "json_object"
+        messages: [{ role: "user", content: "hi" }]
       })
     ).resolves.toBe("first line\nsecond line")
   })

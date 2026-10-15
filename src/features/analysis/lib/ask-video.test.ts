@@ -33,13 +33,13 @@ describe("ask video", () => {
   })
 
   it("repairs invalid structured output exactly once", async () => {
-    const calls: string[] = []
+    const calls: number[] = []
     const responses = ["not json", validAnswer]
     const client = {
       provider: { baseUrl: "https://api.example.com/v1", apiKey: "sk-test-placeholder", model: "gpt-4.1-mini" },
       testConnection: async () => ({ ok: true as const, baseUrl: "https://api.example.com/v1", model: "gpt-4.1-mini", latencyMs: 1 }),
-      createChatCompletion: async ({ responseFormat }: { responseFormat?: string }) => {
-        calls.push(responseFormat ?? "text")
+      createChatCompletion: async () => {
+        calls.push(1)
         return responses.shift() ?? "unexpected"
       }
     }
@@ -50,7 +50,7 @@ describe("ask video", () => {
       client: client as never
     })
     expect(result.repairAttempted).toBe(true)
-    expect(calls).toEqual(["json_object", "json_object"])
+    expect(calls).toHaveLength(2)
   })
 
   it("passes the same abort signal to the initial and repair requests", async () => {
@@ -307,8 +307,8 @@ describe("ask video", () => {
     ).toThrow("Ask AI returned no citations that line up with the transcript.")
   })
 
-  it("runs Ask AI through the provider with JSON response format", async () => {
-    const calls: Array<"json_object" | "text" | undefined> = []
+  it("runs Ask AI through the provider with prompt-only JSON instructions", async () => {
+    const calls: string[] = []
     const result = await askVideo({
       provider: {
         baseUrl: "https://api.example.com/v1",
@@ -333,8 +333,8 @@ describe("ask video", () => {
           model: "gpt-4.1-mini",
           latencyMs: 1
         }),
-        createChatCompletion: async ({ responseFormat }) => {
-          calls.push(responseFormat)
+        createChatCompletion: async ({ messages }) => {
+          calls.push(messages.at(-1)?.content ?? "")
 
           return JSON.stringify({
             answer: "The demo starts after setup.",
@@ -352,7 +352,8 @@ describe("ask video", () => {
       }
     })
 
-    expect(calls).toEqual(["json_object"])
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toContain("Return JSON with keys answer, citations, suggestedJumps, and followUps.")
     expect(result.answer.answer).toBe("The demo starts after setup.")
   })
 
@@ -363,6 +364,7 @@ describe("ask video", () => {
       model: "gpt-4.1-mini"
     }
     const scheduledTimeouts: number[] = []
+    const bodies: string[] = []
     const responses = ["not json", validAnswer]
     const client = createOpenAICompatibleClient(provider, {
       setTimeoutImpl: (_callback, timeoutMs) => {
@@ -370,9 +372,12 @@ describe("ask video", () => {
         return 1
       },
       clearTimeoutImpl: () => undefined,
-      fetchImpl: async () => new Response(JSON.stringify({
-        choices: [{ message: { content: responses.shift() ?? "unexpected" } }]
-      }), { status: 200 })
+      fetchImpl: async (_input, init) => {
+        bodies.push(String(init?.body))
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: responses.shift() ?? "unexpected" } }]
+        }), { status: 200 })
+      }
     })
 
     const result = await askVideo({
@@ -386,6 +391,7 @@ describe("ask video", () => {
       DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
       DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS
     ])
+    expect(bodies.every((body) => !body.includes("response_format"))).toBe(true)
   })
 
   it("does not automatically retry or wrap a provider timeout during Ask Video", async () => {

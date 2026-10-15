@@ -4,7 +4,10 @@ import {
   askVideo,
   buildAskVideoPrompt,
   deriveTranscriptCitationText,
+  HARD_REPAIR_THRESHOLD_SEC,
+  hasInlineCitationResidue,
   MAX_CITATION_TEXT_CHARS,
+  PREFERRED_MAX_CITATION_SPAN_SEC,
   parseAskVideoAnswerPayload
 } from "@/features/analysis/lib/ask-video"
 import {
@@ -110,6 +113,9 @@ describe("ask video", () => {
     expect(prompt.systemPrompt).toContain("prefer the discourse topic established by the user's previous turns")
     expect(prompt.systemPrompt).toContain("does not directly explain")
     expect(prompt.systemPrompt).toContain("smallest transcript span")
+    expect(prompt.systemPrompt).toContain("Do not include footnote numbers")
+    expect(prompt.systemPrompt).toContain("[617.07-660.67]")
+    expect(prompt.systemPrompt).toContain("the root cause")
   })
 
   it("includes bounded conversation history as auxiliary context", () => {
@@ -222,6 +228,96 @@ describe("ask video", () => {
       ],
       followUps: ["What happens next?"]
     })
+  })
+
+  it("rejects numeric inline citation residue but allows ordinary bracketed text", () => {
+    expect(hasInlineCitationResidue("教宗拥有权力[1][2]。" )).toBe(true)
+    expect(hasInlineCitationResidue("教宗拥有权力[1, 2]。" )).toBe(true)
+    expect(hasInlineCitationResidue("变化发生于[617.07-660.67]。" )).toBe(true)
+    expect(hasInlineCitationResidue("术语写作[宗座宪章]。" )).toBe(false)
+    expect(hasInlineCitationResidue("1272—1274年发生改革。" )).toBe(false)
+
+    for (const answer of [
+      "教宗拥有权力[1][2]。",
+      "教宗拥有权力[1, 2]。",
+      "变化发生于[617.07-660.67]。"
+    ]) {
+      expect(() => parseAskVideoAnswerPayload(JSON.stringify({
+        answer,
+        citations: [{ startSec: 10, endSec: 20 }]
+      }), TRANSCRIPT_CUES)).toThrow("inline citation")
+    }
+  })
+
+  it("accepts focused citation spans through the preferred threshold and rejects only hard-broad spans", () => {
+    expect(PREFERRED_MAX_CITATION_SPAN_SEC).toBe(30)
+    expect(HARD_REPAIR_THRESHOLD_SEC).toBe(60)
+    const cues = [
+      { startSec: 100, endSec: 125, text: "First evidence." },
+      { startSec: 125, endSec: 145, text: "Second evidence." },
+      { startSec: 145, endSec: 170, text: "Third evidence." }
+    ]
+    for (const endSec of [125, 145]) {
+      expect(parseAskVideoAnswerPayload(JSON.stringify({
+        answer: "The answer is supported.",
+        citations: [{ startSec: 100, endSec }]
+      }), cues).citations[0].endSec).toBe(endSec)
+    }
+    expect(() => parseAskVideoAnswerPayload(JSON.stringify({
+      answer: "The answer is supported.",
+      citations: [{ startSec: 100, endSec: 170 }]
+    }), cues)).toThrow("too broad")
+  })
+
+  it("repairs inline citation residue and broad citation spans at most once", async () => {
+    const cues = [
+      { startSec: 100, endSec: 125, text: "First evidence." },
+      { startSec: 125, endSec: 145, text: "Second evidence." },
+      { startSec: 145, endSec: 170, text: "Third evidence." }
+    ]
+    const responses = [
+      JSON.stringify({
+        answer: "The answer is supported[1][2].",
+        citations: [{ startSec: 100, endSec: 170 }]
+      }),
+      JSON.stringify({
+        answer: "The answer is supported by the first evidence.",
+        citations: [{ startSec: 100, endSec: 125 }]
+      })
+    ]
+    const prompts: string[] = []
+    const result = await askVideo({
+      provider: {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-test-placeholder",
+        model: "gpt-4.1-mini"
+      },
+      question: "What is supported?",
+      transcript: { videoId: "video-1", cues },
+      client: {
+        provider: {
+          baseUrl: "https://api.example.com/v1",
+          apiKey: "sk-test-placeholder",
+          model: "gpt-4.1-mini"
+        },
+        testConnection: async () => ({
+          ok: true as const,
+          baseUrl: "https://api.example.com/v1",
+          model: "gpt-4.1-mini",
+          latencyMs: 1
+        }),
+        createChatCompletion: async ({ messages }) => {
+          prompts.push(messages.map((message) => message.content).join("\n"))
+          return responses.shift() ?? "unexpected"
+        }
+      }
+    })
+    expect(result.repairAttempted).toBe(true)
+    expect(result.answer.answer).toBe("The answer is supported by the first evidence.")
+    expect(result.answer.citations).toEqual([{ startSec: 100, endSec: 125, text: "First evidence." }])
+    expect(prompts).toHaveLength(2)
+    expect(prompts[1]).toContain("Remove all inline citation markers from answer")
+    expect(prompts[1]).toContain("smallest transcript spans that directly support the answer")
   })
 
   it("derives citation text from overlapping transcript cues and ignores model prose", () => {

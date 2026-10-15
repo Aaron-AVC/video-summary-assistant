@@ -146,7 +146,7 @@ describe("content-aware persistence identities", () => {
       model: "model",
       question: "Why?"
     }
-    expect(VIDEO_QA_PROMPT_VERSION).toBe("video-qa-v3")
+    expect(VIDEO_QA_PROMPT_VERSION).toBe("video-qa-v4")
     expect(buildQaCacheIdentity({ ...base, promptVersion: "video-qa-v2" }).promptVersion)
       .toBe("video-qa-v2")
     expect(await computeQaCacheKey({ ...base, promptVersion: "video-qa-v2" }))

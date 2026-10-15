@@ -1,5 +1,12 @@
 # TASK_STATE
 
+- 当前任务：CR-12D — clean answer citations + focused evidence ranges；实现完成，待追加 commit 并等待独立复审。
+- 修复：Ask prompt 明确禁止 answer 内的脚注号、source ID、timestamp 引用和方括号引用；新增质量校验，检测 numeric inline citation residue 与超过 60 秒的过宽 citation，并通过现有唯一一次 structured repair 要求移除 inline markers、改用最小 transcript spans。30 秒为偏好上限，30–60 秒可接受；citation.text 继续只由 transcript 本地派生。
+- Prompt policy 同时约束因果措辞，避免无证据的“根本原因”“唯一原因”“证明了”；`VIDEO_QA_PROMPT_VERSION` 从 `video-qa-v3` 升级为 `video-qa-v4`，旧 cache namespace 保留，schema version 不变。
+- 未修改 DB migration、i18n、history deletion、Provider transport/timeout、Analysis/Ask lifecycle、platform/transcript acquisition、response_format、reasoning 字段、manifest permissions 或 broad refactor。
+- 自动化验证：`bun test` PASS（363 tests / 0 fail / 1182 expect calls）；项目内 `tsc.exe --noEmit` PASS；项目内 `plasmo.exe build` PASS；`git diff --check` PASS；build manifest permissions 与 `package.json` 配置一致且未变化。
+- Browser smoke：NOT RUN — environment limitation；本轮未运行真实浏览器 smoke，未伪造结果。
+
 - 当前任务：Provider transport follow-up — avoid provider native JSON mode；实现完成，待追加 commit 并等待独立复审。
 - 修复：移除 V1 OpenAI-compatible transport 对 `response_format`/native JSON mode 的依赖；Analysis、Ask、structured repair 继续通过 JSON prompt + 本地 parse/validation + 单次 repair 完成结构化输出。transport 只读取 `message.content`，不会把 `reasoning_content`、`reasoning` 或 `thinking` 当作 assistant 输出；`content` 缺失时明确报错。
 - 未修改 Provider schema、timeout policy、cache/version、DB、manifest permissions、YouTube/Bilibili、字幕链路、Analysis/Ask lifecycle、map-reduce 算法或 prompt 内容边界。

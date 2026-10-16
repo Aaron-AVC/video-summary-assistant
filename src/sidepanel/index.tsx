@@ -40,8 +40,10 @@ import {
 } from "@/features/history/lib/pending-history-open"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
+  admitDestructiveTask,
   performDestructiveOperation,
   subscribeToDestructiveOperations,
+  type TaskAdmissionHandle,
   type DestructiveTaskSnapshot,
 } from "@/features/history/lib/destructive-operation-coordinator"
 import {
@@ -935,8 +937,16 @@ function SidepanelWorkspace() {
     setAskError(null)
 
     const runTask = async () => {
+      let admission: TaskAdmissionHandle | null = null
+      let taskPromise: Promise<void> | null = null
       try {
-        await analysisTaskController.start(taskSnapshot, async ({ taskId, signal, setPhase }) => {
+        admission = await admitDestructiveTask({
+          kind: "analysis",
+          contentKey: taskSnapshot.contentKey,
+          analysisRunId: destructiveWorkspaceRef.current.analysisRunId ?? undefined,
+          phase: "loading-transcript",
+        }, (taskId) => {
+          taskPromise = analysisTaskController.start(taskSnapshot, async ({ taskId, signal, setPhase }) => {
           const task = analysisTaskController.getSnapshot()
           if (!task || task.snapshot.taskId !== taskId) throw new Error("Analysis task is no longer active.")
           const ensureTaskCurrent = () => {
@@ -1186,7 +1196,9 @@ function SidepanelWorkspace() {
             await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
           }
           toast.success(`Analysis completed: ${sourceVideo.title}`)
+          }, { taskId })
         })
+        await taskPromise
       } catch (error) {
         const isAbort = error instanceof AnalysisAbortedError
           || (error instanceof DOMException && error.name === "AbortError")
@@ -1209,6 +1221,8 @@ function SidepanelWorkspace() {
           setAnalysisView((current) => current ? { ...current, errorMessage: message } : null)
         }
         toast.error(message)
+      } finally {
+        admission?.release()
       }
     }
 
@@ -1407,8 +1421,15 @@ function SidepanelWorkspace() {
     setAskError(null)
     const submittedQuestion = askQuestion.trim()
     askStartLockRef.current = true
+    let admission: TaskAdmissionHandle | null = null
     let askSignal: AbortSignal | null = null
     try {
+      admission = await admitDestructiveTask({
+        kind: "ask",
+        contentKey: requestedContentKey,
+        analysisRunId: requestedAnalysisRunId,
+        phase: "preparing",
+      }, () => {})
       let thread = requestThreadId
         ? await qaConversationRepository.getQaThread(requestThreadId)
         : null
@@ -1569,7 +1590,7 @@ function SidepanelWorkspace() {
           setAskAnswer(answer)
         }
         toast.success(`Ask Video answer ready: ${taskSnapshot.videoTitle}`)
-      })
+      }, { taskId: admission.taskId })
       await taskPromise
     } catch (error) {
       const wasCancelled = askSignal?.aborted
@@ -1581,6 +1602,7 @@ function SidepanelWorkspace() {
       if (isCurrentAsk()) setAskError(message)
       toast.error(message)
     } finally {
+      admission?.release()
       pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }

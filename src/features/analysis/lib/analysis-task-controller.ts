@@ -28,6 +28,11 @@ export type AnalysisTaskRunner = (input: {
   setPhase: (phase: AnalysisTaskPhase) => void
 }) => Promise<void>
 
+export type AnalysisTaskStartOptions = {
+  taskId?: string
+  startedAt?: string
+}
+
 export class AnalysisTaskAlreadyRunningError extends Error {
   constructor() {
     super("Another analysis is already running.")
@@ -52,13 +57,17 @@ export class AnalysisTaskController {
     return this.activeTask?.snapshot.taskId === taskId
   }
 
-  start(snapshot: Omit<AnalysisTaskSnapshot, "taskId" | "startedAt">, runner: AnalysisTaskRunner): Promise<void> {
+  start(
+    snapshot: Omit<AnalysisTaskSnapshot, "taskId" | "startedAt">,
+    runner: AnalysisTaskRunner,
+    options: AnalysisTaskStartOptions = {},
+  ): Promise<void> {
     if (this.activeTask) throw new AnalysisTaskAlreadyRunningError()
 
     const taskSnapshot: AnalysisTaskSnapshot = {
       ...snapshot,
-      taskId: crypto.randomUUID(),
-      startedAt: new Date().toISOString(),
+      taskId: options.taskId ?? crypto.randomUUID(),
+      startedAt: options.startedAt ?? new Date().toISOString(),
     }
     const controller = new AbortController()
     this.activeAbortController = controller

@@ -29,6 +29,11 @@ export type AskTaskRunner = (input: {
   setPhase: (phase: AskTaskPhase) => void
 }) => Promise<void>
 
+export type AskTaskStartOptions = {
+  taskId?: string
+  startedAt?: string
+}
+
 export class AskTaskAlreadyRunningError extends Error {
   constructor() {
     super("Another Ask Video request is already running.")
@@ -57,13 +62,14 @@ export class AskTaskController {
   start(
     snapshot: Omit<AskTaskSnapshot, "taskId" | "startedAt">,
     runner: AskTaskRunner,
+    options: AskTaskStartOptions = {},
   ): Promise<void> {
     if (this.activeTask) throw new AskTaskAlreadyRunningError()
 
     const taskSnapshot: AskTaskSnapshot = {
       ...snapshot,
-      taskId: crypto.randomUUID(),
-      startedAt: new Date().toISOString(),
+      taskId: options.taskId ?? crypto.randomUUID(),
+      startedAt: options.startedAt ?? new Date().toISOString(),
     }
     const controller = new AbortController()
     this.activeAbortController = controller

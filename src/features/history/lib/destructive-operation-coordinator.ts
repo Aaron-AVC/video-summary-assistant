@@ -20,6 +20,21 @@ export type DestructiveTaskSnapshot = {
   phase: string
 }
 
+export type TaskAdmissionHandle = {
+  taskId: string
+  release: () => void
+}
+
+export type TaskAdmissionStarter = (taskId: string) => void | Promise<void>
+
+export type DestructiveCoordinatorSerialization = {
+  admitTask: (
+    task: DestructiveTaskSnapshot,
+    starter: TaskAdmissionStarter,
+  ) => Promise<TaskAdmissionHandle>
+  reserveDestructive: <T>(operation: () => Promise<T>) => Promise<T>
+}
+
 export type DestructiveMutation =
   | { type: "delete-analysis-run"; analysisRunId: string }
   | { type: "delete-video-data"; contentKey: string }
@@ -56,10 +71,13 @@ export type DestructiveCoordinatorOptions = {
   createChannel?: () => DestructiveCoordinatorChannel
   responseWindowMs?: number
   createId?: () => string
+  serialization?: DestructiveCoordinatorSerialization
 }
 
 const CHANNEL_NAME = "video-summary-assistant:destructive-coordination:v1"
 const RESPONSE_WINDOW_MS = 180
+const ADMISSION_LOCK_NAME = "video-summary-assistant:task-admission:v1"
+const ACTIVE_TASK_LOCK_PREFIX = "video-summary-assistant:active-task:v1:"
 const ACTIONS: DestructiveAction[] = [
   "delete-analysis-run",
   "delete-video-data",
@@ -79,6 +97,121 @@ function createBrowserChannel(): DestructiveCoordinatorChannel {
 
 function createId() {
   return crypto.randomUUID()
+}
+
+function createDeferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((nextResolve) => {
+    resolve = nextResolve
+  })
+  return { promise, resolve }
+}
+
+function encodeTaskLockDescriptor(task: DestructiveTaskSnapshot) {
+  return encodeURIComponent(JSON.stringify({
+    kind: task.kind,
+    contentKey: task.contentKey,
+    analysisRunId: task.analysisRunId,
+    threadId: task.threadId,
+  }))
+}
+
+function decodeTaskLockDescriptor(name: string): DestructiveTaskSnapshot | null {
+  if (!name.startsWith(ACTIVE_TASK_LOCK_PREFIX)) return null
+  const encoded = name.slice(ACTIVE_TASK_LOCK_PREFIX.length)
+  const separator = encoded.lastIndexOf(":")
+  if (separator <= 0) return null
+  try {
+    const value = JSON.parse(decodeURIComponent(encoded.slice(0, separator))) as unknown
+    if (!isRecord(value) || !isTaskKind(value.kind)) return null
+    return {
+      kind: value.kind,
+      ...(typeof value.contentKey === "string" ? { contentKey: value.contentKey } : {}),
+      ...(typeof value.analysisRunId === "string" ? { analysisRunId: value.analysisRunId } : {}),
+      ...(typeof value.threadId === "string" ? { threadId: value.threadId } : {}),
+      phase: "unknown",
+    }
+  } catch {
+    return null
+  }
+}
+
+function getBrowserLockManager(): LockManager {
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    throw new Error("Data coordination is unavailable in this browser context. Try again after reopening the extension.")
+  }
+  return navigator.locks
+}
+
+function isTaskKind(value: unknown): value is DestructiveTaskSnapshot["kind"] {
+  return value === "analysis" || value === "ask" || value === "unknown"
+}
+
+function createWebLocksSerialization(): DestructiveCoordinatorSerialization {
+  return {
+    async admitTask(task, starter) {
+      const locks = getBrowserLockManager()
+      const taskId = createId()
+      const releaseTask = createDeferred()
+      let taskReady!: () => void
+      const taskReadyPromise = new Promise<void>((resolve) => {
+        taskReady = resolve
+      })
+      let taskLockPromise: Promise<void> | null = null
+      try {
+        const admitted = await locks.request(
+          ADMISSION_LOCK_NAME,
+          { ifAvailable: true },
+          async (lock) => {
+            if (!lock) return false
+            taskLockPromise = locks.request<void>(
+              `${ACTIVE_TASK_LOCK_PREFIX}${encodeTaskLockDescriptor(task)}:${taskId}`,
+              { mode: "shared" },
+              async (activeTaskLock) => {
+                if (!activeTaskLock) throw new Error("Could not acquire task admission lock.")
+                taskReady()
+                await releaseTask.promise
+              },
+            )
+            await taskReadyPromise
+            await starter(taskId)
+            return true
+          },
+        )
+
+        if (!admitted) throw new DestructiveOperationBlockedError()
+      } catch (error) {
+        releaseTask.resolve()
+        if (taskLockPromise) await taskLockPromise.catch(() => {})
+        throw error
+      }
+
+      let released = false
+      return {
+        taskId,
+        release: () => {
+          if (released) return
+          released = true
+          releaseTask.resolve()
+          void taskLockPromise
+        },
+      }
+    },
+
+    async reserveDestructive(operation) {
+      return getBrowserLockManager().request(
+        ADMISSION_LOCK_NAME,
+        async (lock) => {
+          if (!lock) throw new Error("Could not acquire destructive-operation reservation.")
+          return await operation()
+        },
+      )
+    },
+  }
+}
+
+function getDefaultSerialization() {
+  return createWebLocksSerialization()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -150,7 +283,7 @@ export async function queryActiveDestructiveTasks(
   const requestId = (options.createId ?? createId)()
   const responders = new Map<string, DestructiveTaskSnapshot[]>()
 
-  return new Promise((resolve) => {
+  const snapshots = await new Promise<DestructiveTaskSnapshot[]>((resolve) => {
     const timeout = setTimeout(() => {
       channel.onmessage = null
       channel.close()
@@ -176,6 +309,23 @@ export async function queryActiveDestructiveTasks(
       resolve([{ kind: "unknown", phase: "coordination-error" }])
     }
   })
+
+  if (typeof navigator === "undefined" || !navigator.locks?.query) return snapshots
+  let heldLocks: LockManagerSnapshot
+  try {
+    heldLocks = await navigator.locks.query()
+  } catch {
+    return [...snapshots, { kind: "unknown", phase: "lock-query-error" }]
+  }
+  const lockTasks = heldLocks.held
+    .map((lock) => decodeTaskLockDescriptor(lock.name))
+    .filter((task): task is DestructiveTaskSnapshot => task !== null)
+  return [...snapshots, ...lockTasks.filter((lockTask) => !snapshots.some((snapshot) => (
+    snapshot.kind === lockTask.kind
+      && snapshot.contentKey === lockTask.contentKey
+      && snapshot.analysisRunId === lockTask.analysisRunId
+      && snapshot.threadId === lockTask.threadId
+  )))]
 }
 
 export function publishDestructiveMutation(
@@ -238,12 +388,21 @@ export class DestructiveOperationBlockedError extends Error {
   }
 }
 
+export async function admitDestructiveTask(
+  task: DestructiveTaskSnapshot,
+  starter: TaskAdmissionStarter,
+  options: Pick<DestructiveCoordinatorOptions, "serialization"> = {},
+): Promise<TaskAdmissionHandle> {
+  return (options.serialization ?? getDefaultSerialization()).admitTask(task, starter)
+}
+
 export type PerformDestructiveOperationOptions = {
   checkConflicts?: (
     action: DestructiveAction,
     target: DestructiveOperationTarget,
   ) => Promise<DestructiveTaskSnapshot[]>
   broadcastMutation?: (mutation: DestructiveMutation) => void
+  serialization?: DestructiveCoordinatorSerialization
 }
 
 export async function performDestructiveOperation(
@@ -252,13 +411,23 @@ export async function performDestructiveOperation(
   mutate: () => Promise<void>,
   options: PerformDestructiveOperationOptions = {},
 ): Promise<void> {
-  const tasks = await (options.checkConflicts ?? queryActiveDestructiveTasks)(action, target)
-  if (getDestructiveTaskConflicts(action, target, tasks).length > 0) {
-    throw new DestructiveOperationBlockedError()
+  const execute = async () => {
+    const tasks = await (options.checkConflicts ?? queryActiveDestructiveTasks)(action, target)
+    if (getDestructiveTaskConflicts(action, target, tasks).length > 0) {
+      throw new DestructiveOperationBlockedError()
+    }
+    await mutate()
+    const mutation = mutationForAction(action, target)
+    ;(options.broadcastMutation ?? publishDestructiveMutation)(mutation)
   }
-  await mutate()
-  const mutation = mutationForAction(action, target)
-  ;(options.broadcastMutation ?? publishDestructiveMutation)(mutation)
+
+  // Injected conflict checks are retained for narrow unit tests that exercise
+  // the conflict rules without a browser lock implementation.
+  if (options.serialization || !options.checkConflicts) {
+    await (options.serialization ?? getDefaultSerialization()).reserveDestructive(execute)
+    return
+  }
+  await execute()
 }
 
 export function mutationForAction(

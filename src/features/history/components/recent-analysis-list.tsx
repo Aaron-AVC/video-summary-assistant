@@ -1,4 +1,4 @@
-import { Clock3, FolderOpen, History, Search } from "lucide-react"
+import { Clock3, FolderOpen, History, MoreVertical, Search, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +33,8 @@ type RecentAnalysisListProps = {
   activeVideoId: string | null
   activeAnalysisRunId?: string | null
   onSelect: (videoId: string, contentKey?: string, analysisRunId?: string) => void | Promise<void>
+  onDeleteAnalysis?: (item: RecentAnalysisListItem) => void | Promise<void>
+  onDeleteVideo?: (item: RecentAnalysisListItem) => void | Promise<void>
   onOpenFullHistory?: () => void
   searchable?: boolean
   searchPlaceholder?: string
@@ -46,6 +48,8 @@ export function RecentAnalysisList({
   activeVideoId,
   activeAnalysisRunId = null,
   onSelect,
+  onDeleteAnalysis,
+  onDeleteVideo,
   onOpenFullHistory,
   searchable = true,
   searchPlaceholder = "Search saved analyses",
@@ -115,10 +119,17 @@ export function RecentAnalysisList({
                   : item.videoId === activeVideoId
 
                 return (
-                  <button
+                  <div
                     key={item.analysisRunId ?? item.contentKey ?? item.videoId}
-                    type="button"
                     onClick={() => onSelect(item.videoId, item.contentKey, item.analysisRunId)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        void onSelect(item.videoId, item.contentKey, item.analysisRunId)
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                     className={cn(
                       "w-full rounded-2xl border p-4 text-left transition-colors",
                       isActive
@@ -132,9 +143,40 @@ export function RecentAnalysisList({
                           {item.channelTitle ?? "Unknown channel"}
                         </p>
                       </div>
-                      <Badge variant="secondary" className="rounded-full px-3 py-1">
-                        {item.status ?? "saved"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="rounded-full px-3 py-1">
+                          {item.status ?? "saved"}
+                        </Badge>
+                        {(item.analysisRunId && onDeleteAnalysis) || (item.contentKey && onDeleteVideo) ? (
+                          <details className="relative" onClick={(event) => event.stopPropagation()}>
+                            <summary
+                              className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+                              aria-label="More actions">
+                              <MoreVertical className="h-4 w-4" />
+                            </summary>
+                            <div className="absolute right-0 z-10 mt-1 min-w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
+                              {item.analysisRunId && onDeleteAnalysis ? (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-destructive hover:bg-destructive/10"
+                                  onClick={() => void onDeleteAnalysis(item)}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Delete this analysis
+                                </button>
+                              ) : null}
+                              {item.contentKey && onDeleteVideo ? (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-destructive hover:bg-destructive/10"
+                                  onClick={() => void onDeleteVideo(item)}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Delete all data for this video
+                                </button>
+                              ) : null}
+                            </div>
+                          </details>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
@@ -146,7 +188,7 @@ export function RecentAnalysisList({
                         Open
                       </span>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>

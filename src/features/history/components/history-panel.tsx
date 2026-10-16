@@ -80,12 +80,29 @@ export function HistoryPanel() {
     }
   }, [])
 
+  const handleDeleteAnalysis = useCallback(async (item: RecentAnalysisListItem) => {
+    if (!item.analysisRunId) return
+    if (!window.confirm(`Delete this saved analysis?\n\n${item.title}`)) return
+    await historyRepository.deleteAnalysisRun(item.analysisRunId)
+    await reload()
+  }, [reload])
+
+  const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
+    if (!item.contentKey) return
+    if (!window.confirm(`Delete all local data for this video?\n\n${item.title}\n\nThis removes its analyses, Ask data, transcript cache, and video record.`)) return
+    if (!window.confirm(`Confirm deleting all data for “${item.title}”.`)) return
+    await historyRepository.deleteVideoData(item.contentKey)
+    await reload()
+  }, [reload])
+
   return (
     <RecentAnalysisList
       items={items}
       isLoading={isLoading}
       activeVideoId={null}
       onSelect={handleSelect}
+      onDeleteAnalysis={handleDeleteAnalysis}
+      onDeleteVideo={handleDeleteVideo}
       searchPlaceholder="Search history (title, channel, video ID)"
       emptyMatchMessage="No history entries match your search."
       scrollHeightClassName="h-[32rem]"

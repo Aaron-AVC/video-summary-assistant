@@ -11,7 +11,6 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
   settingsStorage,
@@ -35,6 +34,10 @@ type DataInventory = {
   analysisRuns: number
   segmentSummaries: number
   recentVideos: number
+  videoRecords: number
+  transcriptCache: number
+  analysisCache: number
+  qaAnswers: number
   qaThreads: number
   qaMessages: number
   diagnosticLogs: number
@@ -46,6 +49,10 @@ const EMPTY_INVENTORY: DataInventory = {
   analysisRuns: 0,
   segmentSummaries: 0,
   recentVideos: 0,
+  videoRecords: 0,
+  transcriptCache: 0,
+  analysisCache: 0,
+  qaAnswers: 0,
   qaThreads: 0,
   qaMessages: 0,
   diagnosticLogs: 0
@@ -65,6 +72,9 @@ type DataManagementDependencies = {
   clearSettings: () => Promise<void>
   clearLocalData: () => Promise<void>
   clearTranscriptLogs: () => Promise<void>
+  clearQaData?: () => Promise<void>
+  clearTranscriptCache?: () => Promise<void>
+  clearAnalysisHistory?: () => Promise<void>
 }
 
 const dataManagementDependencies: DataManagementDependencies = {
@@ -73,7 +83,10 @@ const dataManagementDependencies: DataManagementDependencies = {
   getTranscriptLogs,
   clearSettings: () => settingsStorage.clearSettings(),
   clearLocalData: () => historyRepository.clearAll(),
-  clearTranscriptLogs
+  clearTranscriptLogs,
+  clearQaData: () => historyRepository.clearQaData(),
+  clearTranscriptCache: () => historyRepository.clearTranscriptCache(),
+  clearAnalysisHistory: () => historyRepository.clearAnalysisHistory()
 }
 
 export async function createDataManagementSnapshot(
@@ -104,11 +117,40 @@ export async function clearDataManagementStores(
   ])
 }
 
+export type DataClearAction =
+  | "conversations"
+  | "transcript-cache"
+  | "analysis-history"
+  | "diagnostics"
+  | "all"
+
+export async function clearCategorizedData(
+  action: DataClearAction,
+  dependencies = dataManagementDependencies
+): Promise<void> {
+  if (action === "conversations") {
+    await dependencies.clearQaData?.()
+    return
+  }
+  if (action === "transcript-cache") {
+    await dependencies.clearTranscriptCache?.()
+    return
+  }
+  if (action === "analysis-history") {
+    await dependencies.clearAnalysisHistory?.()
+    return
+  }
+  if (action === "diagnostics") {
+    await dependencies.clearTranscriptLogs()
+    return
+  }
+  await clearDataManagementStores(dependencies)
+}
+
 export function DataManagement({ onDataCleared }: DataManagementProps) {
   const [inventory, setInventory] = useState<DataInventory>(EMPTY_INVENTORY)
   const [isExporting, setIsExporting] = useState(false)
-  const [isClearing, setIsClearing] = useState(false)
-  const [isArmed, setIsArmed] = useState(false)
+  const [clearingAction, setClearingAction] = useState<DataClearAction | null>(null)
   const [feedback, setFeedback] = useState<{
     state: "idle" | "success" | "error"
     title: string
@@ -131,6 +173,10 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         inventory.analysisRuns,
         inventory.segmentSummaries,
         inventory.recentVideos,
+        inventory.videoRecords,
+        inventory.transcriptCache,
+        inventory.analysisCache,
+        inventory.qaAnswers,
         inventory.qaThreads,
         inventory.qaMessages,
         inventory.diagnosticLogs
@@ -142,11 +188,15 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
     const { settings, localData, diagnosticLogs } = await createDataManagementSnapshot()
 
     setInventory({
-      providerConfigs: settings.providerConfigs.length,
+      providerConfigs: settings.providerConfigs.length + localData.providerConfigs.length,
       transcriptSnapshots: localData.transcriptSnapshots.length,
       analysisRuns: localData.analysisRuns.length,
       segmentSummaries: localData.segmentSummaries.length,
       recentVideos: localData.recentVideos.length,
+      videoRecords: localData.videoRecords?.length ?? 0,
+      transcriptCache: localData.transcriptCache?.length ?? 0,
+      analysisCache: localData.analysisCache?.length ?? 0,
+      qaAnswers: localData.qaAnswers?.length ?? 0,
       qaThreads: localData.qaThreads?.length ?? 0,
       qaMessages: localData.qaMessages?.length ?? 0,
       diagnosticLogs: diagnosticLogs.length
@@ -181,37 +231,30 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
     }
   }
 
-  async function handleClear() {
-    if (!isArmed) {
-      setFeedback({
-        state: "error",
-        title: "Confirm destructive action first",
-        message: "Enable the confirmation switch before clearing local data."
-      })
-      return
-    }
+  async function handleClear(action: DataClearAction, label: string, explanation: string) {
+    if (typeof window !== "undefined" && !window.confirm(`${label}\n\n${explanation}\n\nContinue?`)) return
+    if (typeof window !== "undefined" && !window.confirm(`Confirm ${label.toLowerCase()} one more time.`)) return
 
-    setIsClearing(true)
+    setClearingAction(action)
     setFeedback({ state: "idle", title: "", message: "" })
 
     try {
-      await clearDataManagementStores()
+      await clearCategorizedData(action)
       await refreshInventory()
-      setIsArmed(false)
       onDataCleared?.()
       setFeedback({
         state: "success",
-        title: "Local data cleared",
-        message: "Saved providers, transcripts, runs, recent video history, Ask Video conversations, and diagnostic logs were removed."
+        title: `${label} complete`,
+        message: explanation
       })
     } catch (error) {
       setFeedback({
         state: "error",
-        title: "Could not clear local data",
+        title: `Could not ${label.toLowerCase()}`,
         message: error instanceof Error ? error.message : "Unknown clear error."
       })
     } finally {
-      setIsClearing(false)
+      setClearingAction(null)
     }
   }
 
@@ -230,12 +273,16 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <InventoryStat label="Providers" value={inventory.providerConfigs} />
           <InventoryStat label="Transcripts" value={inventory.transcriptSnapshots} />
           <InventoryStat label="Runs" value={inventory.analysisRuns} />
           <InventoryStat label="Segments" value={inventory.segmentSummaries} />
           <InventoryStat label="Recent videos" value={inventory.recentVideos} />
+          <InventoryStat label="Video records" value={inventory.videoRecords} />
+          <InventoryStat label="Transcript cache" value={inventory.transcriptCache} />
+          <InventoryStat label="Analysis cache" value={inventory.analysisCache} />
+          <InventoryStat label="QA answers" value={inventory.qaAnswers} />
           <InventoryStat label="QA threads" value={inventory.qaThreads} />
           <InventoryStat label="QA messages" value={inventory.qaMessages} />
           <InventoryStat label="Diagnostic logs" value={inventory.diagnosticLogs} />
@@ -274,43 +321,33 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
           <SettingsSection className="flex h-full min-w-0 flex-col gap-4 border-destructive/20 bg-destructive/5">
             <div className="flex min-w-0 items-start justify-between gap-4">
               <div className="min-w-0 space-y-2">
-                <p className="text-sm font-medium text-foreground">
-                  Clear all local analysis data
-                </p>
+                <p className="text-sm font-medium text-foreground">Categorized local data controls</p>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  This removes {totalRecords} locally stored record{totalRecords === 1 ? "" : "s"} including
-                  provider settings, transcript caches, saved analysis history,
-                  and diagnostic logs.
+                  Each action has its own confirmation and only removes the named data domain. Current inventory: {totalRecords} records.
                 </p>
               </div>
               <Trash2 className="mt-1 h-4 w-4 shrink-0 text-destructive" />
             </div>
-
-            <label className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-destructive/20 bg-background/90 px-4 py-3">
-              <div className="min-w-0 space-y-1">
-                <span className="text-sm font-medium text-foreground">
-                  I understand this cannot be undone
-                </span>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Turn this on to enable the destructive clear action.
-                </p>
-              </div>
-              <Switch checked={isArmed} onCheckedChange={setIsArmed} />
-            </label>
-
-            <Button
-              className="w-fit rounded-xl"
-              disabled={isClearing || !isArmed}
-              onClick={handleClear}
-              type="button"
-              variant="destructive">
-              {isClearing ? (
-                <Loader2 data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <Trash2 data-icon="inline-start" />
-              )}
-              Clear local data
-            </Button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                ["conversations", "Clear conversations", "Ask history/cache only."],
+                ["transcript-cache", "Clear transcript cache", "Reusable transcript cache only; saved analysis snapshots stay."],
+                ["analysis-history", "Clear analysis history", "Analyses plus dependent Ask conversations; providers and transcript cache stay."],
+                ["diagnostics", "Clear diagnostics", "Diagnostic transcript logs only."],
+                ["all", "Clear all extension data", "Providers, all local data, and logs."]
+              ] as const).map(([action, label, explanation]) => (
+                <Button
+                  key={action}
+                  className="justify-start rounded-xl"
+                  disabled={clearingAction !== null}
+                  onClick={() => void handleClear(action, label, explanation)}
+                  type="button"
+                  variant={action === "all" ? "destructive" : "outline"}>
+                  {clearingAction === action ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Trash2 data-icon="inline-start" />}
+                  {label}
+                </Button>
+              ))}
+            </div>
           </SettingsSection>
         </div>
 

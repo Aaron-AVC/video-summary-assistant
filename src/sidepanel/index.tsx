@@ -1152,6 +1152,58 @@ function SidepanelWorkspace() {
     toast.success("Loaded saved analysis from local history.")
   }, [loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun])
 
+  const hasActiveTaskForContent = useCallback((contentKey?: string) => {
+    if (!contentKey) return false
+    return activeAnalysisTask?.snapshot.contentKey === contentKey
+      || activeAskTask?.snapshot.contentKey === contentKey
+  }, [activeAnalysisTask, activeAskTask])
+
+  const handleDeleteAnalysis = useCallback(async (item: RecentAnalysisListItem) => {
+    if (!item.analysisRunId) return
+    if (hasActiveTaskForContent(item.contentKey)) {
+      toast.error("Cancel the active task before deleting this analysis.")
+      return
+    }
+    if (!window.confirm(`Delete this saved analysis?\n\n${item.title}`)) return
+    await historyRepository.deleteAnalysisRun(item.analysisRunId)
+    if (analysisView?.analysisRunId === item.analysisRunId) {
+      loadWorkspaceGenerationRef.current += 1
+      qaLoadGenerationRef.current += 1
+      setAnalysisView(null)
+      setAnalysisPhase("idle")
+      setAnalysisError(null)
+      clearQaWorkspace()
+    }
+    await refreshRecentAnalyses()
+    toast.success("Saved analysis deleted.")
+  }, [analysisView?.analysisRunId, clearQaWorkspace, hasActiveTaskForContent, refreshRecentAnalyses])
+
+  const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
+    if (!item.contentKey) return
+    if (hasActiveTaskForContent(item.contentKey)) {
+      toast.error("Cancel the active task before deleting this video data.")
+      return
+    }
+    if (!window.confirm(`Delete all local data for this video?\n\n${item.title}`)) return
+    if (!window.confirm(`This removes analyses, Ask data, transcript cache, and the video record for “${item.title}”. Continue?`)) return
+    await historyRepository.deleteVideoData(item.contentKey)
+    if (analysisView?.contentKey === item.contentKey) {
+      loadWorkspaceGenerationRef.current += 1
+      qaLoadGenerationRef.current += 1
+      transcriptLoadGenerationRef.current += 1
+      setAnalysisView(null)
+      setAnalysisPhase("idle")
+      setAnalysisError(null)
+      setRawVtt(null)
+      setTranscriptCues([])
+      setTranscriptIdentity(null)
+      setCurrentTranscriptFingerprint(null)
+      clearQaWorkspace()
+    }
+    await refreshRecentAnalyses()
+    toast.success("All local data for this video was deleted.")
+  }, [analysisView?.contentKey, clearQaWorkspace, hasActiveTaskForContent, refreshRecentAnalyses])
+
   useEffect(() => {
     let isCurrent = true
     const consumePayload = async (rawValue: unknown) => {
@@ -1618,6 +1670,8 @@ function SidepanelWorkspace() {
             onConfigureProvider={() => setActiveTab("settings")}
             onJump={handleAnalysisJump}
             onSelectHistory={handleOpenSavedAnalysis}
+            onDeleteAnalysis={handleDeleteAnalysis}
+            onDeleteVideo={handleDeleteVideo}
             onOpenFullHistory={() => {
               const url = chrome.runtime.getURL("options.html#history")
               void chrome.tabs.create({ url })

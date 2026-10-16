@@ -1,5 +1,12 @@
 # TASK_STATE
 
+- 当前任务：Granular History Deletion / Data Management；实现完成，待独立复审。
+- 已加入 repository 级 `deleteAnalysisRun`、`deleteVideoData`、`clearQaData`、`clearTranscriptCache`、`clearAnalysisHistory`，均通过 Dexie rw transaction；单 run 删除保留 provider、transcript source/cache、videoRecord 与其他 run，contentKey 删除按 canonical identity 清理分析、Ask、transcript cache/snapshots、videoRecord 和兼容 history。
+- Data 管理已改为独立的 Clear conversations、Clear transcript cache、Clear analysis history、Clear diagnostics、Clear all extension data 操作，每项使用独立双确认；inventory/export 覆盖 videoRecords、transcriptCache、analysisCache、qaAnswers、QA threads/messages 与 diagnostics。
+- Recent/Full History 增加 per-run overflow actions；当前 Side Panel 删除当前 run/video 后会清理对应 analysis/Ask workspace，active matching task 时 fail-safe 阻止删除。
+- 本轮不修改 DB migration、i18n、Provider transport、Analysis/Ask lifecycle、platform transcript acquisition 或 manifest permissions；Browser smoke：NOT RUN。
+- 自动化验证：`bun test` PASS（369 tests / 0 fail / 1210 expect calls）；项目内 `tsc.exe --noEmit` PASS；项目内 `plasmo.exe build` PASS；`git diff --check` PASS；build manifest permissions 与 `package.json` 配置一致且未变化。
+
 - 当前任务：CR-12D — clean answer citations + focused evidence ranges；实现完成，待追加 commit 并等待独立复审。
 - 修复：Ask prompt 明确禁止 answer 内的脚注号、source ID、timestamp 引用和方括号引用；新增质量校验，检测 numeric inline citation residue 与超过 60 秒的过宽 citation，并通过现有唯一一次 structured repair 要求移除 inline markers、改用最小 transcript spans。30 秒为偏好上限，30–60 秒可接受；citation.text 继续只由 transcript 本地派生。
 - Prompt policy 同时约束因果措辞，避免无证据的“根本原因”“唯一原因”“证明了”；`VIDEO_QA_PROMPT_VERSION` 从 `video-qa-v3` 升级为 `video-qa-v4`，旧 cache namespace 保留，schema version 不变。

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
 import {
+  clearCategorizedData,
   clearDataManagementStores,
   createDataManagementSnapshot
 } from "@/features/settings/components/data-management"
@@ -71,6 +72,30 @@ const diagnosticLogs: TranscriptLogEntry[] = [
 ]
 
 describe("data-management storage lifecycle", () => {
+  it("clears only the selected data category", async () => {
+    const cleared: string[] = []
+    const dependencies = {
+      exportSettings: async () => settingsSnapshot,
+      exportLocalData: async () => localData,
+      getTranscriptLogs: async () => [],
+      clearSettings: async () => { cleared.push("settings") },
+      clearLocalData: async () => { cleared.push("all-local") },
+      clearTranscriptLogs: async () => { cleared.push("diagnostics") },
+      clearQaData: async () => { cleared.push("conversations") },
+      clearTranscriptCache: async () => { cleared.push("transcript-cache") },
+      clearAnalysisHistory: async () => { cleared.push("analysis-history") }
+    }
+
+    await clearCategorizedData("conversations", dependencies)
+    expect(cleared).toEqual(["conversations"])
+    await clearCategorizedData("transcript-cache", dependencies)
+    expect(cleared).toEqual(["conversations", "transcript-cache"])
+    await clearCategorizedData("analysis-history", dependencies)
+    expect(cleared).toEqual(["conversations", "transcript-cache", "analysis-history"])
+    await clearCategorizedData("diagnostics", dependencies)
+    expect(cleared).toEqual(["conversations", "transcript-cache", "analysis-history", "diagnostics"])
+  })
+
   it("includes diagnostic transcript logs in exports", async () => {
     const snapshot = await createDataManagementSnapshot(
       {

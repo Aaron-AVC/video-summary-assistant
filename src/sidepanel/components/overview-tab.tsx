@@ -30,6 +30,8 @@ type OverviewTabProps = {
   onConfigureProvider: () => void
   onJump: (timestampSeconds: number) => void | Promise<void>
   onSelectHistory: (videoId: string, contentKey?: string, analysisRunId?: string) => void | Promise<void>
+  onDeleteAnalysis?: (item: RecentAnalysisListItem) => void | Promise<void>
+  onDeleteVideo?: (item: RecentAnalysisListItem) => void | Promise<void>
   onOpenFullHistory: () => void
   formatTimestamp: (timestampSeconds: number) => string
 }
@@ -52,6 +54,8 @@ export function OverviewTab({
   onConfigureProvider,
   onJump,
   onSelectHistory,
+  onDeleteAnalysis,
+  onDeleteVideo,
   onOpenFullHistory,
   formatTimestamp,
 }: OverviewTabProps) {
@@ -105,6 +109,8 @@ export function OverviewTab({
         activeVideoId={activeVideoId}
         activeAnalysisRunId={activeAnalysisRunId}
         onSelect={onSelectHistory}
+        onDeleteAnalysis={onDeleteAnalysis}
+        onDeleteVideo={onDeleteVideo}
         onOpenFullHistory={onOpenFullHistory}
         scrollHeightClassName="h-[16rem]"
       />

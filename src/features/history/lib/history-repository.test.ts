@@ -29,8 +29,8 @@ class FakeTable<T extends Row> {
     if (this.putShouldThrow) {
       throw this.putShouldThrow
     }
-    const key = (row.videoId ?? row.id) as string
-    this.rows = this.rows.filter((existing) => (existing.videoId ?? existing.id) !== key)
+    const key = this.keyOf(row)
+    this.rows = this.rows.filter((existing) => !this.matchesKey(existing, key))
     this.rows.push(row)
   }
 
@@ -42,7 +42,15 @@ class FakeTable<T extends Row> {
 
   async bulkDelete(keys: string[]) {
     const set = new Set(keys)
-    this.rows = this.rows.filter((row) => !set.has((row.videoId ?? row.id) as string))
+    this.rows = this.rows.filter((row) => ![...set].some((key) => this.matchesKey(row, key)))
+  }
+
+  async get(key: string) {
+    return this.rows.find((row) => this.matchesKey(row, key))
+  }
+
+  async delete(key: string) {
+    this.rows = this.rows.filter((row) => !this.matchesKey(row, key))
   }
 
   async clear() {
@@ -57,6 +65,16 @@ class FakeTable<T extends Row> {
       })
     }
   }
+
+  private keyOf(row: T) {
+    const value = row as T & { cacheKey?: string; contentKey?: string }
+    return (value.videoId ?? value.id ?? value.cacheKey ?? value.contentKey) as string
+  }
+
+  private matchesKey(row: T, key: string) {
+    const value = row as T & { cacheKey?: string; contentKey?: string }
+    return value.videoId === key || value.id === key || value.cacheKey === key || value.contentKey === key
+  }
 }
 
 function buildFakeDatabase() {
@@ -65,6 +83,9 @@ function buildFakeDatabase() {
   const analysisRuns = new FakeTable<AnalysisRunEntity & Row>()
   const segmentSummaries = new FakeTable<SegmentSummaryEntity & Row>()
   const recentVideos = new FakeTable<RecentVideoEntity & Row>()
+  const videoRecords = new FakeTable<any>()
+  const transcriptCache = new FakeTable<any>()
+  const analysisCache = new FakeTable<any>()
   const qaThreads = new FakeTable<any>()
   const qaMessages = new FakeTable<any>()
   const qaAnswers = new FakeTable<any>()
@@ -75,6 +96,9 @@ function buildFakeDatabase() {
     analysisRuns,
     segmentSummaries,
     recentVideos,
+    videoRecords,
+    transcriptCache,
+    analysisCache,
     qaThreads,
     qaMessages,
     qaAnswers,
@@ -464,5 +488,194 @@ describe("historyRepository Ask Video persistence", () => {
     expect(fake.qaThreads.rows).toHaveLength(0)
     expect(fake.qaMessages.rows).toHaveLength(0)
     expect(fake.qaAnswers.rows).toHaveLength(0)
+  })
+})
+
+describe("historyRepository granular deletion", () => {
+  function seedRun(
+    id: string,
+    contentKey: string,
+    videoId: string,
+    cacheKey: string,
+  ): AnalysisRunEntity {
+    return {
+      ...buildAnalysisRun(),
+      id,
+      videoId,
+      contentKey,
+      platform: contentKey.startsWith("bilibili:") ? "bilibili" : "youtube",
+      partId: contentKey.includes(":p:") ? contentKey.split(":p:")[1] ?? null : null,
+      analysisCacheKey: cacheKey,
+      transcriptSnapshotId: `snapshot-${id}`,
+      updatedAt: id === "run-b" ? "2026-05-05T12:00:00.000Z" : NOW,
+      completedAt: id === "run-b" ? "2026-05-05T12:00:00.000Z" : NOW,
+    }
+  }
+
+  function seedDependentRows(fake: ReturnType<typeof buildFakeDatabase>, run: AnalysisRunEntity) {
+    fake.segmentSummaries.rows.push({
+      id: `segment-${run.id}`,
+      analysisRunId: run.id,
+      videoId: run.videoId,
+      title: "Segment",
+      summary: "Summary",
+      startSec: 0,
+      endSec: 1,
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    fake.analysisCache.rows.push({
+      cacheKey: run.analysisCacheKey,
+      contentKey: run.contentKey,
+      analysisRunId: run.id,
+    })
+    fake.qaAnswers.rows.push({
+      cacheKey: `answer-${run.id}`,
+      contentKey: run.contentKey,
+      analysisRunId: run.id,
+    })
+    fake.qaThreads.rows.push({
+      id: `thread-${run.id}`,
+      contentKey: run.contentKey,
+      analysisRunId: run.id,
+    })
+    fake.qaMessages.rows.push({
+      id: `message-${run.id}`,
+      threadId: `thread-${run.id}`,
+    })
+    fake.recentVideos.rows.push({
+      videoId: run.videoId,
+      analysisRunId: run.id,
+      contentKey: run.contentKey,
+      title: run.videoId,
+      channelTitle: null,
+      thumbnailUrl: null,
+      status: "completed",
+      updatedAt: run.updatedAt,
+      openedAt: run.createdAt,
+      analyzedAt: run.completedAt,
+    })
+  }
+
+  it("deletes one run and its dependent analysis/Ask rows while preserving another run and shared transcript", async () => {
+    const fake = buildFakeDatabase()
+    const runA = seedRun("run-a", "youtube:video-a", "video-a", "cache-a")
+    const runB = seedRun("run-b", "youtube:video-b", "video-b", "cache-b")
+    fake.analysisRuns.rows.push(runA, runB)
+    seedDependentRows(fake, runA)
+    seedDependentRows(fake, runB)
+    fake.transcriptCache.rows.push({ id: "transcript-a", contentKey: runA.contentKey, fingerprint: "fp-a" })
+    fake.videoRecords.rows.push({ contentKey: runA.contentKey, videoId: runA.videoId })
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    await repo.deleteAnalysisRun(runA.id)
+
+    expect(fake.analysisRuns.rows.map((row) => row.id)).toEqual([runB.id])
+    expect(fake.segmentSummaries.rows.map((row) => row.analysisRunId)).toEqual([runB.id])
+    expect(fake.analysisCache.rows.map((row) => row.cacheKey)).toEqual([runB.analysisCacheKey])
+    expect(fake.qaAnswers.rows.map((row) => row.analysisRunId)).toEqual([runB.id])
+    expect(fake.qaThreads.rows.map((row) => row.analysisRunId)).toEqual([runB.id])
+    expect(fake.qaMessages.rows.map((row) => row.threadId)).toEqual([`thread-${runB.id}`])
+    expect(fake.transcriptCache.rows).toHaveLength(1)
+    expect(fake.videoRecords.rows).toHaveLength(1)
+  })
+
+  it("does not resurrect a deleted run through legacy recentVideos", async () => {
+    const fake = buildFakeDatabase()
+    const run = seedRun("run-a", "youtube:video-a", "video-a", "cache-a")
+    fake.analysisRuns.rows.push(run)
+    seedDependentRows(fake, run)
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await repo.deleteAnalysisRun(run.id)
+
+    expect(await repo.listRecentAnalyses()).toHaveLength(0)
+  })
+
+  it("deletes all data for one Bilibili part while preserving the other part", async () => {
+    const fake = buildFakeDatabase()
+    const part1 = seedRun("run-p1", "bilibili:BV1:p:1", "BV1", "cache-p1")
+    const part2 = seedRun("run-p2", "bilibili:BV1:p:2", "BV1", "cache-p2")
+    fake.analysisRuns.rows.push(part1, part2)
+    seedDependentRows(fake, part1)
+    seedDependentRows(fake, part2)
+    fake.transcriptCache.rows.push(
+      { id: "transcript-p1", contentKey: part1.contentKey },
+      { id: "transcript-p2", contentKey: part2.contentKey },
+    )
+    fake.videoRecords.rows.push(
+      { contentKey: part1.contentKey, videoId: "BV1", partId: "1" },
+      { contentKey: part2.contentKey, videoId: "BV1", partId: "2" },
+    )
+    fake.transcriptSnapshots.rows.push(
+      {
+        id: "snapshot-p1",
+        videoId: "BV1",
+        contentKey: part1.contentKey,
+        language: "zh",
+        sourceUrl: null,
+        rawVtt: null,
+        cues: [],
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+      {
+        id: "snapshot-p2",
+        videoId: "BV1",
+        contentKey: part2.contentKey,
+        language: "zh",
+        sourceUrl: null,
+        rawVtt: null,
+        cues: [],
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    )
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    await repo.deleteVideoData(part1.contentKey!)
+
+    expect(fake.analysisRuns.rows.map((row) => row.id)).toEqual([part2.id])
+    expect(fake.transcriptCache.rows.map((row) => row.contentKey)).toEqual([part2.contentKey])
+    expect(fake.videoRecords.rows.map((row) => row.contentKey)).toEqual([part2.contentKey])
+    expect(fake.transcriptSnapshots.rows.map((row) => row.contentKey)).toEqual([part2.contentKey])
+    expect(fake.qaThreads.rows.map((row) => row.contentKey)).toEqual([part2.contentKey])
+  })
+
+  it("keeps providers and transcript cache when clearing analysis history", async () => {
+    const fake = buildFakeDatabase()
+    const run = seedRun("run-a", "youtube:video-a", "video-a", "cache-a")
+    fake.analysisRuns.rows.push(run)
+    fake.analysisCache.rows.push({ cacheKey: "cache-a" })
+    fake.transcriptCache.rows.push({ id: "transcript-a", contentKey: run.contentKey })
+    fake.providerConfigs.rows.push({ id: "provider-a" })
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    await repo.clearAnalysisHistory()
+
+    expect(fake.analysisRuns.rows).toHaveLength(0)
+    expect(fake.analysisCache.rows).toHaveLength(0)
+    expect(fake.transcriptCache.rows).toHaveLength(1)
+    expect(fake.providerConfigs.rows).toHaveLength(1)
+  })
+
+  it("clears conversations and transcript cache independently", async () => {
+    const fake = buildFakeDatabase()
+    fake.qaAnswers.rows.push({ cacheKey: "answer-a" })
+    fake.qaThreads.rows.push({ id: "thread-a" })
+    fake.qaMessages.rows.push({ id: "message-a", threadId: "thread-a" })
+    fake.analysisRuns.rows.push(seedRun("run-a", "youtube:video-a", "video-a", "cache-a"))
+    fake.transcriptCache.rows.push({ id: "transcript-a", contentKey: "youtube:video-a" })
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await repo.clearQaData()
+    expect(fake.qaAnswers.rows).toHaveLength(0)
+    expect(fake.qaThreads.rows).toHaveLength(0)
+    expect(fake.qaMessages.rows).toHaveLength(0)
+    expect(fake.analysisRuns.rows).toHaveLength(1)
+
+    await repo.clearTranscriptCache()
+    expect(fake.transcriptCache.rows).toHaveLength(0)
+    expect(fake.analysisRuns.rows).toHaveLength(1)
   })
 })

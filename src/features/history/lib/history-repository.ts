@@ -125,6 +125,65 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
   const runTransaction: RunRepositoryTransaction =
     options.runTransaction ?? withDatabaseTransaction
 
+  const stores = database as typeof database & {
+    videoRecords?: typeof database.videoRecords
+    transcriptCache?: typeof database.transcriptCache
+    analysisCache?: typeof database.analysisCache
+    qaAnswers?: typeof database.qaAnswers
+    qaThreads?: typeof database.qaThreads
+    qaMessages?: typeof database.qaMessages
+  }
+
+  type AnyRow = Record<string, any>
+  type AnyTable = {
+    toArray: () => Promise<AnyRow[]>
+    bulkDelete?: (keys: string[]) => Promise<unknown>
+    clear?: () => Promise<unknown>
+  }
+
+  async function rowsBy(
+    table: AnyTable | undefined,
+    predicate: (row: AnyRow) => boolean
+  ): Promise<AnyRow[]> {
+    if (!table) return []
+    return (await table.toArray()).filter(predicate)
+  }
+
+  async function deleteRows(
+    table: AnyTable | undefined,
+    rows: AnyRow[],
+    key: (row: AnyRow) => unknown
+  ) {
+    if (!table?.bulkDelete || rows.length === 0) return
+    const keys = rows.map(key).filter((value): value is string => typeof value === "string")
+    if (keys.length > 0) await table.bulkDelete(keys)
+  }
+
+  async function deleteQaForRun(
+    analysisRunId: string,
+    contentKey?: string,
+    additionalRunIds: string[] = []
+  ) {
+    const matchesRun = (row: AnyRow) => (
+      row.analysisRunId === analysisRunId
+      || (typeof row.analysisRunId === "string" && additionalRunIds.includes(row.analysisRunId))
+    )
+    const answers = await rowsBy(stores.qaAnswers, (row) => (
+      matchesRun(row) || (contentKey !== undefined && row.contentKey === contentKey)
+    ))
+    await deleteRows(stores.qaAnswers, answers, (row) => row.cacheKey)
+
+    const threads = await rowsBy(stores.qaThreads, (row) => (
+      matchesRun(row) || (contentKey !== undefined && row.contentKey === contentKey)
+    ))
+    const threadIds = threads.map((row) => row.id).filter((id): id is string => typeof id === "string")
+    const messages = await rowsBy(stores.qaMessages, (row) => (
+      typeof row.threadId === "string" && threadIds.includes(row.threadId)
+    ))
+    await deleteRows(stores.qaMessages, messages, (row) => row.id)
+    await deleteRows(stores.qaThreads, threads, (row) => row.id)
+  }
+
   async function trimRecentVideos() {
     const allRecent = byNewest(await database.recentVideos.toArray())
     if (allRecent.length <= recentVideosRetentionLimit) {
@@ -506,6 +565,144 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       }
 
       return { analysisRun, segments, transcript, videoRecord }
+    },
+    async deleteAnalysisRun(analysisRunId: string): Promise<void> {
+      await runTransaction(
+        "rw",
+        [
+          "analysisRuns",
+          "segmentSummaries",
+          "recentVideos",
+          "analysisCache",
+          "qaAnswers",
+          "qaThreads",
+          "qaMessages"
+        ],
+        async () => {
+          const row = await database.analysisRuns.get(analysisRunId)
+          if (!row) return
+          const analysisRun = normalizeAnalysisRun(row)
+          const segments = await database.segmentSummaries
+            .where("analysisRunId")
+            .equals(analysisRunId)
+            .toArray()
+          await deleteRows(database.segmentSummaries, segments, (segment) => segment.id)
+
+          await database.analysisRuns.delete(analysisRunId)
+
+          const caches = await rowsBy(stores.analysisCache, (cache) => (
+            cache.cacheKey === analysisRun.analysisCacheKey
+            || cache.analysisRunId === analysisRunId
+          ))
+          await deleteRows(stores.analysisCache, caches, (cache) => cache.cacheKey)
+          await deleteQaForRun(analysisRunId)
+
+          // A legacy recentVideos row can otherwise resurrect deleted history
+          // after canonical suppression is no longer present. Remove only rows
+          // explicitly bound to this run; unrelated legacy rows remain intact.
+          const legacyRows = await rowsBy(database.recentVideos, (recent) => (
+            recent.analysisRunId === analysisRunId
+          ))
+          await deleteRows(database.recentVideos, legacyRows, (recent) => recent.videoId)
+        }
+      )
+    },
+    async deleteVideoData(contentKey: string): Promise<void> {
+      await runTransaction(
+        "rw",
+        [
+          "analysisRuns",
+          "segmentSummaries",
+          "recentVideos",
+          "transcriptSnapshots",
+          "videoRecords",
+          "transcriptCache",
+          "analysisCache",
+          "qaAnswers",
+          "qaThreads",
+          "qaMessages"
+        ],
+        async () => {
+          const runs = await rowsBy(database.analysisRuns, (run) => (
+            (run as AnalysisRunEntity & { contentKey?: string }).contentKey === contentKey
+          ))
+          const runIds = runs.map((run) => run.id)
+          for (const run of runs) {
+            const segments = await database.segmentSummaries
+              .where("analysisRunId")
+              .equals(run.id)
+              .toArray()
+            await deleteRows(database.segmentSummaries, segments, (segment) => segment.id)
+          }
+          await deleteRows(database.analysisRuns, runs, (run) => run.id)
+
+          const caches = await rowsBy(stores.analysisCache, (cache) => (
+            cache.contentKey === contentKey || (typeof cache.analysisRunId === "string" && runIds.includes(cache.analysisRunId))
+          ))
+          await deleteRows(stores.analysisCache, caches, (cache) => cache.cacheKey)
+          await deleteQaForRun("", contentKey, runIds)
+
+          const transcriptCache = await rowsBy(stores.transcriptCache, (cache) => cache.contentKey === contentKey)
+          await deleteRows(stores.transcriptCache, transcriptCache, (cache) => cache.id)
+          const transcriptSnapshots = await rowsBy(database.transcriptSnapshots, (snapshot) => (
+            (snapshot as TranscriptSnapshotEntity & { contentKey?: string }).contentKey === contentKey
+          ))
+          await deleteRows(database.transcriptSnapshots, transcriptSnapshots, (snapshot) => snapshot.id)
+
+          const videoRecords = await rowsBy(stores.videoRecords, (record) => record.contentKey === contentKey)
+          await deleteRows(stores.videoRecords, videoRecords, (record) => record.contentKey)
+
+          const recentRows = await rowsBy(database.recentVideos, (recent) => (
+            recent.contentKey === contentKey
+            || (typeof recent.analysisRunId === "string" && runIds.includes(recent.analysisRunId))
+            || (
+              contentKey.startsWith("youtube:")
+              && !recent.contentKey
+              && recent.videoId === contentKey.slice("youtube:".length)
+            )
+          ))
+          await deleteRows(database.recentVideos, recentRows, (recent) => recent.videoId)
+        }
+      )
+    },
+    async clearQaData(): Promise<void> {
+      await runTransaction("rw", ["qaAnswers", "qaThreads", "qaMessages"], async () => {
+        await Promise.all([
+          stores.qaAnswers?.clear(),
+          stores.qaThreads?.clear(),
+          stores.qaMessages?.clear()
+        ])
+      })
+    },
+    async clearTranscriptCache(): Promise<void> {
+      await runTransaction("rw", ["transcriptCache"], async () => {
+        await stores.transcriptCache?.clear()
+      })
+    },
+    async clearAnalysisHistory(): Promise<void> {
+      await runTransaction(
+        "rw",
+        [
+          "analysisRuns",
+          "segmentSummaries",
+          "recentVideos",
+          "analysisCache",
+          "qaAnswers",
+          "qaThreads",
+          "qaMessages"
+        ],
+        async () => {
+          await Promise.all([
+            database.analysisRuns.clear(),
+            database.segmentSummaries.clear(),
+            database.recentVideos.clear(),
+            stores.analysisCache?.clear(),
+            stores.qaAnswers?.clear(),
+            stores.qaThreads?.clear(),
+            stores.qaMessages?.clear()
+          ])
+        }
+      )
     },
     async listRecentAnalyses(limit = 10) {
       const recordsTable = (database as typeof database & { videoRecords?: typeof database.recentVideos }).videoRecords

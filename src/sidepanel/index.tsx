@@ -40,6 +40,11 @@ import {
 } from "@/features/history/lib/pending-history-open"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
+  performDestructiveOperation,
+  subscribeToDestructiveOperations,
+  type DestructiveTaskSnapshot,
+} from "@/features/history/lib/destructive-operation-coordinator"
+import {
   computeAnalysisCacheKey,
   computeQaCacheKey,
   computeTranscriptFingerprint,
@@ -100,6 +105,7 @@ import {
   resolveAskTranscriptFingerprint,
 } from "@/sidepanel/lib/ask-transcript-identity"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
+import { applySidepanelDataMutation } from "@/sidepanel/lib/apply-data-mutation"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -213,10 +219,25 @@ function SidepanelWorkspace() {
   const activeAnalysisRunIdRef = useRef<string>("legacy")
   const currentTranscriptFingerprintRef = useRef<string | null>(null)
   const activeQaThreadIdRef = useRef<string | null>(null)
+  const pendingAskOperationRef = useRef<DestructiveTaskSnapshot | null>(null)
+  const destructiveWorkspaceRef = useRef({
+    analysisRunId: null as string | null,
+    analysisContentKey: null as string | null,
+    hasPersistedAnalysis: false,
+    transcriptContentKey: null as string | null,
+    videoContextContentKey: null as string | null,
+  })
   activeAnalysisContentKeyRef.current = analysisView?.contentKey ?? null
   activeAnalysisRunIdRef.current = analysisView?.analysisRunId ?? "legacy"
   currentTranscriptFingerprintRef.current = currentTranscriptFingerprint
   activeQaThreadIdRef.current = qaThreadId
+  destructiveWorkspaceRef.current = {
+    analysisRunId: analysisView?.analysisRunId ?? null,
+    analysisContentKey: analysisView?.contentKey ?? null,
+    hasPersistedAnalysis: Boolean(analysisView),
+    transcriptContentKey: transcriptIdentity?.contentKey ?? null,
+    videoContextContentKey: videoContext.contentKey,
+  }
 
   const clearQaWorkspace = useCallback(() => {
     activeQaThreadIdRef.current = null
@@ -346,6 +367,81 @@ function SidepanelWorkspace() {
         })),
     )
   }, [])
+
+  const applyMutation = useCallback(async (mutation: Parameters<typeof applySidepanelDataMutation>[0]) => {
+    await applySidepanelDataMutation(mutation, destructiveWorkspaceRef.current, {
+      invalidateWorkspace: (clearTranscript) => {
+        loadWorkspaceGenerationRef.current += 1
+        qaLoadGenerationRef.current += 1
+        askGenerationRef.current += 1
+        if (clearTranscript) transcriptLoadGenerationRef.current += 1
+      },
+      clearAnalysis: () => {
+        setAnalysisView(null)
+        setAnalysisError(null)
+        setIsAnalysisFetching(false)
+      },
+      setAnalysisIdle: () => setAnalysisPhase("idle"),
+      clearAskWorkspace: () => {
+        qaLoadGenerationRef.current += 1
+        askGenerationRef.current += 1
+        activeQaThreadIdRef.current = null
+        clearQaWorkspace()
+        setAskQuestion("")
+        setAskError(null)
+      },
+      clearTranscriptWorkspace: () => {
+        currentTranscriptFingerprintRef.current = null
+        setTranscriptCues([])
+        setTranscriptIdentity(null)
+        setTranscriptTitle(null)
+        setCurrentTranscriptFingerprint(null)
+        setRawVtt(null)
+        setTranscriptError(null)
+        setIsTranscriptLoading(false)
+      },
+      refreshRecentAnalyses,
+      refreshProvider: async () => {
+        const providerConfigs = await settingsStorage.getProviderConfigs()
+        setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
+      },
+    })
+  }, [clearQaWorkspace, refreshRecentAnalyses])
+
+  useEffect(() => {
+    const getTasks = () => {
+      const tasks: DestructiveTaskSnapshot[] = []
+      const analysisTask = analysisTaskController.getSnapshot()
+      const askTask = askTaskController.getSnapshot()
+      if (analysisTask) {
+        tasks.push({
+          kind: "analysis",
+          contentKey: analysisTask.snapshot.contentKey,
+          analysisRunId: destructiveWorkspaceRef.current.analysisRunId ?? undefined,
+          phase: analysisTask.phase,
+        })
+      }
+      if (askTask) {
+        tasks.push({
+          kind: "ask",
+          contentKey: askTask.snapshot.contentKey,
+          analysisRunId: askTask.snapshot.analysisRunId,
+          threadId: askTask.snapshot.threadId,
+          phase: askTask.phase,
+        })
+      } else if (pendingAskOperationRef.current) {
+        tasks.push(pendingAskOperationRef.current)
+      }
+      return tasks
+    }
+    return subscribeToDestructiveOperations(getTasks, async (mutation) => {
+      try {
+        await applyMutation(mutation)
+      } catch {
+        toast.error("Local data changed, but this Side Panel could not refresh completely.")
+      }
+    })
+  }, [analysisTaskController, askTaskController, applyMutation])
 
   const loadSavedAnalysis = useCallback(async (videoId: string, generation: number) => {
     setIsAnalysisFetching(true)
@@ -1165,18 +1261,18 @@ function SidepanelWorkspace() {
       return
     }
     if (!window.confirm(`Delete this saved analysis?\n\n${item.title}`)) return
-    await historyRepository.deleteAnalysisRun(item.analysisRunId)
-    if (analysisView?.analysisRunId === item.analysisRunId) {
-      loadWorkspaceGenerationRef.current += 1
-      qaLoadGenerationRef.current += 1
-      setAnalysisView(null)
-      setAnalysisPhase("idle")
-      setAnalysisError(null)
-      clearQaWorkspace()
+    try {
+      await performDestructiveOperation(
+        "delete-analysis-run",
+        { analysisRunId: item.analysisRunId, contentKey: item.contentKey },
+        () => historyRepository.deleteAnalysisRun(item.analysisRunId!),
+      )
+      await applyMutation({ type: "delete-analysis-run", analysisRunId: item.analysisRunId })
+      toast.success("Saved analysis deleted.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete this analysis.")
     }
-    await refreshRecentAnalyses()
-    toast.success("Saved analysis deleted.")
-  }, [analysisView?.analysisRunId, clearQaWorkspace, hasActiveTaskForContent, refreshRecentAnalyses])
+  }, [applyMutation, hasActiveTaskForContent])
 
   const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.contentKey) return
@@ -1186,23 +1282,18 @@ function SidepanelWorkspace() {
     }
     if (!window.confirm(`Delete all local data for this video?\n\n${item.title}`)) return
     if (!window.confirm(`This removes analyses, Ask data, transcript cache, and the video record for “${item.title}”. Continue?`)) return
-    await historyRepository.deleteVideoData(item.contentKey)
-    if (analysisView?.contentKey === item.contentKey) {
-      loadWorkspaceGenerationRef.current += 1
-      qaLoadGenerationRef.current += 1
-      transcriptLoadGenerationRef.current += 1
-      setAnalysisView(null)
-      setAnalysisPhase("idle")
-      setAnalysisError(null)
-      setRawVtt(null)
-      setTranscriptCues([])
-      setTranscriptIdentity(null)
-      setCurrentTranscriptFingerprint(null)
-      clearQaWorkspace()
+    try {
+      await performDestructiveOperation(
+        "delete-video-data",
+        { contentKey: item.contentKey },
+        () => historyRepository.deleteVideoData(item.contentKey!),
+      )
+      await applyMutation({ type: "delete-video-data", contentKey: item.contentKey })
+      toast.success("All local data for this video was deleted.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete this video's data.")
     }
-    await refreshRecentAnalyses()
-    toast.success("All local data for this video was deleted.")
-  }, [analysisView?.contentKey, clearQaWorkspace, hasActiveTaskForContent, refreshRecentAnalyses])
+  }, [applyMutation, hasActiveTaskForContent])
 
   useEffect(() => {
     let isCurrent = true
@@ -1287,6 +1378,12 @@ function SidepanelWorkspace() {
     if (askStartLockRef.current || activeAskTask) {
       toast.message("Another Ask Video request is already running.")
       return
+    }
+    pendingAskOperationRef.current = {
+      kind: "ask",
+      contentKey: requestedContentKey,
+      analysisRunId: requestedAnalysisRunId,
+      phase: "preparing",
     }
     const requestedThreadId = qaThreadId ?? activeQaThreadIdRef.current
     const generation = ++askGenerationRef.current
@@ -1484,6 +1581,7 @@ function SidepanelWorkspace() {
       if (isCurrentAsk()) setAskError(message)
       toast.error(message)
     } finally {
+      pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }
   }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, transcriptCues, transcriptIdentity])

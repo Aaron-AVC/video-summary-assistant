@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 
 import { historyRepository } from "@/features/history/lib/history-repository"
+import { performDestructiveOperation } from "@/features/history/lib/destructive-operation-coordinator"
 import {
   RecentAnalysisList,
   type RecentAnalysisListItem
@@ -83,16 +85,32 @@ export function HistoryPanel() {
   const handleDeleteAnalysis = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.analysisRunId) return
     if (!window.confirm(`Delete this saved analysis?\n\n${item.title}`)) return
-    await historyRepository.deleteAnalysisRun(item.analysisRunId)
-    await reload()
+    try {
+      await performDestructiveOperation(
+        "delete-analysis-run",
+        { analysisRunId: item.analysisRunId, contentKey: item.contentKey },
+        () => historyRepository.deleteAnalysisRun(item.analysisRunId!),
+      )
+      await reload()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete this analysis.")
+    }
   }, [reload])
 
   const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.contentKey) return
     if (!window.confirm(`Delete all local data for this video?\n\n${item.title}\n\nThis removes its analyses, Ask data, transcript cache, and video record.`)) return
     if (!window.confirm(`Confirm deleting all data for “${item.title}”.`)) return
-    await historyRepository.deleteVideoData(item.contentKey)
-    await reload()
+    try {
+      await performDestructiveOperation(
+        "delete-video-data",
+        { contentKey: item.contentKey },
+        () => historyRepository.deleteVideoData(item.contentKey!),
+      )
+      await reload()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete this video's data.")
+    }
   }, [reload])
 
   return (

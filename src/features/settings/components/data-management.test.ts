@@ -3,8 +3,10 @@ import { describe, expect, it } from "bun:test"
 import {
   clearCategorizedData,
   clearDataManagementStores,
-  createDataManagementSnapshot
+  createDataManagementSnapshot,
+  performCategorizedDataClear
 } from "@/features/settings/components/data-management"
+import { DestructiveOperationBlockedError } from "@/features/history/lib/destructive-operation-coordinator"
 import { createHistoryRepository } from "@/features/history/lib/history-repository"
 import {
   createSettingsStorage,
@@ -94,6 +96,64 @@ describe("data-management storage lifecycle", () => {
     expect(cleared).toEqual(["conversations", "transcript-cache", "analysis-history"])
     await clearCategorizedData("diagnostics", dependencies)
     expect(cleared).toEqual(["conversations", "transcript-cache", "analysis-history", "diagnostics"])
+  })
+
+  it("blocks conversations clear for active Ask but allows analysis-only tasks", async () => {
+    let clears = 0
+    const dependencies = {
+      clearQaData: async () => { clears += 1 }
+    }
+    const blocked = await performCategorizedDataClear("conversations", dependencies, {
+      checkConflicts: async () => [{ kind: "ask", contentKey: "youtube:a", phase: "answering" }],
+      broadcastMutation: () => {},
+    }).then(() => false, (error) => error instanceof DestructiveOperationBlockedError)
+    expect(blocked).toBe(true)
+    expect(clears).toBe(0)
+
+    await performCategorizedDataClear("conversations", dependencies, {
+      checkConflicts: async () => [{ kind: "analysis", contentKey: "youtube:a", phase: "analyzing" }],
+      broadcastMutation: (mutation) => expect(mutation).toEqual({ type: "clear-conversations" }),
+    })
+    expect(clears).toBe(1)
+  })
+
+  it("blocks analysis-history and all clears for active tasks while allowing diagnostics", async () => {
+    const cleared: string[] = []
+    const dependencies = {
+      clearQaData: async () => { cleared.push("conversations") },
+      clearAnalysisHistory: async () => { cleared.push("history") },
+      clearSettings: async () => { cleared.push("settings") },
+      clearLocalData: async () => { cleared.push("all-local") },
+      clearTranscriptLogs: async () => { cleared.push("diagnostics") },
+    }
+    const active = async () => [{ kind: "analysis" as const, contentKey: "youtube:a", phase: "analyzing" }]
+    await expect(performCategorizedDataClear("analysis-history", dependencies, {
+      checkConflicts: active,
+      broadcastMutation: () => {},
+    })).rejects.toBeInstanceOf(DestructiveOperationBlockedError)
+    await expect(performCategorizedDataClear("all", dependencies, {
+      checkConflicts: active,
+      broadcastMutation: () => {},
+    })).rejects.toBeInstanceOf(DestructiveOperationBlockedError)
+
+    await performCategorizedDataClear("diagnostics", dependencies, {
+      checkConflicts: active,
+      broadcastMutation: (mutation) => expect(mutation).toEqual({ type: "clear-diagnostics" }),
+    })
+    expect(cleared).toEqual(["diagnostics"])
+  })
+
+  it("allows an active task to persist normally after a blocked clear", async () => {
+    let persisted = false
+    const blocked = await performCategorizedDataClear("analysis-history", {
+      clearAnalysisHistory: async () => { persisted = false },
+    }, {
+      checkConflicts: async () => [{ kind: "ask", contentKey: "youtube:a", phase: "finalizing" }],
+      broadcastMutation: () => {},
+    }).then(() => false, () => true)
+    expect(blocked).toBe(true)
+    persisted = true
+    expect(persisted).toBe(true)
   })
 
   it("includes diagnostic transcript logs in exports", async () => {

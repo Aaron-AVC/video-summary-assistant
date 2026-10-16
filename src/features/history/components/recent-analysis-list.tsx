@@ -1,5 +1,6 @@
 import { Clock3, FolderOpen, History, MoreVertical, Search, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
+import type { KeyboardEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,17 @@ export type RecentAnalysisListItem = {
   channelTitle: string | null
   status: string | null
   updatedAt: string
+}
+
+export function handleHistoryCardKeyDown(
+  event: Pick<KeyboardEvent<HTMLElement>, "key" | "target" | "currentTarget" | "preventDefault">,
+  activate: () => void,
+): boolean {
+  if (event.target !== event.currentTarget) return false
+  if (event.key !== "Enter" && event.key !== " ") return false
+  event.preventDefault()
+  activate()
+  return true
 }
 
 type RecentAnalysisListProps = {
@@ -122,12 +134,10 @@ export function RecentAnalysisList({
                   <div
                     key={item.analysisRunId ?? item.contentKey ?? item.videoId}
                     onClick={() => onSelect(item.videoId, item.contentKey, item.analysisRunId)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault()
-                        void onSelect(item.videoId, item.contentKey, item.analysisRunId)
-                      }
-                    }}
+                    onKeyDown={(event) => handleHistoryCardKeyDown(
+                      event,
+                      () => void onSelect(item.videoId, item.contentKey, item.analysisRunId),
+                    )}
                     role="button"
                     tabIndex={0}
                     className={cn(

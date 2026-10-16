@@ -13,6 +13,10 @@ import {
 } from "@/components/ui/card"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
+  performDestructiveOperation,
+  type PerformDestructiveOperationOptions
+} from "@/features/history/lib/destructive-operation-coordinator"
+import {
   settingsStorage,
   type SettingsExportSnapshot
 } from "@/features/settings/lib/settings-storage"
@@ -147,6 +151,27 @@ export async function clearCategorizedData(
   await clearDataManagementStores(dependencies)
 }
 
+const DESTRUCTIVE_ACTION_FOR_CLEAR: Record<DataClearAction, "clear-conversations" | "clear-transcript-cache" | "clear-analysis-history" | "clear-diagnostics" | "clear-all"> = {
+  conversations: "clear-conversations",
+  "transcript-cache": "clear-transcript-cache",
+  "analysis-history": "clear-analysis-history",
+  diagnostics: "clear-diagnostics",
+  all: "clear-all"
+}
+
+export async function performCategorizedDataClear(
+  action: DataClearAction,
+  dependencies: Partial<DataManagementDependencies> = {},
+  coordinatorOptions: PerformDestructiveOperationOptions = {},
+): Promise<void> {
+  await performDestructiveOperation(
+    DESTRUCTIVE_ACTION_FOR_CLEAR[action],
+    {},
+    () => clearCategorizedData(action, { ...dataManagementDependencies, ...dependencies }),
+    coordinatorOptions,
+  )
+}
+
 export function DataManagement({ onDataCleared }: DataManagementProps) {
   const [inventory, setInventory] = useState<DataInventory>(EMPTY_INVENTORY)
   const [isExporting, setIsExporting] = useState(false)
@@ -239,7 +264,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
     setFeedback({ state: "idle", title: "", message: "" })
 
     try {
-      await clearCategorizedData(action)
+      await performCategorizedDataClear(action)
       await refreshInventory()
       onDataCleared?.()
       setFeedback({

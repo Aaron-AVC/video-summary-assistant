@@ -11,6 +11,7 @@ import {
   type RecentAnalysisListItem,
 } from "@/features/history/components/recent-analysis-list"
 import type { AnalysisPhase } from "@/sidepanel/lib/sidepanel-ux"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type OverviewTabProps = {
   analysis: VideoAnalysis | null
@@ -59,6 +60,7 @@ export function OverviewTab({
   onOpenFullHistory,
   formatTimestamp,
 }: OverviewTabProps) {
+  const { t } = useI18n()
   const chapters = analysis?.chapters.map((chapter, index) => ({
     ...chapter,
     id: `chapter-${index}`,
@@ -99,8 +101,8 @@ export function OverviewTab({
         <EmptyState
           className="border border-dashed border-border/70 bg-card/70"
           icon={<Sparkles />}
-          title="Generate an analysis"
-          description="Use the action above to create transcript-grounded Summary, Key Points, and Chapters for the current video."
+          title={t("overview.emptyTitle")}
+          description={t("overview.emptyDescription")}
         />
       ) : null}
       <RecentAnalysisList

@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type CurrentVideoCardProps = {
   platform: "youtube" | "bilibili" | null
@@ -41,6 +42,12 @@ export function CurrentVideoCard({
   analysisState,
   onRefresh
 }: CurrentVideoCardProps) {
+  const { t } = useI18n()
+  const localizedRuntimeStatus = runtimeStatus === "idle" ? t("video.runtimeIdle")
+    : runtimeStatus === "loading" ? t("video.runtimeLoading")
+      : runtimeStatus === "ready" ? t("video.runtimeReady")
+        : runtimeStatus === "error" ? t("video.runtimeError")
+          : runtimeStatus
   return (
     <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95">
       <CardHeader className="flex min-w-0 flex-col gap-3 p-4">
@@ -48,10 +55,10 @@ export function CurrentVideoCard({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
               <Film className="h-3.5 w-3.5" />
-              Current video
+              {t("video.current")}
             </Badge>
             <Badge variant={isReady ? "default" : "outline"} className="rounded-full px-3 py-1">
-              {isReady ? "Watch page ready" : "Unsupported tab"}
+              {isReady ? t("video.ready") : t("video.unsupported")}
             </Badge>
             {platform ? (
               <Badge variant="outline" className="rounded-full px-3 py-1">
@@ -59,14 +66,14 @@ export function CurrentVideoCard({
               </Badge>
             ) : null}
           </div>
-          <Button variant="ghost" size="icon" onClick={onRefresh} aria-label="Refresh video context">
+          <Button variant="ghost" size="icon" onClick={onRefresh} aria-label={t("video.refreshContext")}>
             <RefreshCcw data-icon="inline-start" />
           </Button>
         </div>
         <div className="flex min-w-0 flex-col gap-2">
           <CardTitle className="line-clamp-2 max-w-full text-base leading-snug [overflow-wrap:anywhere] sm:text-lg">{title}</CardTitle>
           <CardDescription className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
-            <span className="min-w-0 [overflow-wrap:anywhere]">{author ?? "Unknown author"}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{author ?? t("video.unknownAuthor")}</span>
             <span className="hidden text-border sm:inline">•</span>
             <span>{timestampLabel}</span>
           </CardDescription>
@@ -76,7 +83,7 @@ export function CurrentVideoCard({
         <details className="group">
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2 text-xs text-muted-foreground">
             <span className="min-w-0 [overflow-wrap:anywhere]">
-              {providerName ?? "Provider not configured"}
+              {providerName ?? t("video.notConfigured")}
               {providerModel ? ` · ${providerModel}` : ""}
               {` · ${analysisState}`}
             </span>
@@ -84,15 +91,15 @@ export function CurrentVideoCard({
           </summary>
           <div className="flex flex-col gap-2 border-t border-border/60 px-4 py-3 text-xs">
             <div className="flex min-w-0 justify-between gap-3">
-              <span className="shrink-0 text-muted-foreground">Runtime</span>
-              <span className="min-w-0 text-right font-medium text-foreground [overflow-wrap:anywhere]">{runtimeStatus}</span>
+              <span className="shrink-0 text-muted-foreground">{t("video.runtime")}</span>
+              <span className="min-w-0 text-right font-medium text-foreground [overflow-wrap:anywhere]">{localizedRuntimeStatus}</span>
             </div>
             <div className="flex min-w-0 justify-between gap-3">
-              <span className="shrink-0 text-muted-foreground">Video ID</span>
+              <span className="shrink-0 text-muted-foreground">{t("video.videoId")}</span>
               <span className="min-w-0 text-right font-medium text-foreground [overflow-wrap:anywhere]">{videoId}</span>
             </div>
             <div className="flex min-w-0 justify-between gap-3">
-              <span className="shrink-0 text-muted-foreground">URL</span>
+              <span className="shrink-0 text-muted-foreground">{t("video.url")}</span>
               <span className="min-w-0 break-all text-right font-medium text-foreground">
                 {canonicalUrl}
               </span>

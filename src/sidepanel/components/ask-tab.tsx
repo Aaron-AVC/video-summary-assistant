@@ -7,6 +7,7 @@ import { EmptyState } from "@/features/common/components/empty-state"
 import { getAskRequirement } from "@/sidepanel/lib/sidepanel-ux"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import { QaThreadHistory } from "@/features/analysis/components/qa-thread-history"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type AskTabProps = {
   hasProvider: boolean
@@ -61,6 +62,7 @@ export function AskTab({
   onLoadTranscript,
   formatTimestamp,
 }: AskTabProps) {
+  const { t } = useI18n()
   const requirement = getAskRequirement({ hasProvider, hasAnalysis, hasTranscript })
 
   if (requirement === "provider") {
@@ -68,9 +70,9 @@ export function AskTab({
       <EmptyState
         className="border border-dashed border-border/70 bg-card/70"
         icon={<Settings2 />}
-        title="Configure a provider"
-        description="Ask Video uses the current default provider after you explicitly save it in Settings."
-        action={<Button onClick={onOpenSettings}>Configure provider</Button>}
+        title={t("ask.configureProvider")}
+        description={t("ask.configureDescription")}
+        action={<Button onClick={onOpenSettings}>{t("overview.configureProvider")}</Button>}
       />
     )
   }
@@ -80,9 +82,9 @@ export function AskTab({
       <EmptyState
         className="border border-dashed border-border/70 bg-card/70"
         icon={<Sparkles />}
-        title="Generate analysis first"
-        description="Ask Video needs the canonical analysis context before it can answer follow-up questions."
-        action={<Button onClick={onOpenOverview}>Generate analysis first</Button>}
+        title={t("ask.generateFirst")}
+        description={t("ask.generateDescription")}
+        action={<Button onClick={onOpenOverview}>{t("ask.generateFirst")}</Button>}
       />
     )
   }
@@ -92,9 +94,9 @@ export function AskTab({
       <EmptyState
         className="border border-dashed border-border/70 bg-card/70"
         icon={<FileText />}
-        title="Transcript changed since this analysis"
-        description="Regenerate the analysis before continuing Ask Video."
-        action={<Button onClick={onOpenOverview}>Go to Overview</Button>}
+        title={t("ask.transcriptChanged")}
+        description={t("ask.transcriptChangedDescription")}
+        action={<Button onClick={onOpenOverview}>{t("ask.goOverview")}</Button>}
       />
     )
   }
@@ -104,11 +106,11 @@ export function AskTab({
       <EmptyState
         className="border border-dashed border-border/70 bg-card/70"
         icon={<FileText />}
-        title="Load transcript"
-        description="Ask Video grounds answers in the transcript for this analysis."
+        title={t("ask.loadTranscript")}
+        description={t("ask.loadDescription")}
         action={(
           <Button disabled={isTranscriptLoading} onClick={onLoadTranscript}>
-            {isTranscriptLoading ? "Loading transcript…" : "Load transcript"}
+            {isTranscriptLoading ? t("task.loadingTranscript") : t("ask.loadTranscript")}
           </Button>
         )}
       />
@@ -118,11 +120,11 @@ export function AskTab({
   return (
     <div className="min-w-0" data-layout-check="ask-tab">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-medium"><MessageCircleQuestion className="h-4 w-4 text-primary" /> Ask Video</div>
+        <div className="flex items-center gap-2 text-sm font-medium"><MessageCircleQuestion className="h-4 w-4 text-primary" /> {t("ask.video")}</div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={isAsking} onClick={onNewChat}><Plus className="h-4 w-4" /> New chat</Button>
+          <Button variant="outline" size="sm" disabled={isAsking} onClick={onNewChat}><Plus className="h-4 w-4" /> {t("ask.newChat")}</Button>
           <details className="relative min-w-0">
-            <summary className="inline-flex h-9 cursor-pointer list-none items-center rounded-md border border-input bg-background px-3 text-sm font-medium">History</summary>
+            <summary className="inline-flex h-9 cursor-pointer list-none items-center rounded-md border border-input bg-background px-3 text-sm font-medium">{t("ask.history")}</summary>
             <div className="absolute right-0 top-full z-20 mt-2 min-w-0 max-w-[calc(100vw-1.5rem)] w-[min(28rem,calc(100vw-1.5rem))] overflow-hidden">
               <QaThreadHistory disabled={isAsking} currentThreadId={currentThreadId} threads={threads} onOpen={onOpenThread} onDelete={onDeleteThread} />
             </div>
@@ -135,7 +137,7 @@ export function AskTab({
         messages={messages}
         isAsking={isAsking}
         canAsk={canAsk}
-        disabledReason={question.trim() ? null : "Type a question to enable Ask Video."}
+        disabledReason={question.trim() ? null : t("ask.typeQuestion")}
         errorMessage={errorMessage}
         onQuestionChange={onQuestionChange}
         onAsk={onAsk}
@@ -144,7 +146,7 @@ export function AskTab({
         formatTimestamp={formatTimestamp}
       />
       <p className="sr-only">
-        <MessageCircleQuestion /> Ask answers stay grounded in the loaded transcript.
+        <MessageCircleQuestion /> {t("ask.loadDescription")}
       </p>
     </div>
   )

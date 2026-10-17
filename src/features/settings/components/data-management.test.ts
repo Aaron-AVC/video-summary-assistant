@@ -18,6 +18,7 @@ import type { PersistenceExport } from "@/lib/schemas/persistence"
 
 const settingsSnapshot: SettingsExportSnapshot = {
   theme: "system",
+  language: "auto",
   defaultProviderId: null,
   providerConfigs: [],
   diagnosticLogging: true
@@ -96,6 +97,28 @@ describe("data-management storage lifecycle", () => {
     expect(cleared).toEqual(["conversations", "transcript-cache", "analysis-history"])
     await clearCategorizedData("diagnostics", dependencies)
     expect(cleared).toEqual(["conversations", "transcript-cache", "analysis-history", "diagnostics"])
+  })
+
+  it("does not clear language preference for categorized actions", async () => {
+    let language = "zh-CN"
+    const dependencies = {
+      exportSettings: async () => settingsSnapshot,
+      exportLocalData: async () => localData,
+      getTranscriptLogs: async () => [],
+      clearSettings: async () => { language = "auto" },
+      clearLocalData: async () => {},
+      clearQaData: async () => {},
+      clearTranscriptCache: async () => {},
+      clearAnalysisHistory: async () => {},
+      clearTranscriptLogs: async () => {},
+    }
+
+    await clearCategorizedData("conversations", dependencies)
+    await clearCategorizedData("transcript-cache", dependencies)
+    await clearCategorizedData("analysis-history", dependencies)
+    await clearCategorizedData("diagnostics", dependencies)
+
+    expect(language).toBe("zh-CN")
   })
 
   it("blocks conversations clear for active Ask but allows analysis-only tasks", async () => {

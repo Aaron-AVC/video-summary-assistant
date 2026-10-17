@@ -3,6 +3,7 @@ import { Loader2, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import type { ActiveAskTask } from "@/features/analysis/lib/ask-task-controller"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type ActiveAskTaskBannerProps = {
   task: ActiveAskTask
@@ -10,15 +11,16 @@ type ActiveAskTaskBannerProps = {
 }
 
 export function ActiveAskTaskBanner({ task, onCancel }: ActiveAskTaskBannerProps) {
+  const { t } = useI18n()
   const isCancelling = task.phase === "cancelling"
   const isFinalizing = task.phase === "finalizing"
   const phaseLabel = isCancelling
-    ? "Cancelling…"
+    ? t("task.cancelling")
     : isFinalizing
-      ? "Saving answer…"
+      ? t("task.savingAnswer")
       : task.phase === "repairing"
-        ? "Repairing answer…"
-        : "Answering…"
+        ? t("task.repairing")
+        : t("task.answering")
 
   return (
     <Card className="border-sky-500/40 bg-sky-500/10">
@@ -26,7 +28,7 @@ export function ActiveAskTaskBanner({ task, onCancel }: ActiveAskTaskBannerProps
         <div className="flex min-w-0 items-center gap-2">
           <Loader2 className={`h-4 w-4 shrink-0 ${isCancelling ? "" : "animate-spin"}`} />
           <div className="min-w-0 text-xs">
-            <div className="font-medium [overflow-wrap:anywhere]">Active Ask · {task.snapshot.videoTitle}</div>
+            <div className="font-medium [overflow-wrap:anywhere]">{t("task.activeAsk", { title: task.snapshot.videoTitle })}</div>
             <div className="text-muted-foreground [overflow-wrap:anywhere]">{phaseLabel} · {task.snapshot.question}</div>
           </div>
         </div>
@@ -36,9 +38,9 @@ export function ActiveAskTaskBanner({ task, onCancel }: ActiveAskTaskBannerProps
           className="shrink-0 gap-2"
           disabled={isCancelling || isFinalizing}
           onClick={onCancel}
-          aria-label="Cancel active Ask Video request">
+          aria-label={t("common.cancel")}>
           <Square data-icon="inline-start" />
-          {isCancelling ? "Cancelling…" : "Cancel"}
+          {isCancelling ? t("task.cancelling") : t("common.cancel")}
         </Button>
       </CardContent>
     </Card>

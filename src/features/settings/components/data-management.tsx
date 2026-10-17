@@ -27,6 +27,7 @@ import {
 } from "@/features/transcript/lib/transcript-log"
 import { SettingsSection } from "@/features/common/components/settings-ui"
 import type { PersistenceExport } from "@/lib/schemas/persistence"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type DataManagementProps = {
   onDataCleared?: () => void
@@ -173,6 +174,7 @@ export async function performCategorizedDataClear(
 }
 
 export function DataManagement({ onDataCleared }: DataManagementProps) {
+  const { t } = useI18n()
   const [inventory, setInventory] = useState<DataInventory>(EMPTY_INVENTORY)
   const [isExporting, setIsExporting] = useState(false)
   const [clearingAction, setClearingAction] = useState<DataClearAction | null>(null)
@@ -242,14 +244,14 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       await refreshInventory()
       setFeedback({
         state: "success",
-        title: "Local data exported",
-        message: "A JSON snapshot of settings, IndexedDB records, and diagnostic logs was downloaded."
+        title: t("data.exported"),
+        message: t("data.exportedMessage")
       })
     } catch (error) {
       setFeedback({
         state: "error",
-        title: "Could not export local data",
-        message: error instanceof Error ? error.message : "Unknown export error."
+        title: t("data.exportFailed"),
+        message: error instanceof Error ? error.message : t("data.unknownClearError")
       })
     } finally {
       setIsExporting(false)
@@ -257,8 +259,8 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
   }
 
   async function handleClear(action: DataClearAction, label: string, explanation: string) {
-    if (typeof window !== "undefined" && !window.confirm(`${label}\n\n${explanation}\n\nContinue?`)) return
-    if (typeof window !== "undefined" && !window.confirm(`Confirm ${label.toLowerCase()} one more time.`)) return
+    if (typeof window !== "undefined" && !window.confirm(`${label}\n\n${explanation}\n\n${t("data.continue")}`)) return
+    if (typeof window !== "undefined" && !window.confirm(t("data.confirmAgain", { label }))) return
 
     setClearingAction(action)
     setFeedback({ state: "idle", title: "", message: "" })
@@ -269,14 +271,14 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       onDataCleared?.()
       setFeedback({
         state: "success",
-        title: `${label} complete`,
+        title: t("data.clearComplete", { label }),
         message: explanation
       })
     } catch (error) {
       setFeedback({
         state: "error",
-        title: `Could not ${label.toLowerCase()}`,
-        message: error instanceof Error ? error.message : "Unknown clear error."
+        title: t("data.clearFailed", { label }),
+        message: error instanceof Error ? error.message : t("data.unknownClearError")
       })
     } finally {
       setClearingAction(null)
@@ -288,29 +290,28 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       <CardHeader className="gap-3">
         <div className="space-y-1.5">
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-            Local data
+            {t("data.local")}
           </Badge>
-          <CardTitle>Inspect, export, or clear browser data</CardTitle>
+          <CardTitle>{t("data.title")}</CardTitle>
           <CardDescription>
-            Keep destructive actions intentional while still making it easy to
-            snapshot or reset your local-first analysis workspace.
+            {t("data.description")}
           </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <InventoryStat label="Providers" value={inventory.providerConfigs} />
-          <InventoryStat label="Transcripts" value={inventory.transcriptSnapshots} />
-          <InventoryStat label="Runs" value={inventory.analysisRuns} />
-          <InventoryStat label="Segments" value={inventory.segmentSummaries} />
-          <InventoryStat label="Recent videos" value={inventory.recentVideos} />
-          <InventoryStat label="Video records" value={inventory.videoRecords} />
-          <InventoryStat label="Transcript cache" value={inventory.transcriptCache} />
-          <InventoryStat label="Analysis cache" value={inventory.analysisCache} />
-          <InventoryStat label="QA answers" value={inventory.qaAnswers} />
-          <InventoryStat label="QA threads" value={inventory.qaThreads} />
-          <InventoryStat label="QA messages" value={inventory.qaMessages} />
-          <InventoryStat label="Diagnostic logs" value={inventory.diagnosticLogs} />
+          <InventoryStat label={t("data.providers")} value={inventory.providerConfigs} />
+          <InventoryStat label={t("data.transcripts")} value={inventory.transcriptSnapshots} />
+          <InventoryStat label={t("data.runs")} value={inventory.analysisRuns} />
+          <InventoryStat label={t("data.segments")} value={inventory.segmentSummaries} />
+          <InventoryStat label={t("data.recentVideos")} value={inventory.recentVideos} />
+          <InventoryStat label={t("data.videoRecords")} value={inventory.videoRecords} />
+          <InventoryStat label={t("data.transcriptCache")} value={inventory.transcriptCache} />
+          <InventoryStat label={t("data.analysisCache")} value={inventory.analysisCache} />
+          <InventoryStat label={t("data.qaAnswers")} value={inventory.qaAnswers} />
+          <InventoryStat label={t("data.qaThreads")} value={inventory.qaThreads} />
+          <InventoryStat label={t("data.qaMessages")} value={inventory.qaMessages} />
+          <InventoryStat label={t("data.diagnosticLogs")} value={inventory.diagnosticLogs} />
         </div>
 
         <div className="grid items-stretch gap-4 lg:grid-cols-2">
@@ -318,12 +319,10 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
             <div className="flex min-w-0 items-start justify-between gap-4">
               <div className="min-w-0 space-y-2">
                 <p className="text-sm font-medium text-foreground">
-                  Export a local recovery snapshot
+                  {t("data.exportSnapshot")}
                 </p>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Download settings, IndexedDB analysis records, and transcript
-                  diagnostic logs as one JSON file before you migrate machines
-                  or reset the extension.
+                  {t("data.exportDescription")}
                 </p>
               </div>
               <DatabaseZap className="mt-1 h-4 w-4 shrink-0 text-primary" />
@@ -339,27 +338,27 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
               ) : (
                 <Download data-icon="inline-start" />
               )}
-              Export data
+              {t("data.exportData")}
             </Button>
           </SettingsSection>
 
           <SettingsSection className="flex h-full min-w-0 flex-col gap-4 border-destructive/20 bg-destructive/5">
             <div className="flex min-w-0 items-start justify-between gap-4">
               <div className="min-w-0 space-y-2">
-                <p className="text-sm font-medium text-foreground">Categorized local data controls</p>
+                <p className="text-sm font-medium text-foreground">{t("data.categorizedControls")}</p>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Each action has its own confirmation and only removes the named data domain. Current inventory: {totalRecords} records.
+                  {t("data.currentInventory", { count: totalRecords })}
                 </p>
               </div>
               <Trash2 className="mt-1 h-4 w-4 shrink-0 text-destructive" />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {([
-                ["conversations", "Clear conversations", "Ask history/cache only."],
-                ["transcript-cache", "Clear transcript cache", "Reusable transcript cache only; saved analysis snapshots stay."],
-                ["analysis-history", "Clear analysis history", "Analyses plus dependent Ask conversations; providers and transcript cache stay."],
-                ["diagnostics", "Clear diagnostics", "Diagnostic transcript logs only."],
-                ["all", "Clear all extension data", "Providers, all local data, and logs."]
+                ["conversations", t("data.clearConversations"), t("data.clearConversationsExplanation")],
+                ["transcript-cache", t("data.clearTranscriptCache"), t("data.clearTranscriptCacheExplanation")],
+                ["analysis-history", t("data.clearAnalysisHistory"), t("data.clearAnalysisHistoryExplanation")],
+                ["diagnostics", t("data.clearDiagnostics"), t("data.clearDiagnosticsExplanation")],
+                ["all", t("data.clearAll"), t("data.clearAllExplanation")]
               ] as const).map(([action, label, explanation]) => (
                 <Button
                   key={action}
@@ -384,10 +383,9 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         ) : (
           <Alert>
             <ShieldCheck className="h-4 w-4" />
-            <AlertTitle>Intentional local-first controls</AlertTitle>
+            <AlertTitle>{t("data.intentional")}</AlertTitle>
             <AlertDescription>
-              Export keeps a portable snapshot, while clear requires an explicit
-              confirmation step before anything is removed.
+              {t("data.intentionalDescription")}
             </AlertDescription>
           </Alert>
         )}

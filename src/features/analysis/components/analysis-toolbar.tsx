@@ -11,9 +11,9 @@ import {
 } from "@/components/ui/card"
 import {
   getAnalysisAction,
-  getAnalysisStatusLabel,
   type AnalysisPhase,
 } from "@/sidepanel/lib/sidepanel-ux"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type AnalysisToolbarProps = {
   hasProvider: boolean
@@ -36,24 +36,31 @@ export function AnalysisToolbar({
   onCancel,
   onConfigureProvider,
 }: AnalysisToolbarProps) {
+  const { t } = useI18n()
   const isAnalyzing = status === "loading-transcript" || status === "analyzing" || status === "cancelling"
   const isFinalizing = status === "finalizing"
   const action = getAnalysisAction({ hasProvider, hasAnalysis, isAnalyzing, isFinalizing })
   const isCancelling = status === "cancelling"
-  const statusLabel = getAnalysisStatusLabel(status, hasAnalysis)
+  const statusKey = status === "loading-transcript" ? "runtime.statusLoadingTranscript"
+    : status === "analyzing" ? "runtime.statusAnalyzing"
+      : status === "finalizing" ? "runtime.statusSaving"
+        : status === "cancelling" ? "runtime.statusCancelling"
+          : status === "error" ? "runtime.statusError"
+            : status === "cancelled" ? "runtime.statusCancelled"
+              : hasAnalysis ? "runtime.statusReady" : "runtime.statusNotAnalyzed"
 
   return (
     <Card className="border-border/70 bg-card/95">
       <CardHeader className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base">Analysis</CardTitle>
+            <CardTitle className="text-base">{t("toolbar.title")}</CardTitle>
             <CardDescription role="status" className="text-xs">
-              {statusLabel}{lastAnalyzedAt ? ` · ${lastAnalyzedAt}` : ""}
+              {t(statusKey)}{lastAnalyzedAt ? ` · ${lastAnalyzedAt}` : ""}
             </CardDescription>
           </div>
           <Badge variant={hasProvider ? "secondary" : "outline"} className="rounded-full px-3 py-1">
-            {hasProvider ? "Provider ready" : "Provider required"}
+            {hasProvider ? t("overview.providerReady") : t("overview.providerRequired")}
           </Badge>
         </div>
       </CardHeader>
@@ -62,7 +69,7 @@ export function AnalysisToolbar({
           {action.kind === "configure-provider" ? (
             <Button className="min-w-0 flex-1 gap-2" onClick={onConfigureProvider}>
               <Settings2 data-icon="inline-start" />
-              Configure provider
+              {t("overview.configureProvider")}
             </Button>
           ) : action.kind === "cancel" ? (
             <Button
@@ -70,18 +77,18 @@ export function AnalysisToolbar({
               className="min-w-0 flex-1 gap-2"
               onClick={onCancel}
               disabled={isCancelling}
-              aria-label="Cancel analysis">
+              aria-label={t("toolbar.cancelAnalysis")}>
               <Square data-icon="inline-start" />
-              {isCancelling ? "Cancelling…" : "Cancel"}
+              {isCancelling ? t("task.cancelling") : t("common.cancel")}
             </Button>
           ) : action.kind === "finalizing" ? (
             <Button
               variant="secondary"
               className="min-w-0 flex-1 gap-2"
               disabled
-              aria-label="Saving analysis">
+              aria-label={t("toolbar.savingAnalysis")}>
               <Loader2 data-icon="inline-start" className="animate-spin" />
-              Saving analysis…
+              {t("task.savingAnalysis")}
             </Button>
           ) : (
             <Button
@@ -95,7 +102,7 @@ export function AnalysisToolbar({
               ) : (
                 <PlayCircle data-icon="inline-start" />
               )}
-              {action.label}
+              {action.kind === "regenerate" ? t("overview.regenerate") : t("overview.generate")}
             </Button>
           )}
         </div>

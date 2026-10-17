@@ -50,6 +50,19 @@ describe("createSettingsStorage", () => {
     expect(await storage.setDefaultProviderConfig("provider-1")).toBe("provider-1")
   })
 
+  it("persists, exports, and clears the language preference", async () => {
+    const storage = createSettingsStorage(createAdapter())
+
+    await storage.setLanguagePreference("zh-CN")
+    expect(await storage.getLanguagePreference()).toBe("zh-CN")
+    expect((await storage.getSettingsSnapshot()).language).toBe("zh-CN")
+    expect((await storage.exportSettings()).language).toBe("zh-CN")
+
+    await storage.clearSettings()
+    expect(await storage.getLanguagePreference()).toBe("auto")
+    expect((await storage.exportSettings()).language).toBe("auto")
+  })
+
   it("exports and clears persisted settings without native helper configuration", async () => {
     const storage = createSettingsStorage(createAdapter())
 
@@ -75,6 +88,7 @@ describe("createSettingsStorage", () => {
 
     expect(await storage.exportSettings()).toEqual({
       theme: "system",
+      language: "auto",
       defaultProviderId: null,
       providerConfigs: [],
       diagnosticLogging: false,

@@ -1,8 +1,9 @@
 # TASK_STATE
 
-- 当前任务：CR-14 — preserve live task phase when deduplicating Web Locks fallback；实现完成，待提交。Analysis/Ask destructive task snapshots 与 Web Lock descriptors 现在共享稳定 `taskId`；`queryActiveDestructiveTasks()` 合并时优先保留 live Broadcast phase/threadId，仅在没有对应 live snapshot 时保留 `phase = unknown` fail-closed fallback。818d4ee 已完成 TOCTOU serialization follow-up；未修改 DB、manifest permissions、provider、transcript acquisition 或既有 Web Locks admission/reservation 设计；Browser smoke：NOT RUN。
+- 当前任务：Task 12 — UI Internationalization / Localization；实现完成，待提交。新增 typed runtime i18n（Auto / 简体中文 / English）、跨 Options/Side Panel 实时同步、语言持久化与清除语义，并覆盖 Options、Provider、Appearance、History、Data、Diagnostics、Side Panel、Current Video、Overview、Transcript、Ask 与 active task UI；未翻译模型回答、提示词、转录、视频标题/频道、引用或 provider 原始错误；Browser smoke：NOT RUN — environment limitation。
+- CR-14 — preserve live task phase when deduplicating Web Locks fallback：CLOSED / PASS；最终 commit：`e561c2aa488c36eb730b88785ca4a91ea9785ee5`。Analysis/Ask destructive task snapshots 与 Web Lock descriptors 共享稳定 `taskId`；合并时优先保留 live Broadcast phase/threadId，仅在没有对应 live snapshot 时保留 `phase = unknown` fail-closed fallback；未修改 DB、manifest permissions、provider、transcript acquisition 或既有 Web Locks admission/reservation 设计；Browser smoke：NOT RUN。
 
-- 当前任务：Granular History Deletion / Data Management；实现完成，待独立复审。
+- Granular History Deletion / Data Management：CLOSED / PASS；已通过独立复审；未修改 DB migration、i18n、Provider transport、Analysis/Ask lifecycle、platform transcript acquisition 或 manifest permissions；Browser smoke：NOT RUN。
 - 已加入 repository 级 `deleteAnalysisRun`、`deleteVideoData`、`clearQaData`、`clearTranscriptCache`、`clearAnalysisHistory`，均通过 Dexie rw transaction；单 run 删除保留 provider、transcript source/cache、videoRecord 与其他 run，contentKey 删除按 canonical identity 清理分析、Ask、transcript cache/snapshots、videoRecord 和兼容 history。
 - Data 管理已改为独立的 Clear conversations、Clear transcript cache、Clear analysis history、Clear diagnostics、Clear all extension data 操作，每项使用独立双确认；inventory/export 覆盖 videoRecords、transcriptCache、analysisCache、qaAnswers、QA threads/messages 与 diagnostics。
 - Recent/Full History 增加 per-run overflow actions；当前 Side Panel 删除当前 run/video 后会清理对应 analysis/Ask workspace，active matching task 时 fail-safe 阻止删除。

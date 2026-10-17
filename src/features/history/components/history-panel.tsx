@@ -11,6 +11,7 @@ import {
   PENDING_HISTORY_OPEN_KEY,
   type PendingHistoryOpenPayload
 } from "@/features/history/lib/pending-history-open"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 const FULL_HISTORY_LIMIT = 200
 
@@ -32,6 +33,7 @@ function toListItem(
 }
 
 export function HistoryPanel() {
+  const { t } = useI18n()
   const [items, setItems] = useState<RecentAnalysisListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -84,7 +86,7 @@ export function HistoryPanel() {
 
   const handleDeleteAnalysis = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.analysisRunId) return
-    if (!window.confirm(`Delete this saved analysis?\n\n${item.title}`)) return
+    if (!window.confirm(`${t("history.deleteAnalysis")}\n\n${item.title}`)) return
     try {
       await performDestructiveOperation(
         "delete-analysis-run",
@@ -93,14 +95,14 @@ export function HistoryPanel() {
       )
       await reload()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete this analysis.")
+      toast.error(error instanceof Error ? error.message : t("history.deleteFailed"))
     }
-  }, [reload])
+  }, [reload, t])
 
   const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.contentKey) return
-    if (!window.confirm(`Delete all local data for this video?\n\n${item.title}\n\nThis removes its analyses, Ask data, transcript cache, and video record.`)) return
-    if (!window.confirm(`Confirm deleting all data for “${item.title}”.`)) return
+    if (!window.confirm(`${t("history.deleteVideoPrompt")}\n\n${item.title}`)) return
+    if (!window.confirm(t("history.deleteVideoDetail", { title: item.title }))) return
     try {
       await performDestructiveOperation(
         "delete-video-data",
@@ -109,9 +111,9 @@ export function HistoryPanel() {
       )
       await reload()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete this video's data.")
+      toast.error(error instanceof Error ? error.message : t("history.videoDeleteFailed"))
     }
-  }, [reload])
+  }, [reload, t])
 
   return (
     <RecentAnalysisList
@@ -121,8 +123,8 @@ export function HistoryPanel() {
       onSelect={handleSelect}
       onDeleteAnalysis={handleDeleteAnalysis}
       onDeleteVideo={handleDeleteVideo}
-      searchPlaceholder="Search history (title, channel, video ID)"
-      emptyMatchMessage="No history entries match your search."
+      searchPlaceholder={t("history.search")}
+      emptyMatchMessage={t("history.noFullMatch")}
       scrollHeightClassName="h-[32rem]"
     />
   )

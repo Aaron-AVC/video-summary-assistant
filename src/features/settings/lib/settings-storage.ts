@@ -1,5 +1,9 @@
 import { sanitizeProviderConfigForExport } from "@/lib/export/provider-config-export"
 import {
+  normalizeLanguagePreference,
+  type LanguagePreference,
+} from "@/lib/i18n/i18n"
+import {
   DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
   MAX_PROVIDER_GENERATION_TIMEOUT_SEC,
   MIN_PROVIDER_GENERATION_TIMEOUT_SEC,
@@ -32,6 +36,7 @@ export type ResolvedProvider = {
 
 export type SettingsSnapshot = {
   theme: ThemePreference
+  language: LanguagePreference
   defaultProviderId: string | null
   providerConfigs: ProviderProfileView[]
   diagnosticLogging: boolean
@@ -56,6 +61,7 @@ export const SETTINGS_KEYS = {
   providerSecrets: "yt-summarizer.provider.secrets",
   legacyProviderConfigs: "yt-summarizer.provider.configs",
   diagnosticLogging: "yt-summarizer.diagnostic-logging",
+  language: "yt-summarizer.language",
 } as const
 
 const SETTINGS_KEY_LIST = [
@@ -65,6 +71,7 @@ const SETTINGS_KEY_LIST = [
   SETTINGS_KEYS.providerSecrets,
   SETTINGS_KEYS.legacyProviderConfigs,
   SETTINGS_KEYS.diagnosticLogging,
+  SETTINGS_KEYS.language,
 ]
 
 const DEFAULT_THEME: ThemePreference = "system"
@@ -250,6 +257,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       SETTINGS_KEYS.providerProfiles,
       SETTINGS_KEYS.providerSecrets,
       SETTINGS_KEYS.diagnosticLogging,
+      SETTINGS_KEYS.language,
     ])
     const profiles = normalizeProfiles(values[SETTINGS_KEYS.providerProfiles])
     const secrets = normalizeSecrets(values[SETTINGS_KEYS.providerSecrets])
@@ -271,6 +279,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     }))
     return {
       theme: normalizeThemePreference(values[SETTINGS_KEYS.theme]),
+      language: normalizeLanguagePreference(values[SETTINGS_KEYS.language]),
       defaultProviderId: defaultProviderId as string | null,
       providerConfigs,
       diagnosticLogging: values[SETTINGS_KEYS.diagnosticLogging] === true,
@@ -302,6 +311,15 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     async setThemePreference(theme: ThemePreference) {
       await adapter.set({ [SETTINGS_KEYS.theme]: theme })
       return theme
+    },
+    async getLanguagePreference(): Promise<LanguagePreference> {
+      const values = await adapter.get<unknown>([SETTINGS_KEYS.language])
+      return normalizeLanguagePreference(values[SETTINGS_KEYS.language])
+    },
+    async setLanguagePreference(language: LanguagePreference) {
+      const normalized = normalizeLanguagePreference(language)
+      await adapter.set({ [SETTINGS_KEYS.language]: normalized })
+      return normalized
     },
     async getProviderProfiles() {
       return (await readSnapshot()).providerConfigs
@@ -441,6 +459,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
         SETTINGS_KEYS.providerSecrets,
         SETTINGS_KEYS.legacyProviderConfigs,
         SETTINGS_KEYS.diagnosticLogging,
+        SETTINGS_KEYS.language,
       ])
       migrationPromise = null
     }

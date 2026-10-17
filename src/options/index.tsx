@@ -14,6 +14,7 @@ import { HistoryPanel } from "@/features/history/components/history-panel"
 import { ProviderForm } from "@/features/settings/components/provider-form"
 import { ThemeSettings } from "@/features/settings/components/theme-settings"
 import type { ProviderConfigRecord } from "@/features/settings/lib/settings-storage"
+import { I18nProvider, useI18n } from "@/lib/i18n/i18n-provider"
 import { ExtensionProviders } from "@/lib/providers/extension-providers"
 import { Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
@@ -21,34 +22,35 @@ import { useEffect, useMemo, useState } from "react"
 const SETTINGS_TABS = [
   {
     value: "provider",
-    label: "Provider",
-    keywords: ["provider", "model", "api", "key", "connection", "test", "default"]
+    keywords: ["provider", "model", "api", "key", "connection", "test", "default"],
+    keywordKeys: ["options.keyword.provider", "options.keyword.model", "options.keyword.api"]
   },
   {
     value: "appearance",
-    label: "Appearance",
-    keywords: ["appearance", "theme", "light", "dark", "system"]
+    keywords: ["appearance", "theme", "light", "dark", "system", "language"],
+    keywordKeys: ["options.keyword.appearance", "options.keyword.theme", "options.keyword.language", "options.keyword.lightDarkSystem"]
   },
   {
     value: "history",
-    label: "History",
-    keywords: ["history", "search", "videos", "analyses", "saved", "recent", "log"]
+    keywords: ["history", "search", "videos", "analyses", "saved", "recent", "log"],
+    keywordKeys: ["options.keyword.history", "options.keyword.searchVideosAnalysesSavedRecentLog"]
   },
   {
     value: "data",
-    label: "Data",
-    keywords: ["data", "export", "clear", "local", "reset"]
+    keywords: ["data", "export", "clear", "local", "reset"],
+    keywordKeys: ["options.keyword.data", "options.keyword.exportClearLocalReset"]
   },
   {
     value: "advanced",
-    label: "Advanced",
-    keywords: ["advanced", "diagnostics", "logs", "debug", "transcript log"]
+    keywords: ["advanced", "diagnostics", "logs", "debug", "transcript log"],
+    keywordKeys: ["options.keyword.diagnostics", "options.keyword.advancedLogsDebugTranscript"]
   }
 ] as const
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["value"]
 
-function OptionsPage() {
+function OptionsPageContent() {
+  const { t } = useI18n()
   const [selectedProvider, setSelectedProvider] = useState<ProviderConfigRecord | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<ProviderConnectionStatus | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
@@ -59,16 +61,24 @@ function OptionsPage() {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const normalizedQuery = searchQuery.trim().toLowerCase()
+  const settingsTabs = useMemo(() => SETTINGS_TABS.map((tab) => ({
+    ...tab,
+    label: t(`options.tab.${tab.value}` as Parameters<typeof t>[0]),
+    localizedKeywords: [
+      ...tab.keywords,
+      ...tab.keywordKeys.flatMap((key) => t(key).split(/[\s、,]+/)),
+    ],
+  })), [t])
   const matchingTabs = useMemo(
     () =>
       normalizedQuery
-        ? SETTINGS_TABS.filter((tab) =>
-            [tab.label, ...tab.keywords].some((keyword) =>
+        ? settingsTabs.filter((tab) =>
+            [tab.label, ...tab.localizedKeywords].some((keyword) =>
               keyword.toLowerCase().includes(normalizedQuery)
             )
           )
-        : SETTINGS_TABS,
-    [normalizedQuery]
+        : settingsTabs,
+    [normalizedQuery, settingsTabs]
   )
 
   useEffect(() => {
@@ -85,14 +95,13 @@ function OptionsPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-col gap-2">
                 <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs uppercase">
-                  Settings
+                  {t("options.settings")}
                 </Badge>
                 <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-                  Configure Video Summary Assistant
+                  {t("options.configure")}
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                  Set up the provider, appearance, local data, and diagnostics
-                  from focused tabs.
+                  {t("options.description")}
                 </p>
               </div>
               <div className="w-full lg:max-w-sm">
@@ -101,10 +110,10 @@ function OptionsPage() {
                     <Search data-icon="inline-start" />
                   </InputGroupAddon>
                   <InputGroupInput
-                    placeholder="Search settings"
+                    placeholder={t("options.searchSettings")}
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    aria-label="Search settings"
+                    aria-label={t("options.searchSettings")}
                   />
                 </InputGroup>
               </div>
@@ -122,7 +131,7 @@ function OptionsPage() {
 
             {matchingTabs.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/70 bg-card/70 p-6 text-sm text-muted-foreground">
-                No settings match “{searchQuery}”.
+                {t("options.noMatch", { query: searchQuery })}
               </div>
             ) : null}
 
@@ -171,4 +180,10 @@ function OptionsPage() {
   )
 }
 
-export default OptionsPage
+export default function OptionsPage() {
+  return (
+    <I18nProvider>
+      <OptionsPageContent />
+    </I18nProvider>
+  )
+}

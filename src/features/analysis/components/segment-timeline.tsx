@@ -12,6 +12,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 export type SegmentTimelineItem = {
   id: string
@@ -35,12 +36,13 @@ export function SegmentTimeline({
   onJump,
   formatTimestamp
 }: SegmentTimelineProps) {
+  const { t } = useI18n()
   return (
     <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95" data-layout-check="chapters-panel">
       <CardHeader className="flex min-w-0 flex-col gap-3 p-4">
         <div className="min-w-0">
-          <CardTitle className="text-base">Chapters</CardTitle>
-          <CardDescription className="text-xs">Jump to transcript-backed sections.</CardDescription>
+          <CardTitle className="text-base">{t("overview.chapters")}</CardTitle>
+          <CardDescription className="text-xs">{t("overview.jumpSections")}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="min-w-0 overflow-hidden p-4 pt-0">
@@ -67,7 +69,7 @@ export function SegmentTimeline({
                       </div>
                       <Button size="sm" className="shrink-0 gap-2" onClick={() => onJump(segment.startSec)}>
                         <Play data-icon="inline-start" />
-                        Jump here
+                        {t("overview.jumpHere")}
                       </Button>
                     </div>
                     <p className="mt-3 max-w-full text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
@@ -84,7 +86,7 @@ export function SegmentTimeline({
           </ScrollArea>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Chapters will appear here after a completed analysis.
+            {t("overview.chaptersAfter")}
           </p>
         )}
       </CardContent>

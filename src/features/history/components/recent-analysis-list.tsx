@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 export type RecentAnalysisListItem = {
   videoId: string
@@ -64,10 +65,13 @@ export function RecentAnalysisList({
   onDeleteVideo,
   onOpenFullHistory,
   searchable = true,
-  searchPlaceholder = "Search saved analyses",
-  emptyMatchMessage = "No saved analyses match your search.",
+  searchPlaceholder,
+  emptyMatchMessage,
   scrollHeightClassName = "h-[20rem]"
 }: RecentAnalysisListProps) {
+  const { t, locale } = useI18n()
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t("history.search")
+  const resolvedEmptyMatchMessage = emptyMatchMessage ?? t("history.noMatch")
   const [query, setQuery] = useState("")
   const normalizedQuery = query.trim().toLowerCase()
   const filteredItems = useMemo(() => {
@@ -89,9 +93,9 @@ export function RecentAnalysisList({
   return (
     <Card className="border-border/70 bg-card/95 shadow-lg shadow-primary/5">
       <CardHeader>
-        <CardTitle className="text-lg">Recent analyses</CardTitle>
+          <CardTitle className="text-lg">{t("history.recent")}</CardTitle>
         <CardDescription>
-          Reopen locally saved summaries without rerunning the model.
+          {t("history.description")}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -102,8 +106,8 @@ export function RecentAnalysisList({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={searchPlaceholder}
-              aria-label="Search saved analyses"
+              placeholder={resolvedSearchPlaceholder}
+              aria-label={t("history.search")}
               className="pl-9"
             />
           </div>
@@ -116,11 +120,11 @@ export function RecentAnalysisList({
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
-            Completed analyses will build a local history list here.
+            {t("history.empty")}
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
-            {emptyMatchMessage}
+            {resolvedEmptyMatchMessage}
           </div>
         ) : (
           <ScrollArea className={scrollHeightClassName}>
@@ -150,18 +154,20 @@ export function RecentAnalysisList({
                       <div className="space-y-1">
                         <p className="line-clamp-2 text-sm font-semibold text-foreground">{item.title}</p>
                         <p className="text-xs text-muted-foreground">
-                          {item.channelTitle ?? "Unknown channel"}
+                          {item.channelTitle ?? t("history.unknownChannel")}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="rounded-full px-3 py-1">
-                          {item.status ?? "saved"}
+                          {item.status
+                            ? translateHistoryStatus(item.status, t)
+                            : t("history.saved")}
                         </Badge>
                         {(item.analysisRunId && onDeleteAnalysis) || (item.contentKey && onDeleteVideo) ? (
                           <details className="relative" onClick={(event) => event.stopPropagation()}>
                             <summary
                               className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-                              aria-label="More actions">
+                              aria-label={t("common.open")}>
                               <MoreVertical className="h-4 w-4" />
                             </summary>
                             <div className="absolute right-0 z-10 mt-1 min-w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
@@ -171,7 +177,7 @@ export function RecentAnalysisList({
                                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-destructive hover:bg-destructive/10"
                                   onClick={() => void onDeleteAnalysis(item)}>
                                   <Trash2 className="h-3.5 w-3.5" />
-                                  Delete this analysis
+                                  {t("history.deleteAnalysis")}
                                 </button>
                               ) : null}
                               {item.contentKey && onDeleteVideo ? (
@@ -180,7 +186,7 @@ export function RecentAnalysisList({
                                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-destructive hover:bg-destructive/10"
                                   onClick={() => void onDeleteVideo(item)}>
                                   <Trash2 className="h-3.5 w-3.5" />
-                                  Delete all data for this video
+                                  {t("history.deleteVideo")}
                                 </button>
                               ) : null}
                             </div>
@@ -191,11 +197,11 @@ export function RecentAnalysisList({
                     <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock3 className="h-3.5 w-3.5" />
-                        {new Date(item.updatedAt).toLocaleString()}
+                        {new Date(item.updatedAt).toLocaleString(locale)}
                       </span>
                       <span className="flex items-center gap-1 text-sm font-medium text-primary">
                         <FolderOpen className="h-4 w-4" />
-                        Open
+                        {t("history.open")}
                       </span>
                     </div>
                   </div>
@@ -211,20 +217,32 @@ export function RecentAnalysisList({
               size="sm"
               onClick={onOpenFullHistory}
               className="gap-2"
-              aria-label="Open full history in Settings">
+              aria-label={t("history.openFull")}>
               <History className="h-3.5 w-3.5" />
-              Open full history
+              {t("history.openFull")}
             </Button>
           ) : (
             <span />
           )}
           <Button variant="ghost" size="sm" disabled={items.length === 0}>
             {normalizedQuery
-              ? `${filteredItems.length} of ${items.length}`
-              : `${items.length} saved`}
+              ? t("history.searchCount", { count: filteredItems.length })
+              : `${items.length} ${t("history.saved")}`}
           </Button>
         </div>
       </CardContent>
     </Card>
   )
+}
+
+function translateHistoryStatus(
+  status: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  const statusKeys: Record<string, Parameters<typeof t>[0]> = {
+    completed: "history.status.completed",
+    error: "history.status.error",
+    cancelled: "history.status.cancelled",
+  }
+  return statusKeys[status] ? t(statusKeys[status]) : status
 }

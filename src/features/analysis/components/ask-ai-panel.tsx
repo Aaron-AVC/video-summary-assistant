@@ -12,6 +12,7 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type AskAiPanelProps = {
   question: string
@@ -42,15 +43,16 @@ export function AskAiPanel({
   onJump,
   formatTimestamp
 }: AskAiPanelProps) {
+  const { t } = useI18n()
   return (
     <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95" data-layout-check="ask-ai-panel">
       <CardHeader className="min-w-0 p-4">
         <CardDescription className="flex min-w-0 items-center gap-2 text-xs font-medium uppercase text-primary">
           <MessageCircleQuestion className="h-3.5 w-3.5" />
-          Ask AI
+          {t("ask.askAI")}
         </CardDescription>
         <CardTitle className="max-w-full text-base [overflow-wrap:anywhere]">
-          Grounded follow-up
+          {t("ask.groundedFollowUp")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-3 p-4 pt-1">
@@ -64,11 +66,11 @@ export function AskAiPanel({
             className="min-w-0"
             value={question}
             onChange={(event) => onQuestionChange(event.target.value)}
-            placeholder="Ask about this video"
-            aria-label="Ask AI a question about this video"
+            placeholder={t("ask.placeholder")}
+            aria-label={t("ask.ariaQuestion")}
             disabled={isAsking}
           />
-          <Button type="submit" size="icon" className="shrink-0" disabled={!canAsk || isAsking} aria-label="Ask AI">
+          <Button type="submit" size="icon" className="shrink-0" disabled={!canAsk || isAsking} aria-label={t("ask.askAI")}>
             {isAsking ? (
               <Loader2 data-icon="inline-start" className="animate-spin" />
             ) : (
@@ -115,7 +117,7 @@ export function AskAiPanel({
                     className="shrink-0 gap-2"
                     onClick={() => onJump(citation.startSec)}>
                     <Play data-icon="inline-start" />
-                    Jump
+                    {t("overview.jump")}
                   </Button>
                 </div>
               ))}
@@ -145,7 +147,7 @@ export function AskAiPanel({
           </div>
         ) : (
           <p className="max-w-full text-sm text-muted-foreground [overflow-wrap:anywhere]">
-            {disabledReason ?? "Ask a question after a transcript-backed analysis is available."}
+            {disabledReason ?? t("ask.disabledReason")}
           </p>
         )}
       </CardContent>

@@ -5,6 +5,7 @@ import {
   selectSidePanelTab,
   type SidePanelTab,
 } from "@/sidepanel/lib/sidepanel-ux"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type SidePanelShellProps = {
   activeTab: SidePanelTab
@@ -17,13 +18,6 @@ type SidePanelShellProps = {
   settings: ReactNode
 }
 
-const TAB_LABELS: Array<{ value: SidePanelTab; label: string }> = [
-  { value: "overview", label: "Overview" },
-  { value: "transcript", label: "Transcript" },
-  { value: "ask", label: "Ask" },
-  { value: "settings", label: "Settings" },
-]
-
 export function SidePanelShell({
   activeTab,
   onTabChange,
@@ -34,6 +28,13 @@ export function SidePanelShell({
   ask,
   settings,
 }: SidePanelShellProps) {
+  const { t } = useI18n()
+  const tabLabels: Array<{ value: SidePanelTab; label: string }> = [
+    { value: "overview", label: t("side.overview") },
+    { value: "transcript", label: t("side.transcript") },
+    { value: "ask", label: t("side.ask") },
+    { value: "settings", label: t("side.settings") },
+  ]
   return (
     <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-3">
       {header}
@@ -43,9 +44,9 @@ export function SidePanelShell({
         onValueChange={(value) => onTabChange(selectSidePanelTab(activeTab, value))}
         className="min-w-0">
         <TabsList
-          aria-label="Side Panel sections"
+          aria-label={t("side.sections")}
           className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 rounded-lg p-1 min-[420px]:grid-cols-4">
-          {TAB_LABELS.map((tab) => (
+          {tabLabels.map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}

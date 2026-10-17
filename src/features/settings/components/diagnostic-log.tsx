@@ -22,6 +22,8 @@ import {
 import { ClipboardCopy, FileText, RefreshCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useCallback, useEffect, useState } from "react"
+import { useI18n } from "@/lib/i18n/i18n-provider"
+import type { TranslationKey } from "@/lib/i18n/en"
 
 function formatStepDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`
@@ -32,6 +34,7 @@ type CopyDiagnosticLogsDeps = {
   write: (text: string) => Promise<void>
   notifySuccess: (message: string) => void
   notifyError: (message: string) => void
+  t?: (key: TranslationKey, params?: Record<string, string | number>) => string
 }
 
 /**
@@ -44,35 +47,52 @@ export async function copyDiagnosticLogsToClipboard(
   logs: TranscriptLogEntry[],
   deps: CopyDiagnosticLogsDeps,
 ): Promise<void> {
+  const fallbackTranslate = (key: TranslationKey, params?: Record<string, string | number>) => {
+    const fallback: Partial<Record<TranslationKey, string>> = {
+      "diagnostics.copied": `Copied {count} diagnostic {entryLabel} to clipboard.`,
+      "diagnostics.entry": "entry",
+      "diagnostics.entries": "entries",
+      "diagnostics.copyFailed": "Could not copy diagnostic logs to the clipboard.",
+      "diagnostics.copyFailedWithDetail": "Could not copy diagnostic logs: {error}",
+    }
+    return (fallback[key] ?? key).replace(/\{([\w.-]+)\}/g, (match, name: string) => {
+      const value = params?.[name]
+      return value === undefined ? match : String(value)
+    })
+  }
+  const translate = deps.t ?? fallbackTranslate
   const text = JSON.stringify(logs, null, 2)
   try {
     await deps.write(text)
     deps.notifySuccess(
-      `Copied ${logs.length} diagnostic ${logs.length === 1 ? "entry" : "entries"} to clipboard.`,
+      translate("diagnostics.copied", {
+        count: logs.length,
+        entryLabel: translate(logs.length === 1 ? "diagnostics.entry" : "diagnostics.entries"),
+      }),
     )
   } catch (error) {
     deps.notifyError(
       error instanceof Error
-        ? `Could not copy diagnostic logs: ${error.message}`
-        : "Could not copy diagnostic logs to the clipboard.",
+        ? translate("diagnostics.copyFailedWithDetail", { error: error.message })
+        : translate("diagnostics.copyFailed"),
     )
   }
 }
 
-function formatTimestamp(iso: string): string {
+function formatTimestamp(iso: string, locale: string): string {
   try {
-    return new Date(iso).toLocaleString()
+    return new Date(iso).toLocaleString(locale)
   } catch {
     return iso
   }
 }
 
-function StepRow({ step }: { step: TranscriptLogStep }) {
+function StepRow({ step, t }: { step: TranscriptLogStep; t: ReturnType<typeof useI18n>["t"] }) {
   const statusLabel = step.skipped
-    ? "SKIP"
+    ? t("diagnostics.skip")
     : step.ok
-      ? "OK"
-      : "FAIL"
+      ? t("diagnostics.ok")
+      : t("diagnostics.fail")
 
   const statusTone = step.skipped ? "muted" : step.ok ? "success" : "destructive"
 
@@ -97,7 +117,7 @@ function StepRow({ step }: { step: TranscriptLogStep }) {
   )
 }
 
-function LogEntryCard({ entry }: { entry: TranscriptLogEntry }) {
+function LogEntryCard({ entry, t, locale }: { entry: TranscriptLogEntry; t: ReturnType<typeof useI18n>["t"]; locale: string }) {
   const [expanded, setExpanded] = useState(false)
   const totalMs = entry.steps.reduce((sum, s) => sum + s.durationMs, 0)
   const isSuccess = entry.outcome === "success"
@@ -111,14 +131,14 @@ function LogEntryCard({ entry }: { entry: TranscriptLogEntry }) {
       >
         <div className="flex items-center gap-3">
           <StatusBadge tone={isSuccess ? "success" : "destructive"} showDot>
-            {isSuccess ? "OK" : "FAIL"}
+            {isSuccess ? t("diagnostics.ok") : t("diagnostics.fail")}
           </StatusBadge>
           <span className="font-mono text-sm text-foreground">
             {entry.videoId}
           </span>
           {entry.successStep && (
             <span className="text-xs text-muted-foreground">
-              via {entry.successStep}
+              {t("diagnostics.successVia", { step: entry.successStep })}
             </span>
           )}
         </div>
@@ -127,7 +147,7 @@ function LogEntryCard({ entry }: { entry: TranscriptLogEntry }) {
             {formatStepDuration(totalMs)}
           </span>
           <span className="text-xs text-muted-foreground">
-            {formatTimestamp(entry.timestamp)}
+            {formatTimestamp(entry.timestamp, locale)}
           </span>
           <span className="text-xs text-muted-foreground">
             {expanded ? "▲" : "▼"}
@@ -138,7 +158,7 @@ function LogEntryCard({ entry }: { entry: TranscriptLogEntry }) {
       {expanded && (
         <div className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
           {entry.steps.map((step, index) => (
-            <StepRow key={`${step.step}-${index}`} step={step} />
+            <StepRow key={`${step.step}-${index}`} step={step} t={t} />
           ))}
         </div>
       )}
@@ -147,6 +167,7 @@ function LogEntryCard({ entry }: { entry: TranscriptLogEntry }) {
 }
 
 export function DiagnosticLog() {
+  const { t, locale } = useI18n()
   const [enabled, setEnabled] = useState(false)
   const [logs, setLogs] = useState<TranscriptLogEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -179,10 +200,11 @@ export function DiagnosticLog() {
     () =>
       copyDiagnosticLogsToClipboard(logs, {
         write: (text) => navigator.clipboard.writeText(text),
-        notifySuccess: toast.success,
-        notifyError: toast.error,
+        notifySuccess: (message) => toast.success(message),
+        notifyError: (message) => toast.error(message),
+        t,
       }),
-    [logs],
+    [logs, t],
   )
 
   if (loading) return null
@@ -195,22 +217,21 @@ export function DiagnosticLog() {
             variant="secondary"
             className="w-fit rounded-full px-3 py-1"
           >
-            Diagnostics
+            {t("diagnostics.title")}
           </Badge>
-          <CardTitle>Transcript fetch log</CardTitle>
+          <CardTitle>{t("diagnostics.transcriptLog")}</CardTitle>
           <CardDescription>
-            When enabled, logs each step of the transcript fallback chain so you
-            can see exactly what happened when fetching fails.
+            {t("diagnostics.description")}
           </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <SwitchRow
           checked={enabled}
-          description={<>Records timing and results for each transcript extraction step. Keeps the last {20} runs.</>}
+          description={t("diagnostics.enableDescription", { count: 20 })}
           icon={FileText}
           id="diagnostic-logging"
-          label="Enable diagnostic logging"
+          label={t("diagnostics.enable")}
           onCheckedChange={handleToggle}
         />
 
@@ -218,7 +239,7 @@ export function DiagnosticLog() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-foreground">
-                Recent logs ({logs.length})
+                {t("diagnostics.recent", { count: logs.length })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -228,7 +249,7 @@ export function DiagnosticLog() {
                   className="rounded-xl"
                 >
                   <RefreshCw data-icon="inline-start" />
-                  Refresh
+                  {t("common.refresh")}
                 </Button>
                 <Button
                   onClick={() => void handleCopy()}
@@ -237,7 +258,7 @@ export function DiagnosticLog() {
                   className="rounded-xl"
                 >
                   <ClipboardCopy data-icon="inline-start" />
-                  Copy JSON
+                  {t("diagnostics.copyJson")}
                 </Button>
                 <Button
                   onClick={() => void handleClear()}
@@ -246,14 +267,14 @@ export function DiagnosticLog() {
                   className="rounded-xl text-destructive hover:text-destructive"
                 >
                   <Trash2 data-icon="inline-start" />
-                  Clear
+                  {t("common.clear")}
                 </Button>
               </div>
             </div>
 
             <div className="space-y-2">
               {logs.map((entry, index) => (
-                <LogEntryCard key={`${entry.timestamp}-${index}`} entry={entry} />
+                <LogEntryCard key={`${entry.timestamp}-${index}`} entry={entry} t={t} locale={locale} />
               ))}
             </div>
           </div>
@@ -262,7 +283,7 @@ export function DiagnosticLog() {
         {logs.length === 0 && enabled && (
           <SettingsSection>
             <p className="text-center text-sm text-muted-foreground">
-              No logs yet. Try fetching a transcript and check back here.
+              {t("diagnostics.empty")}
             </p>
           </SettingsSection>
         )}

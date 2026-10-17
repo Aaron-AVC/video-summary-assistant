@@ -91,7 +91,6 @@ import {
 } from "@/sidepanel/lib/load-current-transcript"
 import {
   INITIAL_SIDE_PANEL_TAB,
-  getAnalysisStatusLabel,
   type AnalysisPhase,
   type SidePanelTab,
 } from "@/sidepanel/lib/sidepanel-ux"
@@ -108,6 +107,7 @@ import {
 } from "@/sidepanel/lib/ask-transcript-identity"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import { applySidepanelDataMutation } from "@/sidepanel/lib/apply-data-mutation"
+import { I18nProvider, useI18n } from "@/lib/i18n/i18n-provider"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -174,6 +174,7 @@ function identityFromAnalysis(view: AnalysisView): VideoIdentity {
 }
 
 function SidepanelWorkspace() {
+  const { t, locale } = useI18n()
   const { activeTabId, jumpToTimestamp, refreshCurrentVideo, status, videoContext } = useRuntimeBridge()
   const videoContextRef = useRef(videoContext)
   videoContextRef.current = videoContext
@@ -442,7 +443,7 @@ function SidepanelWorkspace() {
       try {
         await applyMutation(mutation)
       } catch {
-        toast.error("Local data changed, but this Side Panel could not refresh completely.")
+        toast.error(t("toast.localDataChanged"))
       }
     })
   }, [analysisTaskController, askTaskController, applyMutation])
@@ -807,10 +808,10 @@ function SidepanelWorkspace() {
   const handleLoadTranscript = useCallback(async () => {
     try {
       await loadTranscriptForCurrent(true)
-      toast.success("Transcript loaded.")
+      toast.success(t("toast.transcriptLoaded"))
     } catch (error) {
       if (error instanceof StaleTranscriptError) return
-      toast.error(error instanceof Error ? error.message : "Unknown transcript error.")
+      toast.error(error instanceof Error ? error.message : t("toast.unknownTranscriptError"))
     }
   }, [loadTranscriptForCurrent])
 
@@ -903,11 +904,11 @@ function SidepanelWorkspace() {
 
   const handleAnalyze = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     if (activeAnalysisTask) {
-      toast.error("Another analysis is already running.")
+      toast.error(t("toast.anotherAnalysis"))
       return
     }
     if (!videoContext.isReady || !videoContext.videoId || !videoContext.contentKey || activeTabId === null) {
-      toast.error("Open a supported video page before analyzing.")
+      toast.error(t("toast.openSupportedPage"))
       return
     }
     if (!provider) {
@@ -1052,7 +1053,7 @@ function SidepanelWorkspace() {
                 await restoreQaConversation(sourceVideo.contentKey, cached.analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
               }
               await refreshRecentAnalyses()
-              toast.success(`Loaded cached analysis: ${sourceVideo.title}`)
+              toast.success(t("toast.loadedCached", { title: sourceVideo.title }))
               return
             }
           }
@@ -1197,7 +1198,7 @@ function SidepanelWorkspace() {
             setAnalysisPhase("completed")
             await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
           }
-          toast.success(`Analysis completed: ${sourceVideo.title}`)
+          toast.success(t("toast.analysisCompleted", { title: sourceVideo.title }))
           }, { taskId })
         })
         await taskPromise
@@ -1210,13 +1211,13 @@ function SidepanelWorkspace() {
             setAnalysisError(null)
             setAnalysisPhase("cancelled")
           }
-          toast.message("Analysis cancelled.")
+          toast.message(t("toast.analysisCancelled"))
           return
         }
         const message = error instanceof StaleTranscriptError
           || (error instanceof Error && error.message.includes("video part changed while captions were loading"))
           ? "Source video changed before its transcript could be captured."
-          : error instanceof Error ? error.message : "Unknown analysis error."
+          : error instanceof Error ? error.message : t("toast.unknownAnalysisError")
         if (isWorkspaceCurrent) {
           setAnalysisError(message)
           setAnalysisPhase("error")
@@ -1229,7 +1230,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, refreshRecentAnalyses, restoreQaConversation, videoContext])
+  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, refreshRecentAnalyses, restoreQaConversation, t, videoContext])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()
@@ -1261,7 +1262,7 @@ function SidepanelWorkspace() {
     } else {
       await loadSavedAnalysis(videoId, generation)
     }
-    toast.success("Loaded saved analysis from local history.")
+    toast.success(t("toast.loadedHistory"))
   }, [loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun])
 
   const hasActiveTaskForContent = useCallback((contentKey?: string) => {
@@ -1273,10 +1274,10 @@ function SidepanelWorkspace() {
   const handleDeleteAnalysis = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.analysisRunId) return
     if (hasActiveTaskForContent(item.contentKey)) {
-      toast.error("Cancel the active task before deleting this analysis.")
+      toast.error(t("history.cancelFirst"))
       return
     }
-    if (!window.confirm(`Delete this saved analysis?\n\n${item.title}`)) return
+    if (!window.confirm(`${t("history.deleteAnalysis")}\n\n${item.title}`)) return
     try {
       await performDestructiveOperation(
         "delete-analysis-run",
@@ -1284,20 +1285,20 @@ function SidepanelWorkspace() {
         () => historyRepository.deleteAnalysisRun(item.analysisRunId!),
       )
       await applyMutation({ type: "delete-analysis-run", analysisRunId: item.analysisRunId })
-      toast.success("Saved analysis deleted.")
+      toast.success(t("history.deleted"))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete this analysis.")
+      toast.error(error instanceof Error ? error.message : t("history.deleteFailed"))
     }
   }, [applyMutation, hasActiveTaskForContent])
 
   const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.contentKey) return
     if (hasActiveTaskForContent(item.contentKey)) {
-      toast.error("Cancel the active task before deleting this video data.")
+      toast.error(t("history.cancelFirst"))
       return
     }
-    if (!window.confirm(`Delete all local data for this video?\n\n${item.title}`)) return
-    if (!window.confirm(`This removes analyses, Ask data, transcript cache, and the video record for “${item.title}”. Continue?`)) return
+    if (!window.confirm(`${t("history.deleteVideo")}\n\n${item.title}`)) return
+    if (!window.confirm(t("history.deleteVideoDetail", { title: item.title }))) return
     try {
       await performDestructiveOperation(
         "delete-video-data",
@@ -1305,9 +1306,9 @@ function SidepanelWorkspace() {
         () => historyRepository.deleteVideoData(item.contentKey!),
       )
       await applyMutation({ type: "delete-video-data", contentKey: item.contentKey })
-      toast.success("All local data for this video was deleted.")
+      toast.success(t("history.allDeleted"))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete this video's data.")
+      toast.error(error instanceof Error ? error.message : t("history.videoDeleteFailed"))
     }
   }, [applyMutation, hasActiveTaskForContent])
 
@@ -1352,13 +1353,13 @@ function SidepanelWorkspace() {
 
   const handleAsk = useCallback(async () => {
     if (askStartLockRef.current || activeAskTask) {
-      toast.message("Another Ask Video request is already running.")
+      toast.message(t("toast.anotherAsk"))
       return
     }
     if (!analysisView || !provider) return
     const preflightAskGeneration = askGenerationRef.current
     if (isTranscriptLoading || isAnalysisFetching || isAnalysisBusy) {
-      const message = "Transcript is still loading. Wait before asking a question."
+      const message = t("toast.transcriptStillLoading")
       setAskError(message)
       toast.error(message)
       return
@@ -1371,7 +1372,7 @@ function SidepanelWorkspace() {
       contentMatches: transcriptIdentity?.contentKey === analysisView.contentKey,
     })
     if (transcriptLoadGenerationRef.current !== requestedTranscriptLoadGeneration) {
-      const message = "Transcript changed while it was loading. Try again."
+      const message = t("toast.transcriptChangedWhileLoading")
       setAskError(message)
       toast.error(message)
       return
@@ -1392,7 +1393,7 @@ function SidepanelWorkspace() {
     const requestedAnalysisRunId = analysisView.analysisRunId ?? "legacy"
     const requestedTranscriptFingerprint = actualTranscriptFingerprint
     if (askStartLockRef.current || activeAskTask) {
-      toast.message("Another Ask Video request is already running.")
+      toast.message(t("toast.anotherAsk"))
       return
     }
     pendingAskOperationRef.current = {
@@ -1591,16 +1592,16 @@ function SidepanelWorkspace() {
           setQaMessages((current) => [...current, assistantMessage])
           setAskAnswer(answer)
         }
-        toast.success(`Ask Video answer ready: ${taskSnapshot.videoTitle}`)
+        toast.success(t("toast.askReady", { title: taskSnapshot.videoTitle }))
       }, { taskId: admission.taskId })
       await taskPromise
     } catch (error) {
       const wasCancelled = askSignal?.aborted
       if (wasCancelled) {
-        toast.message("Ask Video request cancelled.")
+        toast.message(t("toast.askCancelled"))
         return
       }
-      const message = error instanceof Error ? error.message : "Unknown Ask Video error."
+      const message = error instanceof Error ? error.message : t("toast.unknownAskError")
       if (isCurrentAsk()) setAskError(message)
       toast.error(message)
     } finally {
@@ -1608,7 +1609,7 @@ function SidepanelWorkspace() {
       pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }
-  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, transcriptCues, transcriptIdentity])
+  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, t, transcriptCues, transcriptIdentity])
 
   const handleCancelAsk = useCallback(() => {
     askTaskController.cancel()
@@ -1678,20 +1679,20 @@ function SidepanelWorkspace() {
     timestampSeconds: number,
   ) => {
     if (!identity) {
-      toast.error("No video context available.")
+      toast.error(t("toast.noVideoContext"))
       return
     }
     const result = await jumpToTimestamp(identity, timestampSeconds)
     if (result.ok === true) {
       toast.success(
         result.openedNewTab
-          ? `Opened video at ${formatTimestamp(timestampSeconds)} in a new tab.`
-          : `Jumped to ${formatTimestamp(timestampSeconds)} in the active tab.`,
+          ? t("runtime.openedVideoAt", { timestamp: formatTimestamp(timestampSeconds) })
+          : t("runtime.jumpedActive", { timestamp: formatTimestamp(timestampSeconds) }),
       )
     } else {
       toast.error(result.error)
     }
-  }, [jumpToTimestamp])
+  }, [jumpToTimestamp, t])
 
   const handleAnalysisJump = useCallback((timestampSeconds: number) => {
     const identity = analysisView
@@ -1706,7 +1707,7 @@ function SidepanelWorkspace() {
 
   const handleDownload = useCallback(async () => {
     if (!rawVtt || !transcriptIdentity) {
-      toast.error("Original VTT is unavailable for this transcript.")
+      toast.error(t("toast.originalUnavailable"))
       return
     }
     await downloadRawVtt({
@@ -1714,8 +1715,8 @@ function SidepanelWorkspace() {
       videoId: transcriptIdentity.videoId,
       title: transcriptTitle ?? transcriptIdentity.videoId,
     })
-    toast.success("Transcript download started.")
-  }, [rawVtt, transcriptIdentity, transcriptTitle])
+    toast.success(t("toast.downloadStarted"))
+  }, [rawVtt, t, transcriptIdentity, transcriptTitle])
 
   const handleProvidersChange = useCallback((providers: ProviderConfigRecord[]) => {
     setProvider(providers.find((item) => item.isDefault) ?? null)
@@ -1723,14 +1724,23 @@ function SidepanelWorkspace() {
 
   const visibleAnalysisError = analysisError
     ?? (activeAnalysisTask && activeAnalysisTask.snapshot.contentKey !== videoContext.contentKey
-      ? "Another analysis is already running."
+      ? t("analysis.otherRunning")
       : null)
     ?? analysisView?.errorMessage ?? (
-    status === "error" ? "Unable to load the active video context." : null
+    status === "error" ? t("analysis.unavailable") : null
   )
   const headerAnalysisState = isAnalysisFetching
-    ? "Loading analysis…"
-    : getAnalysisStatusLabel(workspaceTask?.phase ?? analysisPhase, Boolean(analysisView))
+    ? t("analysis.loading")
+    : (() => {
+      const phase = workspaceTask?.phase ?? analysisPhase
+      return phase === "loading-transcript" ? t("runtime.statusLoadingTranscript")
+        : phase === "analyzing" ? t("runtime.statusAnalyzing")
+          : phase === "finalizing" ? t("runtime.statusSaving")
+            : phase === "cancelling" ? t("runtime.statusCancelling")
+              : phase === "error" ? t("runtime.statusError")
+                : phase === "cancelled" ? t("runtime.statusCancelled")
+                  : analysisView ? t("runtime.statusReady") : t("runtime.statusNotAnalyzed")
+    })()
 
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden bg-background px-3 py-3 text-foreground sm:px-4">
@@ -1745,7 +1755,7 @@ function SidepanelWorkspace() {
             author={videoContext.author}
             canonicalUrl={canonicalUrl}
             videoId={videoContext.videoId ?? "Unavailable"}
-            timestampLabel={`Current playback: ${formatTimestamp(videoContext.timestampSeconds)}`}
+            timestampLabel={t("runtime.playbackAt", { timestamp: formatTimestamp(videoContext.timestampSeconds) })}
             isReady={videoContext.isReady}
             runtimeStatus={status}
             providerName={provider?.name ?? null}
@@ -1781,7 +1791,7 @@ function SidepanelWorkspace() {
               && !isAnalysisFetching,
             )}
             lastAnalyzedAt={analysisView?.lastAnalyzedAt
-              ? new Date(analysisView.lastAnalyzedAt).toLocaleString()
+              ? new Date(analysisView.lastAnalyzedAt).toLocaleString(locale)
               : null}
             recentItems={recentItems}
             isHistoryLoading={isBootstrapping}
@@ -1851,9 +1861,11 @@ function SidepanelWorkspace() {
 
 function SidePanel() {
   return (
-    <ExtensionProviders surface="sidepanel">
-      <SidepanelWorkspace />
-    </ExtensionProviders>
+    <I18nProvider>
+      <ExtensionProviders surface="sidepanel">
+        <SidepanelWorkspace />
+      </ExtensionProviders>
+    </I18nProvider>
   )
 }
 

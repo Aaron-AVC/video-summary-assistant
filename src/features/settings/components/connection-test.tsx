@@ -18,6 +18,7 @@ import {
 import { createOpenAICompatibleClient } from "@/features/analysis/lib/openai-compatible-client"
 import { requestProviderHostPermission } from "@/features/settings/lib/provider-permissions"
 import { settingsStorage, type ProviderConfigRecord } from "@/features/settings/lib/settings-storage"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 export type ProviderConnectionStatus = {
   providerId: string | null
@@ -37,6 +38,7 @@ export function ConnectionTest({
   status,
   onStatusChange
 }: ConnectionTestProps) {
+  const { t } = useI18n()
   const [isTesting, setIsTesting] = useState(false)
 
   async function handleTestConnection() {
@@ -44,9 +46,8 @@ export function ConnectionTest({
       onStatusChange({
         providerId: null,
         state: "error",
-        title: "Select a provider first",
-        message:
-          "Save or select a provider configuration before running a connection probe."
+        title: t("provider.select"),
+        message: t("provider.defaultProviderDescription")
       })
       return
     }
@@ -55,13 +56,13 @@ export function ConnectionTest({
     onStatusChange({
       providerId: provider.id,
       state: "pending",
-      title: "Testing provider connection",
-      message: `Sending a lightweight ping to ${provider.baseUrl}.`
+      title: t("provider.testing"),
+      message: t("provider.sendingPing", { url: provider.baseUrl })
     })
 
     try {
       const granted = await requestProviderHostPermission(provider.baseUrl)
-      if (!granted) throw new Error("Provider host permission was not granted.")
+      if (!granted) throw new Error(t("provider.permissionDenied"))
       const resolved = await settingsStorage.resolveProvider(provider.id)
       const client = createOpenAICompatibleClient({
         baseUrl: resolved.profile.baseUrl,
@@ -75,23 +76,23 @@ export function ConnectionTest({
         onStatusChange({
           providerId: provider.id,
           state: "success",
-          title: "Provider responded successfully",
-          message: `${result.model} replied from ${result.baseUrl} in ${result.latencyMs}ms.`
+          title: t("provider.responded"),
+          message: t("provider.testSuccess", { model: result.model, url: result.baseUrl, latency: result.latencyMs })
         })
       } else {
         onStatusChange({
           providerId: provider.id,
           state: "error",
-          title: "Provider connection failed",
-          message: "error" in result ? result.error : "Unknown provider error."
+          title: t("provider.connectionFailed"),
+          message: "error" in result ? result.error : t("provider.unknownModelsError")
         })
       }
     } catch (error) {
       onStatusChange({
         providerId: provider.id,
         state: "error",
-        title: "Provider connection failed",
-        message: error instanceof Error ? error.message : "Unknown provider error."
+        title: t("provider.connectionFailed"),
+        message: error instanceof Error ? error.message : t("provider.unknownModelsError")
       })
     } finally {
       setIsTesting(false)
@@ -111,12 +112,11 @@ export function ConnectionTest({
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
             <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-              Connection test
+              {t("provider.connection")}
             </Badge>
-            <CardTitle className="[overflow-wrap:anywhere]">Validate provider connectivity</CardTitle>
+            <CardTitle className="[overflow-wrap:anywhere]">{t("provider.connection")}</CardTitle>
             <CardDescription className="[overflow-wrap:anywhere]">
-              Run a lightweight request against the selected provider before you
-              trust it for transcript analysis.
+              {t("provider.testDescription")}
             </CardDescription>
           </div>
           <StatusBadge
@@ -138,12 +138,12 @@ export function ConnectionTest({
           <div className="flex min-w-0 flex-col gap-3 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
             <div className="min-w-0 space-y-1.5">
               <p className="text-sm font-medium text-foreground">
-                {provider ? provider.name : "No provider selected"}
+                {provider ? provider.name : t("provider.select")}
               </p>
               <p className="max-w-full text-sm text-muted-foreground [overflow-wrap:anywhere]">
                 {provider
                   ? `${provider.baseUrl} · ${provider.model}`
-                  : "Choose a saved provider from the form above to enable testing."}
+                  : t("provider.defaultProviderDescription")}
               </p>
             </div>
             <Button
@@ -156,7 +156,7 @@ export function ConnectionTest({
               ) : (
                 <PlugZap data-icon="inline-start" />
               )}
-              Test connection
+              {t("provider.connection")}
             </Button>
           </div>
         </SettingsSection>
@@ -169,11 +169,8 @@ export function ConnectionTest({
           </Alert>
         ) : (
           <Alert>
-            <AlertTitle>Connection checks stay local to your browser</AlertTitle>
-            <AlertDescription>
-              The probe only validates the configured provider, model, and API key
-              path. It does not start a full transcript analysis run.
-            </AlertDescription>
+          <AlertTitle>{t("provider.localConnection")}</AlertTitle>
+            <AlertDescription>{t("provider.probeOnly")}</AlertDescription>
           </Alert>
         )}
       </CardContent>

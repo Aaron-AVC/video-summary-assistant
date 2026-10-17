@@ -11,6 +11,7 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type KeyPointsListProps = {
   keyPoints: AnalysisKeyPoint[]
@@ -32,14 +33,15 @@ export function KeyPointsList({
   onJump,
   formatTimestamp
 }: KeyPointsListProps) {
+  const { t } = useI18n()
   return (
     <Card className="min-w-0 overflow-hidden border-border/70 bg-card/95">
       <CardHeader className="p-4">
         <CardDescription className="flex items-center gap-2 text-xs font-medium uppercase text-primary">
           <ListChecks className="h-3.5 w-3.5" />
-          Key points
+          {t("overview.keyPoints")}
         </CardDescription>
-        <CardTitle className="text-base">Scan and jump</CardTitle>
+        <CardTitle className="text-base">{t("overview.scanJump")}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0">
         {isLoading ? (
@@ -68,7 +70,7 @@ export function KeyPointsList({
                         className="h-8 gap-2"
                         onClick={() => onJump(point.startSec)}>
                         <Play data-icon="inline-start" />
-                        Jump
+                        {t("overview.jump")}
                       </Button>
                     </div>
                   ) : null}
@@ -77,14 +79,14 @@ export function KeyPointsList({
             ))}
             {keyPoints.length === 0 ? (
               <li className="rounded-lg border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
-                Run analysis to populate jumpable talking points.
+                {t("overview.runPoints")}
               </li>
             ) : null}
           </ul>
         )}
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Readable at a glance</span>
-          <Badge variant="secondary">{keyPoints.length} items</Badge>
+          <span>{t("overview.readable")}</span>
+          <Badge variant="secondary">{t("overview.itemCount", { count: keyPoints.length })}</Badge>
         </div>
       </CardContent>
     </Card>

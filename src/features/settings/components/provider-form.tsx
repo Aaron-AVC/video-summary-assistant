@@ -44,6 +44,7 @@ import {
   settingsStorage,
   type ProviderConfigRecord
 } from "@/features/settings/lib/settings-storage"
+import { useI18n } from "@/lib/i18n/i18n-provider"
 
 type ProviderFormProps = {
   connectionStatus?: ProviderConnectionStatus | null
@@ -87,6 +88,7 @@ export function ProviderForm({
   onProvidersChange,
   refreshToken = 0
 }: ProviderFormProps) {
+  const { t } = useI18n()
   const [providerConfigs, setProviderConfigs] = useState<ProviderConfigRecord[]>([])
   const [selectedProviderId, setSelectedProviderId] = useState<string>("new")
   const [draft, setDraft] = useState<ProviderDraft>(createEmptyState(true))
@@ -183,12 +185,12 @@ export function ProviderForm({
       const parsed = parseProviderProfileInput(draft)
       const providerId = draft.id ?? globalThis.crypto.randomUUID()
       if (!draft.id && !draft.apiKey.trim()) {
-        setFieldErrors({ apiKey: "API key is required for a new provider." })
-        throw new Error("API key is required for a new provider.")
+        setFieldErrors({ apiKey: t("provider.requiredApiKey") })
+        throw new Error(t("provider.requiredApiKey"))
       }
 
       const permissionGranted = await requestProviderHostPermission(parsed.baseUrl)
-      if (!permissionGranted) throw new Error("Provider host permission was not granted.")
+      if (!permissionGranted) throw new Error(t("provider.permissionDenied"))
 
       await settingsStorage.saveProviderProfile({
         id: providerId,
@@ -205,12 +207,8 @@ export function ProviderForm({
       await hydrate(providerId)
       setFeedback({
         state: "success",
-        title: draft.id ? "Provider updated" : "Provider saved",
-        message:
-          parsed.name +
-          (draft.isDefault
-            ? " is ready as the default analysis provider."
-            : " is available for connection tests and analysis runs.")
+        title: draft.id ? t("provider.updated") : t("provider.savedTitle"),
+        message: t(draft.isDefault ? "provider.successDefault" : "provider.successAvailable", { name: parsed.name })
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -223,21 +221,26 @@ export function ProviderForm({
             (fieldName === "name" || fieldName === "baseUrl" || fieldName === "apiKey" || fieldName === "model" || fieldName === "generationTimeoutSec") &&
             !nextFieldErrors[fieldName]
           ) {
-            nextFieldErrors[fieldName] = issue.message
+            nextFieldErrors[fieldName] = t(`provider.fieldError.${fieldName}` as
+              | "provider.fieldError.name"
+              | "provider.fieldError.baseUrl"
+              | "provider.fieldError.apiKey"
+              | "provider.fieldError.model"
+              | "provider.fieldError.generationTimeoutSec")
           }
         }
 
         setFieldErrors(nextFieldErrors)
         setFeedback({
           state: "error",
-          title: "Fix the highlighted fields",
-          message: "Provider details must be complete before they can be saved."
+          title: t("provider.fixFields"),
+          message: t("provider.incomplete")
         })
       } else {
         setFeedback({
           state: "error",
-          title: "Could not save provider",
-          message: error instanceof Error ? error.message : "Unknown storage error."
+          title: t("provider.saveFailed"),
+          message: error instanceof Error ? error.message : t("provider.unknownStorageError")
         })
       }
     } finally {
@@ -259,14 +262,14 @@ export function ProviderForm({
       await hydrate(null)
       setFeedback({
         state: "success",
-        title: "Provider removed",
-        message: "The saved provider config has been deleted from local settings."
+        title: t("provider.removed"),
+        message: t("provider.deleteSuccess")
       })
     } catch (error) {
       setFeedback({
         state: "error",
-        title: "Could not remove provider",
-        message: error instanceof Error ? error.message : "Unknown storage error."
+        title: t("provider.removeFailed"),
+        message: error instanceof Error ? error.message : t("provider.unknownStorageError")
       })
     } finally {
       setIsDeleting(false)
@@ -286,19 +289,19 @@ export function ProviderForm({
         apiKey,
       })
       const permissionGranted = await requestProviderHostPermission(parsed.baseUrl)
-      if (!permissionGranted) throw new Error("Provider host permission was not granted.")
+      if (!permissionGranted) throw new Error(t("provider.permissionDenied"))
       const result = await fetchProviderModels({
         baseUrl: parsed.baseUrl,
         apiKey,
       })
       setDraft((current) => ({ ...current, modelOptions: result.models }))
       if (result.error) {
-        setFeedback({ state: "error", title: "Models unavailable", message: result.error })
+        setFeedback({ state: "error", title: t("provider.modelsUnavailable"), message: result.error })
       } else {
-        setFeedback({ state: "success", title: "Models loaded", message: `${result.models.length} model IDs found.` })
+        setFeedback({ state: "success", title: t("provider.modelsLoaded"), message: t("provider.modelsFound", { count: result.models.length }) })
       }
     } catch (error) {
-      setFeedback({ state: "error", title: "Could not fetch models", message: error instanceof Error ? error.message : "Unknown models error." })
+      setFeedback({ state: "error", title: t("provider.fetchModelsFailed"), message: error instanceof Error ? error.message : t("provider.unknownModelsError") })
     } finally {
       setIsFetchingModels(false)
     }
@@ -312,41 +315,40 @@ export function ProviderForm({
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
                 <Sparkles className="h-3.5 w-3.5" />
-                Provider routing
+                {t("provider.routing")}
               </Badge>
               {selectedProvider?.isDefault ? (
                 <Badge className="gap-1 rounded-full px-3 py-1">
                   <Star className="h-3.5 w-3.5" />
-                  Default
+                  {t("provider.default")}
                 </Badge>
               ) : null}
             </div>
-            <CardTitle className="[overflow-wrap:anywhere]">Provider configuration</CardTitle>
+            <CardTitle className="[overflow-wrap:anywhere]">{t("provider.configuration")}</CardTitle>
             <CardDescription className="[overflow-wrap:anywhere]">
-              Save one or more OpenAI-compatible endpoints, switch between them,
-              and choose which config should be used by default.
+              {t("provider.description")}
             </CardDescription>
           </div>
           <div className="w-full min-w-0 max-w-xs space-y-2">
             <span className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
-              Saved providers
+              {t("provider.saved")}
             </span>
             <Select disabled={isLoading} onValueChange={handleProviderSelection} value={selectedProviderId}>
               <SelectTrigger className="h-11 min-w-0 rounded-xl">
-                <SelectValue placeholder="Select a provider" />
+                <SelectValue placeholder={t("provider.select")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
                   <SelectItem value="new">
                     <span className="flex items-center gap-2">
                       <PlusCircle className="h-4 w-4" />
-                      New provider
+                      {t("provider.new")}
                     </span>
                   </SelectItem>
                   {providerConfigs.map((provider) => (
                     <SelectItem key={provider.id} value={provider.id}>
                       {provider.name}
-                      {provider.isDefault ? " · default" : ""}
+                      {provider.isDefault ? t("provider.defaultSuffix") : ""}
                     </SelectItem>
                   ))}
                 </SelectGroup>
@@ -375,10 +377,10 @@ export function ProviderForm({
           <SettingsSection className="min-w-0 bg-background/70 p-4">
             <FieldGroup>
               <ProviderField
-                description="A friendly label to distinguish local, hosted, or fallback models."
+                description={t("provider.nameDescription")}
                 error={fieldErrors.name}
                 id="provider-name"
-                label="Provider name"
+                label={t("provider.name")}
                 disabled={isLoading || isSaving}>
                 <Input
                   aria-invalid={Boolean(fieldErrors.name)}
@@ -394,10 +396,10 @@ export function ProviderForm({
 
               <div className="grid min-w-0 gap-5 min-[620px]:grid-cols-2">
                 <ProviderField
-                  description="Base URL for an OpenAI-compatible API, like /v1."
+                  description={t("provider.baseUrlDescription")}
                   error={fieldErrors.baseUrl}
                   id="provider-base-url"
-                  label="Base URL"
+                  label={t("provider.baseUrl")}
                   disabled={isLoading || isSaving}>
                   <Input
                     aria-invalid={Boolean(fieldErrors.baseUrl)}
@@ -411,10 +413,10 @@ export function ProviderForm({
                   />
                 </ProviderField>
                 <ProviderField
-                  description="Model name used for transcript analysis and repair requests."
+                  description={t("provider.modelDescription")}
                   error={fieldErrors.model}
                   id="provider-model"
-                  label="Model"
+                  label={t("provider.model")}
                   disabled={isLoading || isSaving}>
                   <Input
                     aria-invalid={Boolean(fieldErrors.model)}
@@ -430,10 +432,10 @@ export function ProviderForm({
               </div>
 
               <ProviderField
-                description={draft.hasApiKey ? "Saved key available; leave blank to keep it." : "Stored locally only. Required for a new provider."}
+                description={draft.hasApiKey ? t("provider.keepKey") : t("provider.newKey")}
                 error={fieldErrors.apiKey}
                 id="provider-api-key"
-                label="API key"
+                label={t("provider.apiKey")}
                 disabled={isLoading || isSaving}>
                 <Input
                   aria-invalid={Boolean(fieldErrors.apiKey)}
@@ -442,30 +444,30 @@ export function ProviderForm({
                   disabled={isLoading || isSaving}
                   id="provider-api-key"
                   onChange={(event) => updateDraft("apiKey", event.target.value)}
-                  placeholder={draft.hasApiKey ? "Saved key available" : "sk-..."}
+                  placeholder={draft.hasApiKey ? t("provider.savedKey") : "sk-..."}
                   type="password"
                   value={draft.apiKey}
                 />
               </ProviderField>
               <ProviderField
-                description="Maximum time allowed for each individual AI generation request. Long-video analysis may make multiple requests."
+                description={t("provider.timeoutDescription")}
                 error={fieldErrors.generationTimeoutSec}
                 id="provider-generation-timeout"
-                label="Generation timeout"
+                label={t("provider.timeout")}
                 disabled={isLoading || isSaving}>
                 <Select
                   disabled={isLoading || isSaving}
                   onValueChange={(value) => updateDraft("generationTimeoutSec", Number(value))}
                   value={String(draft.generationTimeoutSec ?? DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC)}>
                   <SelectTrigger className="h-11 min-w-0 rounded-xl" id="provider-generation-timeout">
-                    <SelectValue placeholder="Select timeout" />
+                    <SelectValue placeholder={t("provider.selectTimeout")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="180">3 minutes</SelectItem>
-                    <SelectItem value="300">5 minutes</SelectItem>
-                    <SelectItem value="600">10 minutes</SelectItem>
-                    <SelectItem value="1200">20 minutes</SelectItem>
-                    <SelectItem value="1800">30 minutes</SelectItem>
+                    <SelectItem value="180">{t("provider.minutes", { count: 3 })}</SelectItem>
+                    <SelectItem value="300">{t("provider.minutes", { count: 5 })}</SelectItem>
+                    <SelectItem value="600">{t("provider.minutes", { count: 10 })}</SelectItem>
+                    <SelectItem value="1200">{t("provider.minutes", { count: 20 })}</SelectItem>
+                    <SelectItem value="1800">{t("provider.minutes", { count: 30 })}</SelectItem>
                   </SelectContent>
                 </Select>
               </ProviderField>
@@ -477,14 +479,14 @@ export function ProviderForm({
                   type="button"
                   variant="outline">
                   {isFetchingModels ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
-                  Fetch models
+                  {t("provider.fetchModels")}
                 </Button>
                 {draft.modelOptions.length > 0 ? (
                   <Input
-                    aria-label="Search models"
+                    aria-label={t("provider.searchModels")}
                     className="h-10 min-w-0 max-w-xs rounded-xl"
                     onChange={(event) => setModelSearch(event.target.value)}
-                    placeholder="Search model IDs"
+                    placeholder={t("provider.searchModels")}
                     value={modelSearch}
                   />
                 ) : null}
@@ -510,10 +512,9 @@ export function ProviderForm({
 
           <SettingsSection className="min-w-0 space-y-4 bg-muted/40 p-4">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Default provider</p>
+              <p className="text-sm font-medium text-foreground">{t("provider.defaultProvider")}</p>
               <p className="text-sm leading-6 text-muted-foreground">
-                Make this config the primary choice for analysis requests across
-                the extension.
+                {t("provider.defaultProviderDescription")}
               </p>
             </div>
             <Field
@@ -522,10 +523,10 @@ export function ProviderForm({
               className="rounded-lg border bg-background/80 px-4 py-3">
               <FieldContent>
                 <FieldLabel htmlFor="provider-default">
-                  Use as default provider
+                  {t("provider.useAsDefault")}
                 </FieldLabel>
                 <FieldDescription className="text-xs leading-5">
-                  One provider can stay preselected for faster analysis runs.
+                  {t("provider.oneDefault")}
                 </FieldDescription>
               </FieldContent>
               <Switch
@@ -538,18 +539,18 @@ export function ProviderForm({
 
             <div className="rounded-2xl border border-dashed border-primary/20 bg-primary/5 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
-                Selection status
+                {t("provider.selectionStatus")}
               </p>
               <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                 <p>
                   {selectedProvider
-                    ? `${selectedProvider.name} is loaded for editing and testing.`
-                    : "Create a provider to unlock connection tests and saved defaults."}
+                    ? t("provider.editingStatus", { name: selectedProvider.name })
+                    : t("provider.createToUnlock")}
                 </p>
                 <p>
                   {providerConfigs.length > 0
-                    ? `${providerConfigs.length} provider${providerConfigs.length === 1 ? "" : "s"} stored locally.`
-                    : "No provider configs saved yet."}
+                    ? t("provider.storedCount", { count: providerConfigs.length })
+                    : t("provider.noneSaved")}
                 </p>
               </div>
             </div>
@@ -564,7 +565,7 @@ export function ProviderForm({
                 ) : (
                   <Save data-icon="inline-start" />
                 )}
-                {draft.id ? "Save changes" : "Save provider"}
+                {draft.id ? t("provider.update") : t("provider.save")}
               </Button>
               <Button
                 className="rounded-xl"
@@ -573,7 +574,7 @@ export function ProviderForm({
                 type="button"
                 variant="outline">
                 <PlusCircle data-icon="inline-start" />
-                New
+                {t("provider.new")}
               </Button>
               <Button
                 className="rounded-xl"
@@ -586,7 +587,7 @@ export function ProviderForm({
                 ) : (
                   <Trash2 data-icon="inline-start" />
                 )}
-                Remove
+                {t("provider.delete")}
               </Button>
             </div>
           </SettingsSection>

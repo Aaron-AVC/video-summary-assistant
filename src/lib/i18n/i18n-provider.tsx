@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react"
 
@@ -36,9 +37,95 @@ const DEFAULT_I18N_CONTEXT: I18nContextValue = {
 const I18nContext = createContext<I18nContextValue>(DEFAULT_I18N_CONTEXT)
 const LANGUAGE_STORAGE_KEY = "yt-summarizer.language"
 
+type PreferenceChangeListener = (value: unknown) => void
+
+type I18nPreferenceSynchronizerOptions = {
+  readPreference: () => Promise<unknown>
+  writePreference: (preference: LanguagePreference) => Promise<unknown>
+  subscribe: (listener: PreferenceChangeListener) => () => void
+  onPreference: (preference: LanguagePreference) => void
+}
+
+/**
+ * Keeps async preference reads and writes ordered against storage events.
+ * The revision is advanced before every externally observable change, so an
+ * older in-flight operation cannot overwrite a newer event or user choice.
+ */
+export function createI18nPreferenceSynchronizer({
+  readPreference,
+  writePreference,
+  subscribe,
+  onPreference,
+}: I18nPreferenceSynchronizerOptions) {
+  let revision = 0
+  let stopped = false
+  let unsubscribe: (() => void) | null = null
+
+  const applyIfCurrent = (value: unknown, expectedRevision?: number) => {
+    if (stopped || (expectedRevision !== undefined && expectedRevision !== revision)) return
+    onPreference(normalizeLanguagePreference(value))
+  }
+
+  const start = () => {
+    if (stopped || unsubscribe) return
+
+    unsubscribe = subscribe((value) => {
+      revision += 1
+      applyIfCurrent(value)
+    })
+
+    const initialRevision = revision
+    try {
+      void readPreference()
+        .then((value) => applyIfCurrent(value, initialRevision))
+        .catch(() => {
+          // Keep the safe default when storage is unavailable or read fails.
+        })
+    } catch {
+      // Keep the safe default when storage access throws synchronously.
+    }
+  }
+
+  const setPreference = async (value: LanguagePreference) => {
+    const normalized = normalizeLanguagePreference(value)
+    revision += 1
+    const operationRevision = revision
+    await writePreference(normalized)
+    applyIfCurrent(normalized, operationRevision)
+  }
+
+  const stop = () => {
+    if (stopped) return
+    stopped = true
+    revision += 1
+    unsubscribe?.()
+    unsubscribe = null
+  }
+
+  return { start, setPreference, stop }
+}
+
+function subscribeToLanguageChanges(listener: PreferenceChangeListener) {
+  const storageArea = globalThis.chrome?.storage
+  if (!storageArea?.onChanged) return () => {}
+
+  const handleStorageChange = (
+    changes: { [key: string]: chrome.storage.StorageChange },
+    areaName: string,
+  ) => {
+    if (areaName !== "local") return
+    const change = changes[LANGUAGE_STORAGE_KEY]
+    if (change) listener(change.newValue)
+  }
+
+  storageArea.onChanged.addListener(handleStorageChange)
+  return () => storageArea.onChanged.removeListener(handleStorageChange)
+}
+
 export function I18nProvider({ children }: PropsWithChildren) {
   const [preference, setPreferenceState] = useState<LanguagePreference>("auto")
   const [locale, setLocale] = useState<AppLocale>(() => resolveLocale("auto"))
+  const synchronizerRef = useRef<ReturnType<typeof createI18nPreferenceSynchronizer> | null>(null)
 
   const applyPreference = useCallback((next: unknown) => {
     const normalized = normalizeLanguagePreference(next)
@@ -47,19 +134,18 @@ export function I18nProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
-    void settingsStorage.getLanguagePreference().then(applyPreference)
-    const storageArea = globalThis.chrome?.storage
-    if (!storageArea?.onChanged) return
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string,
-    ) => {
-      if (areaName !== "local") return
-      const change = changes[LANGUAGE_STORAGE_KEY]
-      if (change) applyPreference(change.newValue)
+    const synchronizer = createI18nPreferenceSynchronizer({
+      readPreference: () => settingsStorage.getLanguagePreference(),
+      writePreference: (next) => settingsStorage.setLanguagePreference(next),
+      subscribe: subscribeToLanguageChanges,
+      onPreference: applyPreference,
+    })
+    synchronizerRef.current = synchronizer
+    synchronizer.start()
+    return () => {
+      synchronizer.stop()
+      if (synchronizerRef.current === synchronizer) synchronizerRef.current = null
     }
-    storageArea.onChanged.addListener(handleStorageChange)
-    return () => storageArea.onChanged.removeListener(handleStorageChange)
   }, [applyPreference])
 
   useEffect(() => {
@@ -67,6 +153,11 @@ export function I18nProvider({ children }: PropsWithChildren) {
   }, [locale])
 
   const setPreference = useCallback(async (next: LanguagePreference) => {
+    const synchronizer = synchronizerRef.current
+    if (synchronizer) {
+      await synchronizer.setPreference(next)
+      return
+    }
     const normalized = normalizeLanguagePreference(next)
     await settingsStorage.setLanguagePreference(normalized)
     applyPreference(normalized)

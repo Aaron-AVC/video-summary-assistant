@@ -60,6 +60,7 @@ export function createI18nPreferenceSynchronizer({
   let revision = 0
   let stopped = false
   let unsubscribe: (() => void) | null = null
+  let writeQueue: Promise<void> = Promise.resolve()
 
   const applyIfCurrent = (value: unknown, expectedRevision?: number) => {
     if (stopped || (expectedRevision !== undefined && expectedRevision !== revision)) return
@@ -90,8 +91,12 @@ export function createI18nPreferenceSynchronizer({
     const normalized = normalizeLanguagePreference(value)
     revision += 1
     const operationRevision = revision
-    await writePreference(normalized)
-    applyIfCurrent(normalized, operationRevision)
+    const write = writeQueue.catch(() => {}).then(async () => {
+      await writePreference(normalized)
+      applyIfCurrent(normalized, operationRevision)
+    })
+    writeQueue = write
+    await write
   }
 
   const stop = () => {

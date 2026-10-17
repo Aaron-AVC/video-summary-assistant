@@ -74,26 +74,54 @@ describe("i18n", () => {
     synchronizer.stop()
   })
 
-  it("keeps rapid successive user changes ordered", async () => {
-    const writes: Array<() => void> = []
-    const updates: string[] = []
+  it("keeps rapid successive selections latest after delayed storage change events", async () => {
+    let persistedPreference: unknown = "auto"
+    let emitStorageChange: ((value: unknown) => void) | undefined
+    const pendingWrites: Array<{ value: unknown; commit: () => void }> = []
+    const renderedPreferences: string[] = []
+    let markZhWriteStarted!: () => void
+    let markEnWriteStarted!: () => void
+    const zhWriteStarted = new Promise<void>((resolve) => { markZhWriteStarted = resolve })
+    const enWriteStarted = new Promise<void>((resolve) => { markEnWriteStarted = resolve })
     const synchronizer = createI18nPreferenceSynchronizer({
-      readPreference: async () => "auto",
-      writePreference: () => new Promise<void>((resolve) => writes.push(resolve)),
-      subscribe: () => () => {},
-      onPreference: (preference) => updates.push(preference),
+      readPreference: async () => persistedPreference,
+      writePreference: (value) => new Promise<void>((resolve) => {
+        pendingWrites.push({
+          value,
+          commit: () => {
+            persistedPreference = value
+            emitStorageChange?.(value)
+            resolve()
+          },
+        })
+        if (value === "zh-CN") markZhWriteStarted()
+        if (value === "en") markEnWriteStarted()
+      }),
+      subscribe: (listener) => {
+        emitStorageChange = listener
+        return () => { emitStorageChange = undefined }
+      },
+      onPreference: (preference) => renderedPreferences.push(preference),
     })
 
     synchronizer.start()
     await Promise.resolve()
     const first = synchronizer.setPreference("zh-CN")
     const second = synchronizer.setPreference("en")
-    writes[1]()
-    await second
-    writes[0]()
-    await first
 
-    expect(updates).toEqual(["auto", "en"])
+    await zhWriteStarted
+    expect(pendingWrites.map(({ value }) => value)).toEqual(["zh-CN"])
+
+    pendingWrites[0].commit()
+    await first
+    await enWriteStarted
+
+    expect(pendingWrites.map(({ value }) => value)).toEqual(["zh-CN", "en"])
+    pendingWrites[1].commit()
+    await second
+
+    expect(persistedPreference).toBe("en")
+    expect(renderedPreferences.at(-1)).toBe("en")
     synchronizer.stop()
   })
 

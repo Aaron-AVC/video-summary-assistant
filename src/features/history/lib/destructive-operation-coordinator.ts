@@ -14,6 +14,7 @@ export type DestructiveOperationTarget = {
 
 export type DestructiveTaskSnapshot = {
   kind: "analysis" | "ask" | "unknown"
+  taskId?: string
   contentKey?: string
   analysisRunId?: string
   threadId?: string
@@ -107,8 +108,9 @@ function createDeferred() {
   return { promise, resolve }
 }
 
-function encodeTaskLockDescriptor(task: DestructiveTaskSnapshot) {
+function encodeTaskLockDescriptor(task: DestructiveTaskSnapshot, taskId: string) {
   return encodeURIComponent(JSON.stringify({
+    taskId,
     kind: task.kind,
     contentKey: task.contentKey,
     analysisRunId: task.analysisRunId,
@@ -125,6 +127,7 @@ function decodeTaskLockDescriptor(name: string): DestructiveTaskSnapshot | null 
     const value = JSON.parse(decodeURIComponent(encoded.slice(0, separator))) as unknown
     if (!isRecord(value) || !isTaskKind(value.kind)) return null
     return {
+      ...(typeof value.taskId === "string" ? { taskId: value.taskId } : {}),
       kind: value.kind,
       ...(typeof value.contentKey === "string" ? { contentKey: value.contentKey } : {}),
       ...(typeof value.analysisRunId === "string" ? { analysisRunId: value.analysisRunId } : {}),
@@ -165,7 +168,7 @@ function createWebLocksSerialization(): DestructiveCoordinatorSerialization {
           async (lock) => {
             if (!lock) return false
             taskLockPromise = locks.request<void>(
-              `${ACTIVE_TASK_LOCK_PREFIX}${encodeTaskLockDescriptor(task)}:${taskId}`,
+              `${ACTIVE_TASK_LOCK_PREFIX}${encodeTaskLockDescriptor(task, taskId)}:${taskId}`,
               { mode: "shared" },
               async (activeTaskLock) => {
                 if (!activeTaskLock) throw new Error("Could not acquire task admission lock.")
@@ -225,6 +228,7 @@ function isDestructiveAction(value: unknown): value is DestructiveAction {
 function isTaskSnapshot(value: unknown): value is DestructiveTaskSnapshot {
   return isRecord(value)
     && (value.kind === "analysis" || value.kind === "ask" || value.kind === "unknown")
+    && (value.taskId === undefined || typeof value.taskId === "string")
     && typeof value.phase === "string"
     && (value.contentKey === undefined || typeof value.contentKey === "string")
     && (value.analysisRunId === undefined || typeof value.analysisRunId === "string")
@@ -320,12 +324,33 @@ export async function queryActiveDestructiveTasks(
   const lockTasks = heldLocks.held
     .map((lock) => decodeTaskLockDescriptor(lock.name))
     .filter((task): task is DestructiveTaskSnapshot => task !== null)
-  return [...snapshots, ...lockTasks.filter((lockTask) => !snapshots.some((snapshot) => (
-    snapshot.kind === lockTask.kind
-      && snapshot.contentKey === lockTask.contentKey
-      && snapshot.analysisRunId === lockTask.analysisRunId
-      && snapshot.threadId === lockTask.threadId
-  )))]
+  return mergeDestructiveTaskSnapshots(snapshots, lockTasks)
+}
+
+function sameDestructiveTaskIdentity(
+  left: DestructiveTaskSnapshot,
+  right: DestructiveTaskSnapshot,
+): boolean {
+  if (left.taskId !== undefined && right.taskId !== undefined) {
+    return left.taskId === right.taskId
+  }
+  return left.kind === right.kind
+    && left.contentKey === right.contentKey
+    && left.analysisRunId === right.analysisRunId
+    && left.threadId === right.threadId
+}
+
+export function mergeDestructiveTaskSnapshots(
+  liveSnapshots: DestructiveTaskSnapshot[],
+  lockSnapshots: DestructiveTaskSnapshot[],
+): DestructiveTaskSnapshot[] {
+  const merged = [...liveSnapshots]
+  for (const lockSnapshot of lockSnapshots) {
+    if (!merged.some((liveSnapshot) => sameDestructiveTaskIdentity(liveSnapshot, lockSnapshot))) {
+      merged.push(lockSnapshot)
+    }
+  }
+  return merged
 }
 
 export function publishDestructiveMutation(

@@ -4,6 +4,7 @@ import {
   DestructiveOperationBlockedError,
   admitDestructiveTask,
   getDestructiveTaskConflicts,
+  mergeDestructiveTaskSnapshots,
   performDestructiveOperation,
   queryActiveDestructiveTasks,
   subscribeToDestructiveOperations,
@@ -340,5 +341,145 @@ describe("destructive/task admission serialization", () => {
     const askHandle = await admitDestructiveTask(serializationAsk, () => {}, { serialization })
     askHandle.release()
     expect(serialization.activeTasks).toEqual([])
+  })
+})
+
+describe("destructive task phase identity merge", () => {
+  const lockPrefix = "video-summary-assistant:active-task:v1:"
+  const lockName = (task: { taskId: string; kind: string; contentKey?: string; analysisRunId?: string; threadId?: string }) => (
+    `${lockPrefix}${encodeURIComponent(JSON.stringify(task))}:lock-holder`
+  )
+
+  async function queryWithLiveAndHeldLock(
+    liveTask: DestructiveTaskSnapshot,
+    heldTask: DestructiveTaskSnapshot,
+  ) {
+    const bus = new FakeBroadcastBus()
+    const cleanup = subscribeToDestructiveOperations(
+      () => [liveTask],
+      () => {},
+      { createChannel: () => bus.createChannel(), createId: () => "panel-live" },
+    )
+    const originalLocks = navigator.locks
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: {
+        query: async () => ({
+          held: [{
+            name: lockName({
+              taskId: heldTask.taskId!,
+              kind: heldTask.kind,
+              contentKey: heldTask.contentKey,
+              analysisRunId: heldTask.analysisRunId,
+              threadId: heldTask.threadId,
+            }),
+          }],
+        }),
+      },
+    })
+    try {
+      return await queryActiveDestructiveTasks("clear-transcript-cache", {}, {
+        createChannel: () => bus.createChannel(),
+        createId: () => "query-phase-identity",
+        responseWindowMs: 0,
+      })
+    } finally {
+      cleanup()
+      if (originalLocks === undefined) delete (navigator as { locks?: unknown }).locks
+      else Object.defineProperty(navigator, "locks", { configurable: true, value: originalLocks })
+    }
+  }
+
+  it("query merge keeps live Ask phase and allows transcript-cache clear", async () => {
+    const tasks = await queryWithLiveAndHeldLock(
+      { kind: "ask", taskId: "task-ask", contentKey: "youtube:merge", analysisRunId: "run-merge", threadId: "thread-1", phase: "answering" },
+      { kind: "ask", taskId: "task-ask", contentKey: "youtube:merge", analysisRunId: "run-merge", phase: "unknown" },
+    )
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0]?.phase).toBe("answering")
+    expect(getDestructiveTaskConflicts("clear-transcript-cache", {}, tasks)).toEqual([])
+  })
+
+  it("query merge keeps live analyzing and finalizing Analysis phases allowed", async () => {
+    for (const phase of ["analyzing", "finalizing"] as const) {
+      const tasks = await queryWithLiveAndHeldLock(
+        { kind: "analysis", taskId: `task-${phase}`, contentKey: "youtube:merge", phase },
+        { kind: "analysis", taskId: `task-${phase}`, contentKey: "youtube:merge", phase: "unknown" },
+      )
+      expect(tasks).toHaveLength(1)
+      expect(getDestructiveTaskConflicts("clear-transcript-cache", {}, tasks)).toEqual([])
+    }
+  })
+
+  it("query merge keeps loading-transcript blocked and lock-only fallback fail-closed", async () => {
+    const loading = await queryWithLiveAndHeldLock(
+      { kind: "analysis", taskId: "task-loading", contentKey: "youtube:merge", phase: "loading-transcript" },
+      { kind: "analysis", taskId: "task-loading", contentKey: "youtube:merge", phase: "unknown" },
+    )
+    expect(getDestructiveTaskConflicts("clear-transcript-cache", {}, loading)).toHaveLength(1)
+
+    const bus = new FakeBroadcastBus()
+    const originalLocks = navigator.locks
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: { query: async () => ({ held: [{ name: lockName({ taskId: "task-orphan", kind: "unknown" }) }] }) },
+    })
+    try {
+      const orphan = await queryActiveDestructiveTasks("clear-transcript-cache", {}, {
+        createChannel: () => bus.createChannel(),
+        createId: () => "query-orphan",
+        responseWindowMs: 0,
+      })
+      expect(getDestructiveTaskConflicts("clear-transcript-cache", {}, orphan)).toHaveLength(1)
+    } finally {
+      if (originalLocks === undefined) delete (navigator as { locks?: unknown }).locks
+      else Object.defineProperty(navigator, "locks", { configurable: true, value: originalLocks })
+    }
+  })
+
+  it("deduplicates a live Ask snapshot with its unknown lock fallback", () => {
+    const merged = mergeDestructiveTaskSnapshots([
+      { kind: "ask", taskId: "task-ask", contentKey: "youtube:merge", analysisRunId: "run-merge", threadId: "thread-1", phase: "answering" },
+    ], [
+      { kind: "ask", taskId: "task-ask", contentKey: "youtube:merge", analysisRunId: "run-merge", phase: "unknown" },
+    ])
+    expect(merged).toEqual([
+      { kind: "ask", taskId: "task-ask", contentKey: "youtube:merge", analysisRunId: "run-merge", threadId: "thread-1", phase: "answering" },
+    ])
+  })
+
+  it("deduplicates live analyzing and finalizing Analysis snapshots by taskId", () => {
+    for (const phase of ["analyzing", "finalizing"] as const) {
+      expect(mergeDestructiveTaskSnapshots([
+        { kind: "analysis", taskId: "task-analysis", contentKey: "youtube:merge", phase },
+      ], [
+        { kind: "analysis", taskId: "task-analysis", contentKey: "youtube:merge", phase: "unknown" },
+      ])).toHaveLength(1)
+    }
+  })
+
+  it("preserves the loading-transcript live phase when the fallback matches", () => {
+    const merged = mergeDestructiveTaskSnapshots([
+      { kind: "analysis", taskId: "task-loading", contentKey: "youtube:merge", phase: "loading-transcript" },
+    ], [
+      { kind: "analysis", taskId: "task-loading", contentKey: "youtube:merge", phase: "unknown" },
+    ])
+    expect(getDestructiveTaskConflicts("clear-transcript-cache", {}, merged)).toHaveLength(1)
+  })
+
+  it("keeps an unknown lock-only task fail-closed", () => {
+    const merged = mergeDestructiveTaskSnapshots([], [
+      { kind: "unknown", taskId: "task-orphan", phase: "unknown" },
+    ])
+    expect(getDestructiveTaskConflicts("clear-transcript-cache", {}, merged)).toHaveLength(1)
+  })
+
+  it("does not deduplicate different taskIds", () => {
+    const merged = mergeDestructiveTaskSnapshots([
+      { kind: "ask", taskId: "task-one", contentKey: "youtube:merge", analysisRunId: "run-merge", phase: "answering" },
+    ], [
+      { kind: "ask", taskId: "task-two", contentKey: "youtube:merge", analysisRunId: "run-merge", phase: "unknown" },
+    ])
+    expect(merged).toHaveLength(2)
   })
 })

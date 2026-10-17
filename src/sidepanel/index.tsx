@@ -418,6 +418,7 @@ function SidepanelWorkspace() {
       if (analysisTask) {
         tasks.push({
           kind: "analysis",
+          taskId: analysisTask.snapshot.taskId,
           contentKey: analysisTask.snapshot.contentKey,
           analysisRunId: destructiveWorkspaceRef.current.analysisRunId ?? undefined,
           phase: analysisTask.phase,
@@ -426,6 +427,7 @@ function SidepanelWorkspace() {
       if (askTask) {
         tasks.push({
           kind: "ask",
+          taskId: askTask.snapshot.taskId,
           contentKey: askTask.snapshot.contentKey,
           analysisRunId: askTask.snapshot.analysisRunId,
           threadId: askTask.snapshot.threadId,

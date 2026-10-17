@@ -1,5 +1,7 @@
 # TASK_STATE
 
+- 当前任务：CR-14 — preserve live task phase when deduplicating Web Locks fallback；实现完成，待提交。Analysis/Ask destructive task snapshots 与 Web Lock descriptors 现在共享稳定 `taskId`；`queryActiveDestructiveTasks()` 合并时优先保留 live Broadcast phase/threadId，仅在没有对应 live snapshot 时保留 `phase = unknown` fail-closed fallback。818d4ee 已完成 TOCTOU serialization follow-up；未修改 DB、manifest permissions、provider、transcript acquisition 或既有 Web Locks admission/reservation 设计；Browser smoke：NOT RUN。
+
 - 当前任务：Granular History Deletion / Data Management；实现完成，待独立复审。
 - 已加入 repository 级 `deleteAnalysisRun`、`deleteVideoData`、`clearQaData`、`clearTranscriptCache`、`clearAnalysisHistory`，均通过 Dexie rw transaction；单 run 删除保留 provider、transcript source/cache、videoRecord 与其他 run，contentKey 删除按 canonical identity 清理分析、Ask、transcript cache/snapshots、videoRecord 和兼容 history。
 - Data 管理已改为独立的 Clear conversations、Clear transcript cache、Clear analysis history、Clear diagnostics、Clear all extension data 操作，每项使用独立双确认；inventory/export 覆盖 videoRecords、transcriptCache、analysisCache、qaAnswers、QA threads/messages 与 diagnostics。

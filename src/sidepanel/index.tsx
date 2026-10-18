@@ -95,6 +95,11 @@ import {
   type SidePanelTab,
 } from "@/sidepanel/lib/sidepanel-ux"
 import {
+  formatTimestamp,
+  identityFromAnalysis,
+  identityFromContext,
+} from "@/sidepanel/lib/sidepanel-pure-helpers"
+import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
 } from "@/sidepanel/lib/ask-conversation-identity"
@@ -140,37 +145,6 @@ type HistoryEntry = {
     updatedAt: string
   }
   analysis: { summary: string } | null
-}
-
-function formatTimestamp(timestampSeconds: number) {
-  const totalSeconds = Math.round(timestampSeconds)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
-  }
-  return `${minutes}:${String(seconds).padStart(2, "0")}`
-}
-
-function identityFromContext(context: ActiveVideoContext): VideoIdentity | null {
-  if (!context.platform || !context.videoId || !context.contentKey) return null
-  return {
-    platform: context.platform,
-    videoId: context.videoId,
-    contentKey: context.contentKey,
-    ...(context.partId ? { partId: context.partId } : {}),
-  }
-}
-
-function identityFromAnalysis(view: AnalysisView): VideoIdentity {
-  return {
-    platform: view.platform,
-    videoId: view.videoId,
-    contentKey: view.contentKey,
-    ...(view.partId ? { partId: view.partId } : {}),
-  }
 }
 
 function SidepanelWorkspace() {

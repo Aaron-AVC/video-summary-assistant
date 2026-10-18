@@ -79,37 +79,6 @@ function withoutTranscriptSourceUrl<T extends { sourceUrl?: string | null }>(
   return { ...row, sourceUrl: null }
 }
 
-const TRANSCRIPT_URL_SCRUB_BATCH_SIZE = 100
-
-type TranscriptUrlRow = Record<string, unknown> & { sourceUrl?: unknown }
-type TranscriptUrlTable = {
-  toCollection: () => {
-    offset: (offset: number) => {
-      limit: (limit: number) => { toArray: () => Promise<TranscriptUrlRow[]> }
-    }
-  }
-  bulkPut: (rows: TranscriptUrlRow[]) => Promise<unknown>
-}
-
-async function scrubTranscriptSourceUrls(table: unknown): Promise<void> {
-  if (!table || typeof table !== "object") return
-  const candidate = table as Partial<TranscriptUrlTable>
-  if (typeof candidate.toCollection !== "function" || typeof candidate.bulkPut !== "function") return
-
-  let offset = 0
-  while (true) {
-    const batch = await candidate.toCollection().offset(offset)
-      .limit(TRANSCRIPT_URL_SCRUB_BATCH_SIZE).toArray()
-    if (batch.length === 0) return
-
-    const changed = batch.filter((row) => row.sourceUrl !== null)
-    if (changed.length > 0) {
-      await candidate.bulkPut(changed.map((row) => ({ ...row, sourceUrl: null })))
-    }
-    offset += batch.length
-  }
-}
-
 type IndexedCollection<T> = {
   equals?: (key: unknown) => {
     reverse?: () => { first: () => Promise<T | undefined> }
@@ -832,18 +801,6 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         .slice(0, limit)
     },
     async exportLocalData(): Promise<PersistenceExport> {
-      const cacheTable = (database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache
-      try {
-        await scrubTranscriptSourceUrls(database.transcriptSnapshots)
-      } catch {
-        // The exported view below is sanitized even if in-place cleanup fails.
-      }
-      try {
-        await scrubTranscriptSourceUrls(cacheTable)
-      } catch {
-        // The exported view below is sanitized even if in-place cleanup fails.
-      }
-
       const [providerConfigs, transcriptSnapshots, analysisRuns, segmentSummaries, recentVideos] =
         await Promise.all([
           database.providerConfigs.toArray(),

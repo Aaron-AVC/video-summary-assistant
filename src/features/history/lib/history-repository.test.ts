@@ -21,9 +21,16 @@ class FakeTable<T extends Row> {
   rows: T[] = []
   putShouldThrow: unknown = null
   bulkPutBatchSizes: number[] = []
+  readBarrier: ((rows: T[]) => Promise<void>) | null = null
 
   async toArray() {
-    return [...this.rows]
+    return this.readRows(0, this.rows.length)
+  }
+
+  private async readRows(offset: number, limit: number) {
+    const snapshot = this.rows.slice(offset, offset + limit)
+    await this.readBarrier?.(snapshot)
+    return snapshot
   }
 
   async put(row: T) {
@@ -47,7 +54,7 @@ class FakeTable<T extends Row> {
     return {
       offset: (offset: number) => ({
         limit: (limit: number) => ({
-          toArray: async () => this.rows.slice(offset, offset + limit)
+          toArray: async () => this.readRows(offset, limit)
         })
       })
     }
@@ -514,7 +521,7 @@ describe("historyRepository.saveTranscriptSnapshot rawVtt retention", () => {
     expect(reused?.cues).toEqual([{ startSec: 0, endSec: 1, text: "Cached cue" }])
   })
 
-  it("scrubs old source URLs in bounded batches before full export without changing related history", async () => {
+  it("sanitizes legacy source URLs in the export projection without mutating stored data", async () => {
     const fake = buildFakeDatabase()
     const signedUrl = "https://www.youtube.com/api/timedtext?v=video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN"
     const snapshot: TranscriptSnapshotEntity = {
@@ -596,14 +603,73 @@ describe("historyRepository.saveTranscriptSnapshot rawVtt retention", () => {
     expect(exported.transcriptSnapshots[0]?.rawVtt).toBe("WEBVTT preserved snapshot")
     expect(exported.transcriptCache).toHaveLength(205)
     expect(exported.transcriptCache.every((row) => row.sourceUrl === null)).toBe(true)
-    expect(fake.transcriptSnapshots.rows[0]?.sourceUrl).toBeNull()
-    expect(fake.transcriptCache.rows.every((row) => row.sourceUrl === null)).toBe(true)
-    expect(fake.transcriptCache.bulkPutBatchSizes.every((size) => size <= 100)).toBe(true)
-    expect(fake.transcriptCache.bulkPutBatchSizes).toEqual([100, 100, 5])
+    expect(fake.transcriptSnapshots.rows[0]?.sourceUrl).toBe(signedUrl)
+    expect(fake.transcriptCache.rows.every((row) => row.sourceUrl === signedUrl)).toBe(true)
+    expect(fake.transcriptCache.bulkPutBatchSizes).toEqual([])
     expect(exported.analysisRuns).toHaveLength(1)
     expect(exported.segmentSummaries).toHaveLength(1)
     expect(exported.qaThreads).toHaveLength(1)
     expect(exported.qaMessages).toHaveLength(1)
+  })
+
+  it("does not recreate a transcript cache deleted while its sanitized export read is pending", async () => {
+    const fake = buildFakeDatabase()
+    const signedUrl = "https://www.youtube.com/api/timedtext?v=video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN"
+    fake.transcriptSnapshots.rows.push({
+      id: "snapshot-deleted-during-export",
+      videoId: "video",
+      platform: "youtube",
+      contentKey: "youtube:video",
+      partId: null,
+      fingerprint: "fp-video",
+      language: "en",
+      sourceUrl: signedUrl,
+      rawVtt: "WEBVTT cue",
+      cues: [{ startSec: 0, endSec: 1, text: "Cue" }],
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    fake.transcriptCache.rows.push({
+      id: "cache-deleted-during-export",
+      contentKey: "youtube:video",
+      platform: "youtube",
+      videoId: "video",
+      partId: null,
+      fingerprint: "fp-video",
+      fingerprintVersion: 2,
+      language: "en",
+      sourceUrl: signedUrl,
+      rawVtt: "WEBVTT cue",
+      cues: [{ startSec: 0, endSec: 1, text: "Cue" }],
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+
+    let signalRead!: () => void
+    let releaseRead!: () => void
+    const readReached = new Promise<void>((resolve) => { signalRead = resolve })
+    const readGate = new Promise<void>((resolve) => { releaseRead = resolve })
+    let blockedFirstRead = false
+    fake.transcriptCache.readBarrier = async () => {
+      if (blockedFirstRead) return
+      blockedFirstRead = true
+      signalRead()
+      await readGate
+    }
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    const exporting = repo.exportLocalData()
+    await readReached
+    await fake.transcriptSnapshots.clear()
+    await fake.transcriptCache.clear()
+    releaseRead()
+    const exported = await exporting
+
+    expect(fake.transcriptSnapshots.rows).toEqual([])
+    expect(fake.transcriptCache.rows).toEqual([])
+    expect(exported.transcriptSnapshots[0]?.sourceUrl).toBeNull()
+    expect(exported.transcriptCache[0]?.sourceUrl).toBeNull()
+    expect(JSON.stringify(exported)).not.toContain("SECRET_TEST_VALUE")
   })
 })
 

@@ -10,16 +10,23 @@ import {
 
 const STORAGE_KEY = "yt-summarizer.transcript-log"
 
-function installChromeStorageMock() {
+function installChromeStorageMock(options: {
+  onGet?: (key: string, snapshot: Record<string, unknown>, call: number) => Promise<void>
+} = {}) {
   const store = new Map<string, unknown>()
+  const writes: Record<string, unknown>[] = []
+  let getCall = 0
 
   const chromeMock = {
     storage: {
       local: {
         async get(key: string) {
-          return store.has(key) ? { [key]: store.get(key) } : {}
+          const snapshot = store.has(key) ? { [key]: structuredClone(store.get(key)) } : {}
+          await options.onGet?.(key, snapshot, ++getCall)
+          return snapshot
         },
         async set(values: Record<string, unknown>) {
+          writes.push(structuredClone(values))
           for (const [key, value] of Object.entries(values)) {
             store.set(key, value)
           }
@@ -36,7 +43,13 @@ function installChromeStorageMock() {
     value: chromeMock
   })
 
-  return store
+  return { store, writes }
+}
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((resolvePromise) => { resolve = resolvePromise })
+  return { promise, resolve }
 }
 
 const diagnosticLog: TranscriptLogEntry = {
@@ -60,7 +73,7 @@ afterEach(() => {
 
 describe("transcript diagnostic log storage", () => {
   it("clears persisted logs containing video context", async () => {
-    const store = installChromeStorageMock()
+    const { store } = installChromeStorageMock()
 
     await saveTranscriptLog(diagnosticLog)
 
@@ -78,7 +91,7 @@ describe("transcript diagnostic log storage", () => {
   })
 
   it("redacts signed timedtext URLs from thrown and structured errors", async () => {
-    const store = installChromeStorageMock()
+    const { store } = installChromeStorageMock()
     const signedUrl = "https://www.youtube.com/api/timedtext?v=abc123&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN"
     store.set(STORAGE_KEY, [{
       ...diagnosticLog,
@@ -102,5 +115,66 @@ describe("transcript diagnostic log storage", () => {
     expect(serialized).not.toContain("SECRET_TEST_TOKEN")
     expect(serialized).not.toContain(signedUrl)
     expect(serialized).toContain("[redacted transcript URL]")
+  })
+
+  it("does not restore diagnostic logs when a pending read overlaps clear", async () => {
+    const readReached = deferred()
+    const releaseRead = deferred()
+    const { store, writes } = installChromeStorageMock({
+      onGet: async (_key, _snapshot, call) => {
+        if (call !== 1) return
+        readReached.resolve()
+        await releaseRead.promise
+      }
+    })
+    store.set(STORAGE_KEY, [{
+      ...diagnosticLog,
+      steps: [{ step: "legacy", durationMs: 1, ok: false, error:
+        "https://www.youtube.com/api/timedtext?v=abc123&signature=SECRET_TEST_VALUE" }]
+    }])
+
+    const reading = getTranscriptLogs()
+    await readReached.promise
+    await clearTranscriptLogs()
+    releaseRead.resolve()
+    const entries = await reading
+
+    expect(entries[0]?.steps[0]?.error).toBe("[redacted transcript URL]")
+    expect(store.has(STORAGE_KEY)).toBe(false)
+    expect(writes).toEqual([])
+  })
+
+  it("does not overwrite a concurrent append when sanitizing historical read output", async () => {
+    const readReached = deferred()
+    const releaseRead = deferred()
+    const { store, writes } = installChromeStorageMock({
+      onGet: async (_key, _snapshot, call) => {
+        if (call !== 1) return
+        readReached.resolve()
+        await releaseRead.promise
+      }
+    })
+    store.set(STORAGE_KEY, [{
+      ...diagnosticLog,
+      steps: [{ step: "legacy", durationMs: 1, ok: false, error:
+        "https://www.youtube.com/api/timedtext?v=abc123&signature=SECRET_TEST_VALUE" }]
+    }])
+    const newLog: TranscriptLogEntry = {
+      ...diagnosticLog,
+      videoId: "new-video",
+      steps: [{ step: "new", durationMs: 1, ok: true }]
+    }
+
+    const reading = getTranscriptLogs()
+    await readReached.promise
+    await saveTranscriptLog(newLog)
+    releaseRead.resolve()
+    const entries = await reading
+    const persisted = store.get(STORAGE_KEY) as TranscriptLogEntry[]
+
+    expect(entries[0]?.steps[0]?.error).toBe("[redacted transcript URL]")
+    expect(persisted.map((entry) => entry.videoId)).toEqual(["new-video", "abc123"])
+    expect(JSON.stringify(persisted)).not.toContain("SECRET_TEST_VALUE")
+    expect(writes).toHaveLength(1)
   })
 })

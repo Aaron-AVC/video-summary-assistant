@@ -162,13 +162,7 @@ export async function getTranscriptLogs(): Promise<TranscriptLogEntry[]> {
 
     const data = await storage.get(STORAGE_KEY)
     if (!Array.isArray(data[STORAGE_KEY])) return []
-    const entries = data[STORAGE_KEY].map((entry: TranscriptLogEntry) => sanitizeTranscriptLogEntry(entry))
-    try {
-      await storage.set({ [STORAGE_KEY]: entries })
-    } catch {
-      // Keep sanitized logs available even when storage cleanup fails.
-    }
-    return entries
+    return data[STORAGE_KEY].map((entry: TranscriptLogEntry) => sanitizeTranscriptLogEntry(entry))
   } catch {
     return []
   }

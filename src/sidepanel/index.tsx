@@ -99,6 +99,7 @@ import {
   identityFromAnalysis,
   identityFromContext,
 } from "@/sidepanel/lib/sidepanel-pure-helpers"
+import { getAnalysisHeaderPresentation } from "@/sidepanel/lib/task-presentation"
 import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
@@ -1703,18 +1704,11 @@ function SidepanelWorkspace() {
     ?? analysisView?.errorMessage ?? (
     status === "error" ? t("analysis.unavailable") : null
   )
-  const headerAnalysisState = isAnalysisFetching
-    ? t("analysis.loading")
-    : (() => {
-      const phase = workspaceTask?.phase ?? analysisPhase
-      return phase === "loading-transcript" ? t("runtime.statusLoadingTranscript")
-        : phase === "analyzing" ? t("runtime.statusAnalyzing")
-          : phase === "finalizing" ? t("runtime.statusSaving")
-            : phase === "cancelling" ? t("runtime.statusCancelling")
-              : phase === "error" ? t("runtime.statusError")
-                : phase === "cancelled" ? t("runtime.statusCancelled")
-                  : analysisView ? t("runtime.statusReady") : t("runtime.statusNotAnalyzed")
-    })()
+  const headerAnalysisState = t(getAnalysisHeaderPresentation({
+    isAnalysisFetching,
+    phase: workspaceTask?.phase ?? analysisPhase,
+    hasAnalysis: Boolean(analysisView),
+  }).statusKey)
 
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden bg-background px-3 py-3 text-foreground sm:px-4">

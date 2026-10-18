@@ -11,6 +11,7 @@ import {
   type TranscriptTrack,
 } from "@/features/transcript/lib/transcript-schema"
 import { createLogCollector } from "@/features/transcript/lib/transcript-log"
+import { redactTranscriptFetchUrls } from "@/features/transcript/lib/transcript-url-sanitizer"
 import { readPageMetadata } from "@/features/youtube/lib/read-page-metadata"
 import { isSupportedYouTubeWatchUrl } from "@/features/platform/youtube/youtube-url"
 import type {
@@ -310,7 +311,7 @@ function normalizeTranscript(
     raw: {
       format: "vtt",
       text: result.rawVtt,
-      sourceUrl: result.sourceUrl || null,
+      sourceUrl: null,
     },
   }
 }
@@ -376,8 +377,8 @@ async function runTranscriptStep<T extends FetchVttResult | null>({
 }
 
 function formatThrownError(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string") return error
+  if (error instanceof Error) return redactTranscriptFetchUrls(error.message)
+  if (typeof error === "string") return redactTranscriptFetchUrls(error)
   return "Unknown transcript fallback error"
 }
 

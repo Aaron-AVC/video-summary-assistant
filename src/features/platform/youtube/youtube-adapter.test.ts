@@ -390,7 +390,7 @@ describe("YouTubeAdapter contract", () => {
   })
 
   it("does not persist a signed live URL in transcript output or diagnostic logs", async () => {
-    const signedUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en&fmt=json3&signature=secret-value&pot=pot-value&potc=potc-value`
+    const signedUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en&fmt=json3&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN&potc=SECRET_TEST_POTC`
     const storedLogs: unknown[] = []
     const previousChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome")
     Object.defineProperty(globalThis, "chrome", {
@@ -436,8 +436,9 @@ describe("YouTubeAdapter contract", () => {
       const persisted = JSON.stringify(storedLogs)
       expect(persisted).toContain("strategy=live_timedtext")
       expect(persisted).not.toContain("https://www.youtube.com/api/timedtext")
-      expect(persisted).not.toContain("secret-value")
-      expect(persisted).not.toContain("pot-value")
+      expect(persisted).not.toContain("SECRET_TEST_VALUE")
+      expect(persisted).not.toContain("SECRET_TEST_TOKEN")
+      expect(persisted).not.toContain("SECRET_TEST_POTC")
     } finally {
       if (previousChrome) Object.defineProperty(globalThis, "chrome", previousChrome)
       else Reflect.deleteProperty(globalThis, "chrome")
@@ -446,10 +447,10 @@ describe("YouTubeAdapter contract", () => {
 
   it("continues to legacy tracks when the live timedtext request fails", async () => {
     const liveUrl = `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en&fmt=json3&signature=secret-value`
-    const legacyUrl = createTrack(false).baseUrl
+    const legacyUrl = `${createTrack(false).baseUrl}&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN`
     const requests: string[] = []
     const transcript = await youtubeAdapter.getTranscript(createEnvironment({
-      html: createWatchHtml({ tracks: [createTrack(false)] }),
+      html: createWatchHtml({ tracks: [{ ...createTrack(false), baseUrl: legacyUrl }] }),
       liveState: {
         videoId: VIDEO_ID,
         title: "Live title",
@@ -479,6 +480,10 @@ describe("YouTubeAdapter contract", () => {
 
     expect(requests).toEqual([liveUrl, legacyUrl, `${legacyUrl}&fmt=vtt`])
     expect(transcript.segments[0]?.text).toBe("Legacy fallback")
+    expect(transcript.raw?.sourceUrl).toBeNull()
+    expect(transcript.raw?.text).toContain("Legacy fallback")
+    expect(JSON.stringify(transcript)).not.toContain("SECRET_TEST_VALUE")
+    expect(JSON.stringify(transcript)).not.toContain("SECRET_TEST_TOKEN")
   })
 
   it("uses rendered DOM without activating captions when Resource Timing has no candidate", async () => {

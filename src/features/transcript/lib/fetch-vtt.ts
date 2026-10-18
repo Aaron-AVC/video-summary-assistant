@@ -5,6 +5,7 @@ import {
   type FetchVttResult,
   type TranscriptTrack,
 } from "./transcript-schema"
+import { redactTranscriptFetchUrls } from "./transcript-url-sanitizer"
 
 const DEFAULT_LANGUAGE = "en"
 const SUPPORTED_TIMEDTEXT_FORMATS = ["vtt", "json3"] as const
@@ -222,7 +223,7 @@ function unsupported(
 ): FetchVttResult {
   return {
     ok: false,
-    error: new TranscriptUnsupportedError(reason, details),
+    error: new TranscriptUnsupportedError(reason, redactTranscriptFetchUrls(details)),
   }
 }
 

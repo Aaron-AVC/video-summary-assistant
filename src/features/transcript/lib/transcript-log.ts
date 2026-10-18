@@ -1,3 +1,5 @@
+import { redactTranscriptFetchUrls } from "./transcript-url-sanitizer"
+
 const STORAGE_KEY = "yt-summarizer.transcript-log"
 const MAX_ENTRIES = 20
 
@@ -59,8 +61,8 @@ export function createLogCollector(
           step: stepName,
           durationMs,
           ok: !isFailResult,
-          error: errorMessage,
-          details: resolveDetails(),
+          error: errorMessage ? redactTranscriptFetchUrls(errorMessage) : undefined,
+          details: sanitizeOptionalText(resolveDetails()),
         })
         return result
       } catch (error) {
@@ -68,8 +70,8 @@ export function createLogCollector(
           step: stepName,
           durationMs: Math.round(performance.now() - start),
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-          details: resolveDetails(),
+          error: redactTranscriptFetchUrls(error instanceof Error ? error.message : String(error)),
+          details: sanitizeOptionalText(resolveDetails()),
         })
         throw error
       }
@@ -81,7 +83,7 @@ export function createLogCollector(
         durationMs: 0,
         ok: false,
         skipped: true,
-        details: reason,
+        details: redactTranscriptFetchUrls(reason),
       })
     },
 
@@ -91,7 +93,7 @@ export function createLogCollector(
 
       const entry: TranscriptLogEntry = {
         videoId,
-        pageUrl,
+        pageUrl: redactTranscriptFetchUrls(pageUrl),
         timestamp: new Date().toISOString(),
         outcome,
         successStep,
@@ -104,13 +106,29 @@ export function createLogCollector(
 }
 
 function extractErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error
+  if (typeof error === "string") return redactTranscriptFetchUrls(error)
   if (error && typeof error === "object") {
     const obj = error as Record<string, unknown>
-    if (typeof obj.details === "string") return obj.details
-    if (typeof obj.message === "string") return obj.message
+    if (typeof obj.details === "string") return redactTranscriptFetchUrls(obj.details)
+    if (typeof obj.message === "string") return redactTranscriptFetchUrls(obj.message)
   }
-  return String(error)
+  return redactTranscriptFetchUrls(String(error))
+}
+
+function sanitizeOptionalText(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : redactTranscriptFetchUrls(value)
+}
+
+function sanitizeTranscriptLogEntry(entry: TranscriptLogEntry): TranscriptLogEntry {
+  return {
+    ...entry,
+    pageUrl: redactTranscriptFetchUrls(entry.pageUrl),
+    steps: entry.steps.map((step) => ({
+      ...step,
+      ...(step.error === undefined ? {} : { error: redactTranscriptFetchUrls(step.error) }),
+      ...(step.details === undefined ? {} : { details: redactTranscriptFetchUrls(step.details) })
+    }))
+  }
 }
 
 export async function saveTranscriptLog(entry: TranscriptLogEntry): Promise<void> {
@@ -123,13 +141,15 @@ export async function saveTranscriptLog(entry: TranscriptLogEntry): Promise<void
       ? data[STORAGE_KEY]
       : []
 
-    existing.unshift(entry)
+    existing.unshift(sanitizeTranscriptLogEntry(entry))
 
-    if (existing.length > MAX_ENTRIES) {
-      existing.length = MAX_ENTRIES
+    const sanitizedExisting = existing.map(sanitizeTranscriptLogEntry)
+
+    if (sanitizedExisting.length > MAX_ENTRIES) {
+      sanitizedExisting.length = MAX_ENTRIES
     }
 
-    await storage.set({ [STORAGE_KEY]: existing })
+    await storage.set({ [STORAGE_KEY]: sanitizedExisting })
   } catch {
     // Silent fail — logging should never break the app
   }
@@ -141,7 +161,14 @@ export async function getTranscriptLogs(): Promise<TranscriptLogEntry[]> {
     if (!storage) return []
 
     const data = await storage.get(STORAGE_KEY)
-    return Array.isArray(data[STORAGE_KEY]) ? data[STORAGE_KEY] : []
+    if (!Array.isArray(data[STORAGE_KEY])) return []
+    const entries = data[STORAGE_KEY].map((entry: TranscriptLogEntry) => sanitizeTranscriptLogEntry(entry))
+    try {
+      await storage.set({ [STORAGE_KEY]: entries })
+    } catch {
+      // Keep sanitized logs available even when storage cleanup fails.
+    }
+    return entries
   } catch {
     return []
   }

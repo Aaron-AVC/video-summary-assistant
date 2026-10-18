@@ -9,7 +9,7 @@ import { YoutubeSummarizerDatabase } from "@/lib/db"
 Dexie.dependencies.indexedDB = indexedDB
 Dexie.dependencies.IDBKeyRange = IDBKeyRange
 
-describe("Dexie v2 to v3 transcript cache migration", () => {
+describe("Dexie transcript URL cleanup migration", () => {
   it("preserves two snapshots for one video when upgrading the real IndexedDB schema", async () => {
     const name = `youtube-summarizer-migration-${crypto.randomUUID()}`
     const v1 = MIGRATION_BLOCKS.find((block) => block.version === 1)!
@@ -23,7 +23,7 @@ describe("Dexie v2 to v3 transcript cache migration", () => {
         id: "snapshot-a",
         videoId: "same-video",
         language: "en",
-        sourceUrl: null,
+        sourceUrl: "https://www.youtube.com/api/timedtext?v=same-video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN",
         rawVtt: "WEBVTT A",
         cues: [{ startSec: 0, endSec: 1, text: "A" }],
         createdAt: "2026-10-09T00:00:00.000Z",
@@ -33,7 +33,7 @@ describe("Dexie v2 to v3 transcript cache migration", () => {
         id: "snapshot-b",
         videoId: "same-video",
         language: "en",
-        sourceUrl: null,
+        sourceUrl: "https://www.youtube.com/api/timedtext?v=same-video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN",
         rawVtt: "WEBVTT B",
         cues: [{ startSec: 0, endSec: 1, text: "B" }],
         createdAt: "2026-10-10T00:00:00.000Z",
@@ -46,13 +46,20 @@ describe("Dexie v2 to v3 transcript cache migration", () => {
     try {
       await upgraded.open()
       const rows = await upgraded.transcriptCache.toArray()
-      expect(upgraded.verno).toBe(4)
+      expect(upgraded.verno).toBe(5)
       expect(rows).toHaveLength(2)
       expect(rows.map((row) => row.id).sort()).toEqual([
         "legacy-transcript:snapshot-a",
         "legacy-transcript:snapshot-b"
       ])
       expect(rows.every((row) => row.contentKey === "youtube:same-video")).toBe(true)
+      expect(rows.every((row) => row.sourceUrl === null)).toBe(true)
+      const snapshots = await upgraded.transcriptSnapshots.toArray()
+      expect(snapshots.every((row) => row.sourceUrl === null)).toBe(true)
+      expect(JSON.stringify([...rows, ...snapshots])).not.toContain("SECRET_TEST_VALUE")
+      expect(JSON.stringify([...rows, ...snapshots])).not.toContain("SECRET_TEST_TOKEN")
+      expect(snapshots[0]?.rawVtt).toBe("WEBVTT A")
+      expect(snapshots[0]?.cues[0]?.text).toBe("A")
       expect(await upgraded.transcriptCache
         .where("[contentKey+updatedAt]")
         .between(["youtube:same-video", ""], ["youtube:same-video", "￿"])
@@ -96,7 +103,8 @@ describe("Dexie v2 to v3 transcript cache migration", () => {
     })
     await legacy.table("transcriptCache").put({
       id: "transcript", contentKey: "youtube:video", platform: "youtube", videoId: "video", partId: null,
-      fingerprint: "fp", fingerprintVersion: 2, language: "en", sourceUrl: null, rawVtt: null,
+      fingerprint: "fp", fingerprintVersion: 2, language: "en",
+      sourceUrl: "https://www.youtube.com/api/timedtext?v=video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN", rawVtt: null,
       cues: [{ startSec: 0, endSec: 1, text: "hello" }], createdAt: "2026-10-14T00:00:00.000Z", updatedAt: "2026-10-14T00:00:00.000Z"
     })
     await legacy.table("analysisCache").put({
@@ -111,12 +119,13 @@ describe("Dexie v2 to v3 transcript cache migration", () => {
     const upgraded = new YoutubeSummarizerDatabase(name)
     try {
       await upgraded.open()
-      expect(upgraded.verno).toBe(4)
+      expect(upgraded.verno).toBe(5)
       expect(await upgraded.videoRecords.count()).toBe(1)
       expect(await upgraded.analysisRuns.count()).toBe(1)
       expect(await upgraded.segmentSummaries.count()).toBe(1)
       expect(await upgraded.recentVideos.count()).toBe(1)
       expect(await upgraded.transcriptCache.count()).toBe(1)
+      expect((await upgraded.transcriptCache.get("transcript"))?.sourceUrl).toBeNull()
       expect(await upgraded.analysisCache.count()).toBe(1)
       expect(await upgraded.qaAnswers.count()).toBe(1)
       expect(await upgraded.qaThreads.count()).toBe(0)

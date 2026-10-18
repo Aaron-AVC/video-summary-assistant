@@ -61,6 +61,30 @@ describe("fetchVtt", () => {
     }
   })
 
+  it("keeps every signed legacy-track parameter on the transient successful fetch", async () => {
+    const signedUrl = "https://www.youtube.com/api/timedtext?v=video-1&lang=en&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN"
+    const requests: string[] = []
+    const result = await fetchVtt({
+      tracks: [{ languageCode: "en", baseUrl: signedUrl }],
+      fetchImpl: async (input) => {
+        requests.push(String(input))
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          text: async () => '<transcript><text start="0" dur="1">Legacy cue</text></transcript>',
+        }
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(requests).toEqual([signedUrl])
+    if (result.ok) {
+      expect(result.sourceUrl).toBe(signedUrl)
+      expect(result.rawVtt).toContain("Legacy cue")
+    }
+  })
+
   it("falls back to JSON3 when VTT returns an empty body", async () => {
     const result = await fetchVtt({
       tracks: TRACKS,
@@ -248,7 +272,7 @@ describe("fetchVtt", () => {
 
 describe("fetchExactTimedtext", () => {
   it("fetches the signed player URL byte-for-byte and converts JSON3 through the existing path", async () => {
-    const url = "https://www.youtube.com/api/timedtext?v=video-1&lang=zh-Hans&fmt=json3&signature=keep&pot=p&potc=pc"
+    const url = "https://www.youtube.com/api/timedtext?v=video-1&lang=zh-Hans&fmt=json3&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN&potc=SECRET_TEST_POTC"
     const track: TranscriptTrack = { languageCode: "zh-Hans", baseUrl: url, name: "中文" }
     const calls: Array<{ input: string | URL; init?: RequestInit }> = []
     const result = await fetchExactTimedtext({

@@ -73,6 +73,43 @@ function normalizeSegments(segments: SegmentSummaryEntity[]) {
   return segments.map((segment) => segmentSummarySchema.parse(segment))
 }
 
+function withoutTranscriptSourceUrl<T extends { sourceUrl?: string | null }>(
+  row: T
+): Omit<T, "sourceUrl"> & { sourceUrl: null } {
+  return { ...row, sourceUrl: null }
+}
+
+const TRANSCRIPT_URL_SCRUB_BATCH_SIZE = 100
+
+type TranscriptUrlRow = Record<string, unknown> & { sourceUrl?: unknown }
+type TranscriptUrlTable = {
+  toCollection: () => {
+    offset: (offset: number) => {
+      limit: (limit: number) => { toArray: () => Promise<TranscriptUrlRow[]> }
+    }
+  }
+  bulkPut: (rows: TranscriptUrlRow[]) => Promise<unknown>
+}
+
+async function scrubTranscriptSourceUrls(table: unknown): Promise<void> {
+  if (!table || typeof table !== "object") return
+  const candidate = table as Partial<TranscriptUrlTable>
+  if (typeof candidate.toCollection !== "function" || typeof candidate.bulkPut !== "function") return
+
+  let offset = 0
+  while (true) {
+    const batch = await candidate.toCollection().offset(offset)
+      .limit(TRANSCRIPT_URL_SCRUB_BATCH_SIZE).toArray()
+    if (batch.length === 0) return
+
+    const changed = batch.filter((row) => row.sourceUrl !== null)
+    if (changed.length > 0) {
+      await candidate.bulkPut(changed.map((row) => ({ ...row, sourceUrl: null })))
+    }
+    offset += batch.length
+  }
+}
+
 type IndexedCollection<T> = {
   equals?: (key: unknown) => {
     reverse?: () => { first: () => Promise<T | undefined> }
@@ -227,14 +264,15 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
 
   return {
     async saveTranscriptSnapshot(snapshot: TranscriptSnapshotEntity) {
+      const sanitized = withoutTranscriptSourceUrl(snapshot)
       return runWriteWithQuotaGuard(async () => {
-        await database.transcriptSnapshots.put(snapshot)
+        await database.transcriptSnapshots.put(sanitized)
         await shedOldRawVtt()
-        return snapshot
+        return sanitized
       })
     },
     async saveOrReuseTranscriptSnapshot(input: TranscriptCacheEntity) {
-      const parsed = transcriptCacheSchema.parse(input)
+      const parsed = withoutTranscriptSourceUrl(transcriptCacheSchema.parse(input))
       const cacheTable = (database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache
       if (!cacheTable) return parsed
       return runWriteWithQuotaGuard(async () => {
@@ -276,11 +314,11 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
           const parsed: TranscriptCacheEntity[] = []
           for (const row of await cacheTable.toArray()) {
             if (row.contentKey !== contentKey) continue
-            try { parsed.push(transcriptCacheSchema.parse(row)) } catch { /* ignore corrupt cache rows */ }
+            try { parsed.push(withoutTranscriptSourceUrl(transcriptCacheSchema.parse(row))) } catch { /* ignore corrupt cache rows */ }
           }
           cached = byNewest(parsed)[0] ?? null
         } else {
-          try { cached = transcriptCacheSchema.parse(cached) } catch { cached = null }
+          try { cached = withoutTranscriptSourceUrl(transcriptCacheSchema.parse(cached)) } catch { cached = null }
         }
       }
       if (cached) return cached
@@ -301,7 +339,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
     },
     async getTranscriptSnapshotById(id: string) {
       const row = await database.transcriptSnapshots.get(id)
-      return row ? transcriptSnapshotSchema.parse(row) : null
+      return row ? withoutTranscriptSourceUrl(transcriptSnapshotSchema.parse(row)) : null
     },
     async saveVideoRecord(input: VideoRecordEntity) {
       const parsed = videoRecordSchema.parse(input)
@@ -393,7 +431,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
           .between([videoId, ""], [videoId, "￿"])
           .reverse()
           .first()
-        return result ?? null
+        return result ? withoutTranscriptSourceUrl(result) : null
       }
 
       // Fallback for the test fake which only implements where().equals().toArray().
@@ -404,7 +442,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       const sorted = matching
         .slice()
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      return sorted[0] ?? null
+      return sorted[0] ? withoutTranscriptSourceUrl(sorted[0]) : null
     },
     async getCurrentAnalysisByVideoId(videoId: string) {
       const analysisRuns = await database.analysisRuns
@@ -533,7 +571,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       if (analysisRun.transcriptSnapshotId) {
         const snapshot = await database.transcriptSnapshots.get(analysisRun.transcriptSnapshotId)
         if (snapshot) {
-          try { transcript = transcriptSnapshotSchema.parse(snapshot) } catch { transcript = null }
+          try { transcript = withoutTranscriptSourceUrl(transcriptSnapshotSchema.parse(snapshot)) } catch { transcript = null }
         }
       }
       if (!transcript && analysisRun.contentKey) {
@@ -542,7 +580,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
           const candidates = (await cacheTable.toArray()).flatMap((candidate) => {
             if (candidate.contentKey !== analysisRun.contentKey) return []
             if (analysisRun.transcriptFingerprint && candidate.fingerprint !== analysisRun.transcriptFingerprint) return []
-            try { return [transcriptCacheSchema.parse(candidate)] } catch { return [] }
+            try { return [withoutTranscriptSourceUrl(transcriptCacheSchema.parse(candidate))] } catch { return [] }
           })
           transcript = byNewest(candidates)[0] ?? null
         }
@@ -794,6 +832,18 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         .slice(0, limit)
     },
     async exportLocalData(): Promise<PersistenceExport> {
+      const cacheTable = (database as typeof database & { transcriptCache?: typeof database.transcriptSnapshots }).transcriptCache
+      try {
+        await scrubTranscriptSourceUrls(database.transcriptSnapshots)
+      } catch {
+        // The exported view below is sanitized even if in-place cleanup fails.
+      }
+      try {
+        await scrubTranscriptSourceUrls(cacheTable)
+      } catch {
+        // The exported view below is sanitized even if in-place cleanup fails.
+      }
+
       const [providerConfigs, transcriptSnapshots, analysisRuns, segmentSummaries, recentVideos] =
         await Promise.all([
           database.providerConfigs.toArray(),
@@ -811,7 +861,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         try { return [videoRecordSchema.parse(row)] } catch { return [] }
       })
       const transcriptCache = (await optionalRows("transcriptCache")).flatMap((row) => {
-        try { return [transcriptCacheSchema.parse(row)] } catch { return [] }
+        try { return [withoutTranscriptSourceUrl(transcriptCacheSchema.parse(row))] } catch { return [] }
       })
       const analysisCache = (await optionalRows("analysisCache")).flatMap((row) => {
         try { return [analysisCacheSchema.parse(row)] } catch { return [] }
@@ -827,7 +877,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       })
       return {
         providerConfigs: providerConfigs.map(sanitizeProviderConfigForExport),
-        transcriptSnapshots,
+        transcriptSnapshots: transcriptSnapshots.map(withoutTranscriptSourceUrl),
         analysisRuns: analysisRuns.map(normalizeAnalysisRun),
         segmentSummaries: normalizeSegments(segmentSummaries),
         recentVideos,

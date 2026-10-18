@@ -20,6 +20,7 @@ type Row = { videoId?: string; id?: string; updatedAt?: string; rawVtt?: string 
 class FakeTable<T extends Row> {
   rows: T[] = []
   putShouldThrow: unknown = null
+  bulkPutBatchSizes: number[] = []
 
   async toArray() {
     return [...this.rows]
@@ -30,13 +31,25 @@ class FakeTable<T extends Row> {
       throw this.putShouldThrow
     }
     const key = this.keyOf(row)
-    this.rows = this.rows.filter((existing) => !this.matchesKey(existing, key))
-    this.rows.push(row)
+    const existingIndex = this.rows.findIndex((existing) => this.matchesKey(existing, key))
+    if (existingIndex >= 0) this.rows[existingIndex] = row
+    else this.rows.push(row)
   }
 
   async bulkPut(rows: T[]) {
+    this.bulkPutBatchSizes.push(rows.length)
     for (const row of rows) {
       await this.put(row)
+    }
+  }
+
+  toCollection() {
+    return {
+      offset: (offset: number) => ({
+        limit: (limit: number) => ({
+          toArray: async () => this.rows.slice(offset, offset + limit)
+        })
+      })
     }
   }
 
@@ -68,7 +81,7 @@ class FakeTable<T extends Row> {
 
   private keyOf(row: T) {
     const value = row as T & { cacheKey?: string; contentKey?: string }
-    return (value.videoId ?? value.id ?? value.cacheKey ?? value.contentKey) as string
+    return (value.id ?? value.cacheKey ?? value.videoId ?? value.contentKey) as string
   }
 
   private matchesKey(row: T, key: string) {
@@ -429,6 +442,168 @@ describe("historyRepository.saveTranscriptSnapshot rawVtt retention", () => {
     // Cues remain intact so previously-saved analyses keep rendering.
     expect(oldSnapshot?.cues).toEqual([{ startSec: 0, endSec: 1, text: "hi" }])
     expect(newSnapshot?.rawVtt).toBe("WEBVTT new")
+  })
+
+  it("persists transcript caches and analysis snapshots without fetch URLs", async () => {
+    const fake = buildFakeDatabase()
+    const repo = createHistoryRepository(fake as never, {
+      transcriptRawVttRetentionDays: 0,
+      runTransaction: passthroughTransaction
+    })
+    const signedUrl = "https://www.youtube.com/api/timedtext?v=video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN"
+    const cache = await repo.saveTranscriptCache({
+      id: "cache-safe",
+      contentKey: "youtube:video",
+      platform: "youtube",
+      videoId: "video",
+      partId: null,
+      fingerprint: "fp-safe",
+      fingerprintVersion: 2,
+      language: "en",
+      sourceUrl: signedUrl,
+      rawVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nCue",
+      cues: [{ startSec: 0, endSec: 1, text: "Cue" }],
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    await repo.saveTranscriptSnapshot({
+      id: "snapshot-safe",
+      videoId: "video",
+      platform: "youtube",
+      contentKey: "youtube:video",
+      partId: null,
+      fingerprint: "fp-safe",
+      language: "en",
+      sourceUrl: signedUrl,
+      rawVtt: "WEBVTT snapshot",
+      cues: [{ startSec: 0, endSec: 1, text: "Cue" }],
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+
+    expect(cache.sourceUrl).toBeNull()
+    expect(fake.transcriptCache.rows[0]?.sourceUrl).toBeNull()
+    expect(fake.transcriptSnapshots.rows[0]?.sourceUrl).toBeNull()
+    expect(fake.transcriptCache.rows[0]?.rawVtt).toContain("Cue")
+    expect(fake.transcriptSnapshots.rows[0]?.cues).toEqual([{ startSec: 0, endSec: 1, text: "Cue" }])
+  })
+
+  it("reuses old cache cues while hiding its stored fetch URL", async () => {
+    const fake = buildFakeDatabase()
+    fake.transcriptCache.rows.push({
+      id: "cache-legacy",
+      contentKey: "youtube:video",
+      platform: "youtube",
+      videoId: "video",
+      partId: null,
+      fingerprint: "fp-legacy",
+      fingerprintVersion: 2,
+      language: "en",
+      sourceUrl: "https://www.youtube.com/api/timedtext?v=video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN",
+      rawVtt: "WEBVTT cached cue",
+      cues: [{ startSec: 0, endSec: 1, text: "Cached cue" }],
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    const reused = await repo.getLatestTranscriptByContentKey("youtube:video")
+
+    expect(reused?.sourceUrl).toBeNull()
+    expect(reused?.rawVtt).toBe("WEBVTT cached cue")
+    expect(reused?.cues).toEqual([{ startSec: 0, endSec: 1, text: "Cached cue" }])
+  })
+
+  it("scrubs old source URLs in bounded batches before full export without changing related history", async () => {
+    const fake = buildFakeDatabase()
+    const signedUrl = "https://www.youtube.com/api/timedtext?v=video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN"
+    const snapshot: TranscriptSnapshotEntity = {
+      id: "snapshot-legacy",
+      videoId: "video-current",
+      platform: "youtube",
+      contentKey: "youtube:video-current",
+      partId: null,
+      fingerprint: "fp-current",
+      language: "en",
+      sourceUrl: signedUrl,
+      rawVtt: "WEBVTT preserved snapshot",
+      cues: [{ startSec: 0, endSec: 1, text: "Preserved cue" }],
+      createdAt: NOW,
+      updatedAt: NOW
+    }
+    fake.transcriptSnapshots.rows.push(snapshot)
+    for (let index = 0; index < 205; index += 1) {
+      fake.transcriptCache.rows.push({
+        id: `cache-${index}`,
+        contentKey: `youtube:video-${index}`,
+        platform: "youtube",
+        videoId: `video-${index}`,
+        partId: null,
+        fingerprint: `fp-${index}`,
+        fingerprintVersion: 2,
+        language: "en",
+        sourceUrl: signedUrl,
+        rawVtt: `WEBVTT cache ${index}`,
+        cues: [{ startSec: 0, endSec: 1, text: `Cue ${index}` }],
+        createdAt: NOW,
+        updatedAt: NOW
+      })
+    }
+    fake.analysisRuns.rows.push(buildAnalysisRun())
+    fake.segmentSummaries.rows.push({
+      id: "segment-current",
+      analysisRunId: "run-current",
+      videoId: "video-current",
+      contentKey: "youtube:video-current",
+      title: "Chapter",
+      summary: "Summary",
+      startSec: 0,
+      endSec: 1,
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    fake.qaThreads.rows.push({
+      id: "thread-current",
+      contentKey: "youtube:video-current",
+      platform: "youtube",
+      videoId: "video-current",
+      partId: null,
+      title: "Question",
+      analysisRunId: "run-current",
+      transcriptFingerprint: "fp-current",
+      providerProfileId: "provider",
+      providerBaseUrl: "https://api.example.com/v1",
+      providerModel: "model",
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    fake.qaMessages.rows.push({
+      id: "message-current",
+      threadId: "thread-current",
+      sequence: 0,
+      role: "user",
+      content: "Question",
+      createdAt: NOW
+    })
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    const exported = await repo.exportLocalData()
+    const json = JSON.stringify(exported)
+
+    expect(json).not.toContain("SECRET_TEST_VALUE")
+    expect(json).not.toContain("SECRET_TEST_TOKEN")
+    expect(exported.transcriptSnapshots[0]?.sourceUrl).toBeNull()
+    expect(exported.transcriptSnapshots[0]?.rawVtt).toBe("WEBVTT preserved snapshot")
+    expect(exported.transcriptCache).toHaveLength(205)
+    expect(exported.transcriptCache.every((row) => row.sourceUrl === null)).toBe(true)
+    expect(fake.transcriptSnapshots.rows[0]?.sourceUrl).toBeNull()
+    expect(fake.transcriptCache.rows.every((row) => row.sourceUrl === null)).toBe(true)
+    expect(fake.transcriptCache.bulkPutBatchSizes.every((size) => size <= 100)).toBe(true)
+    expect(fake.transcriptCache.bulkPutBatchSizes).toEqual([100, 100, 5])
+    expect(exported.analysisRuns).toHaveLength(1)
+    expect(exported.segmentSummaries).toHaveLength(1)
+    expect(exported.qaThreads).toHaveLength(1)
+    expect(exported.qaMessages).toHaveLength(1)
   })
 })
 

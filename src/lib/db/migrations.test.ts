@@ -229,4 +229,45 @@ describe("registerMigrations", () => {
     expect(v3?.stores.transcriptCache).toContain("[contentKey+fingerprint]")
     expect(v3?.stores.transcriptCache).not.toContain("&contentKey")
   })
+
+  it("appends a schema-compatible cleanup for stored transcript fetch URLs", async () => {
+    const v4 = MIGRATION_BLOCKS.find((block) => block.version === 4)
+    const v5 = MIGRATION_BLOCKS.find((block) => block.version === 5)
+    expect(v5?.stores).toEqual(v4?.stores)
+
+    const signedUrl = "https://www.youtube.com/api/timedtext?v=video&signature=SECRET_TEST_VALUE&pot=SECRET_TEST_TOKEN"
+    const snapshot = {
+      id: "snapshot",
+      sourceUrl: signedUrl,
+      rawVtt: "WEBVTT preserved",
+      cues: [{ startSec: 0, endSec: 1, text: "Preserved cue" }]
+    }
+    const cache = {
+      id: "cache",
+      sourceUrl: signedUrl,
+      contentKey: "youtube:video",
+      fingerprint: "fp"
+    }
+    await v5?.upgrade?.({
+      table: (name) => ({
+        toCollection: () => ({
+          modify: async (mutator) => {
+            if (name === "transcriptSnapshots") mutator(snapshot)
+            if (name === "transcriptCache") mutator(cache)
+          }
+        })
+      })
+    })
+
+    expect(snapshot).toMatchObject({
+      sourceUrl: null,
+      rawVtt: "WEBVTT preserved",
+      cues: [{ startSec: 0, endSec: 1, text: "Preserved cue" }]
+    })
+    expect(cache).toMatchObject({
+      sourceUrl: null,
+      contentKey: "youtube:video",
+      fingerprint: "fp"
+    })
+  })
 })

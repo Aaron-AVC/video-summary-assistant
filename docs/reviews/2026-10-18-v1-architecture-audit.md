@@ -201,4 +201,3 @@ After SEC-01 is fixed, rerun the full requested validation set and perform brows
 2. **PERSIST-02 test and query repair:** restore active Bilibili transcripts from preserved run-bound snapshots after cache clear without broadening deletion semantics.
 3. **PERF-01 measurement:** add a synthetic large-store benchmark and replace interactive full-table scans with indexed/bounded queries where the measured data warrants it.
 4. **DEP-03 supply-chain review:** choose a supported vulnerability database/registry, record the database timestamp, and review duplicate transitive toolchains without opportunistic upgrades.
-

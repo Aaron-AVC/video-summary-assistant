@@ -31,7 +31,6 @@ import {
   AskTaskController,
   type ActiveAskTask,
 } from "@/features/analysis/lib/ask-task-controller"
-import { persistedLegacyAnalysisToVideoAnalysis } from "@/features/analysis/lib/analysis-compat"
 import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
 import type { RecentAnalysisListItem } from "@/features/history/components/recent-analysis-list"
 import {
@@ -59,7 +58,6 @@ import {
 } from "@/features/analysis/lib/analysis-schema"
 import {
   persistIfSupportedPlatform,
-  projectPersistedVideoIdentity,
 } from "@/features/platform/persistence-compat"
 import type {
   ActiveVideoContext,
@@ -119,6 +117,10 @@ import {
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import { applySidepanelDataMutation } from "@/sidepanel/lib/apply-data-mutation"
 import { I18nProvider, useI18n } from "@/lib/i18n/i18n-provider"
+import {
+  createHistoryController,
+  type HistoryContext,
+} from "@/sidepanel/history/history-controller"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -136,21 +138,6 @@ type AnalysisView = {
   analysisPromptVersion: string | null
   lastAnalyzedAt: string | null
   errorMessage: string | null
-}
-
-type HistoryEntry = {
-  recentVideo: {
-    videoId: string
-    analysisRunId?: string
-    contentKey?: string
-    platform?: "youtube" | "bilibili"
-    partId?: string | null
-    title: string
-    channelTitle: string | null
-    status: string | null
-    updatedAt: string
-  }
-  analysis: { summary: string } | null
 }
 
 function SidepanelWorkspace() {
@@ -193,6 +180,18 @@ function SidepanelWorkspace() {
     })
   }
   const transcriptController = transcriptControllerRef.current
+  const historyControllerRef = useRef<ReturnType<typeof createHistoryController> | null>(null)
+  if (!historyControllerRef.current) {
+    historyControllerRef.current = createHistoryController({
+      listRecentAnalyses: (limit) => historyRepository.listRecentAnalyses(limit),
+      getCurrentAnalysisByVideoId: (videoId) => historyRepository.getCurrentAnalysisByVideoId(videoId),
+      getLatestTranscriptSnapshotByVideoId: (videoId) => historyRepository.getLatestTranscriptSnapshotByVideoId(videoId),
+      getCurrentAnalysisByContentKey: (contentKey) => historyRepository.getCurrentAnalysisByContentKey(contentKey),
+      getLatestTranscriptByContentKey: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
+      getSavedAnalysisRunById: (analysisRunId) => historyRepository.getSavedAnalysisRunById(analysisRunId),
+    })
+  }
+  const historyController = historyControllerRef.current
   const [transcriptSnapshot, setTranscriptSnapshot] = useState(
     transcriptController.getSnapshot(),
   )
@@ -369,23 +368,8 @@ function SidepanelWorkspace() {
   )
 
   const refreshRecentAnalyses = useCallback(async () => {
-    const recent = await historyRepository.listRecentAnalyses(10) as HistoryEntry[]
-    setRecentItems(
-      recent
-        .filter((entry) => Boolean(entry.analysis))
-        .map((entry) => ({
-          videoId: entry.recentVideo.videoId,
-          analysisRunId: entry.recentVideo.analysisRunId,
-          contentKey: entry.recentVideo.contentKey,
-          platform: entry.recentVideo.platform,
-          partId: entry.recentVideo.partId,
-          title: entry.recentVideo.title,
-          channelTitle: entry.recentVideo.channelTitle,
-          status: entry.recentVideo.status,
-          updatedAt: entry.recentVideo.updatedAt,
-        })),
-    )
-  }, [])
+    setRecentItems(await historyController.listRecentAnalyses(10))
+  }, [historyController])
 
   const applyMutation = useCallback(async (mutation: Parameters<typeof applySidepanelDataMutation>[0]) => {
     await applySidepanelDataMutation(mutation, destructiveWorkspaceRef.current, {
@@ -460,62 +444,44 @@ function SidepanelWorkspace() {
   const loadSavedAnalysis = useCallback(async (videoId: string, generation: number) => {
     setIsAnalysisFetching(true)
     try {
-      const [analysis, latestTranscriptSnapshot, recent] = await Promise.all([
-        historyRepository.getCurrentAnalysisByVideoId(videoId),
-        historyRepository.getLatestTranscriptSnapshotByVideoId(videoId),
-        historyRepository.listRecentAnalyses(25) as Promise<HistoryEntry[]>,
-      ])
-
-      if (generation !== loadWorkspaceGenerationRef.current) return
-
-      const identity = projectPersistedVideoIdentity(videoId)
-      const loadedTranscriptFingerprint = await resolveAskTranscriptFingerprint({
-        currentFingerprint: latestTranscriptSnapshot?.fingerprint ?? null,
-        transcriptCues: latestTranscriptSnapshot?.cues ?? [],
+      const result = await historyController.loadLegacyVideoRestore({
+        videoId,
+        isCurrent: () => generation === loadWorkspaceGenerationRef.current,
       })
+      if (result.kind === "stale" || generation !== loadWorkspaceGenerationRef.current) return
+      const { snapshot } = result
       publishTranscript({
-        cues: latestTranscriptSnapshot?.cues ?? [],
-        identity: latestTranscriptSnapshot ? identity : null,
-        title: recent.find((entry) => entry.recentVideo.videoId === videoId)?.recentVideo.title ?? videoId,
-        fingerprint: loadedTranscriptFingerprint,
-        rawVtt: latestTranscriptSnapshot?.rawVtt ?? null,
+        cues: snapshot.transcript.cues,
+        identity: snapshot.transcript.identity,
+        title: snapshot.transcript.title,
+        fingerprint: snapshot.transcript.fingerprint,
+        rawVtt: snapshot.transcript.rawVtt,
       })
       transcriptController.setError(null)
 
-      if (!analysis) {
+      if (!snapshot.analysis) {
         setAnalysisView(null)
         setAnalysisPhase("idle")
         clearQaWorkspace()
         return
       }
 
-      const recentVideo = recent.find((entry) => entry.recentVideo.videoId === videoId)?.recentVideo
-      const canonical = persistedLegacyAnalysisToVideoAnalysis(analysis, analysis.segments)
       setAnalysisView({
-        platform: "youtube",
-        videoId,
-        partId: null,
-        contentKey: identity.contentKey,
-        title: recentVideo?.title ?? videoId,
-        analysis: canonical,
-        analysisRunId: analysis.id,
-        transcriptFingerprint: analysis.transcriptFingerprint ?? null,
-        providerProfileId: null,
-        providerBaseUrl: null,
-        providerModel: null,
-        analysisSchemaVersion: null,
-        analysisPromptVersion: null,
-        lastAnalyzedAt: analysis.completedAt,
-        errorMessage: analysis.errorMessage,
+        ...snapshot.analysis,
       })
       setAnalysisPhase("completed")
-      await restoreQaConversation(identity.contentKey, analysis.id, generation, loadedTranscriptFingerprint)
+      await restoreQaConversation(
+        snapshot.analysis.contentKey,
+        snapshot.analysis.analysisRunId,
+        generation,
+        snapshot.transcript.fingerprint,
+      )
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) {
         setIsAnalysisFetching(false)
       }
     }
-  }, [clearQaWorkspace, publishTranscript, restoreQaConversation, transcriptController])
+  }, [clearQaWorkspace, historyController, publishTranscript, restoreQaConversation, transcriptController])
 
   const loadSavedAnalysisForContext = useCallback(async (
     context: ActiveVideoContext,
@@ -524,116 +490,80 @@ function SidepanelWorkspace() {
     if (!context.contentKey || !context.videoId || !context.platform) return
     setIsAnalysisFetching(true)
     try {
-      const [analysis, latestTranscript] = await Promise.all([
-        historyRepository.getCurrentAnalysisByContentKey(context.contentKey),
-        historyRepository.getLatestTranscriptByContentKey(context.contentKey),
-      ])
-      if (generation !== loadWorkspaceGenerationRef.current) return
-      const loadedTranscriptFingerprint = await resolveAskTranscriptFingerprint({
-        currentFingerprint: latestTranscript?.fingerprint ?? null,
-        transcriptCues: latestTranscript?.cues ?? [],
-      })
-      publishTranscript({
-        cues: latestTranscript?.cues ?? [],
-        identity: latestTranscript ? {
-          platform: latestTranscript.platform ?? context.platform,
-          videoId: latestTranscript.videoId,
-          contentKey: latestTranscript.contentKey ?? context.contentKey,
-          ...(latestTranscript.partId ?? context.partId
-            ? { partId: latestTranscript.partId ?? context.partId }
-            : {}),
-        } : null,
+      const historyContext: HistoryContext = {
+        platform: context.platform,
+        videoId: context.videoId,
+        partId: context.partId,
+        contentKey: context.contentKey,
         title: context.title,
-        fingerprint: loadedTranscriptFingerprint,
-        rawVtt: latestTranscript?.rawVtt ?? null,
+      }
+      const result = await historyController.loadCurrentContextRestore({
+        context: historyContext,
+        isCurrent: () => generation === loadWorkspaceGenerationRef.current,
       })
-      if (!analysis) {
+      if (result.kind === "stale" || generation !== loadWorkspaceGenerationRef.current) return
+      const { snapshot } = result
+      publishTranscript({
+        cues: snapshot.transcript.cues,
+        identity: snapshot.transcript.identity,
+        title: snapshot.transcript.title,
+        fingerprint: snapshot.transcript.fingerprint,
+        rawVtt: snapshot.transcript.rawVtt,
+      })
+      if (!snapshot.analysis) {
         setAnalysisView(null)
         setAnalysisPhase("idle")
         clearQaWorkspace()
         return
       }
-      const canonical = persistedLegacyAnalysisToVideoAnalysis(analysis, analysis.segments)
       setAnalysisView({
-        platform: context.platform,
-        videoId: context.videoId,
-        partId: context.partId,
-        contentKey: context.contentKey,
-        title: context.title ?? context.videoId,
-        analysis: canonical,
-        analysisRunId: analysis.id ?? null,
-        transcriptFingerprint: analysis.transcriptFingerprint ?? null,
-        providerProfileId: analysis.providerProfileId ?? null,
-        providerBaseUrl: analysis.providerBaseUrl ?? null,
-        providerModel: analysis.providerModel ?? null,
-        analysisSchemaVersion: analysis.analysisSchemaVersion ?? null,
-        analysisPromptVersion: analysis.analysisPromptVersion ?? null,
-        lastAnalyzedAt: analysis.completedAt,
-        errorMessage: analysis.errorMessage,
+        ...snapshot.analysis,
       })
       setAnalysisPhase("completed")
-      await restoreQaConversation(context.contentKey, analysis.id, generation, loadedTranscriptFingerprint)
+      await restoreQaConversation(
+        snapshot.analysis.contentKey,
+        snapshot.analysis.analysisRunId,
+        generation,
+        snapshot.transcript.fingerprint,
+      )
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [clearQaWorkspace, publishTranscript, restoreQaConversation])
+  }, [clearQaWorkspace, historyController, publishTranscript, restoreQaConversation])
 
   const loadSavedAnalysisRun = useCallback(async (analysisRunId: string, generation: number) => {
     setIsAnalysisFetching(true)
     try {
-      const aggregate = await historyRepository.getSavedAnalysisRunById(analysisRunId)
-      if (!aggregate) throw new Error("Saved analysis run was not found in local history.")
-      const { analysisRun, segments, transcript, videoRecord } = aggregate
-      const contentKey = videoRecord?.contentKey ?? analysisRun.contentKey
-      if (!contentKey) throw new Error("Saved analysis run has no persisted content identity.")
-      const platform = videoRecord?.platform ?? analysisRun.platform ?? "youtube"
-      const videoId = videoRecord?.videoId ?? analysisRun.videoId
-      const partId = videoRecord?.partId ?? analysisRun.partId ?? null
-      const title = videoRecord?.title ?? videoId
-      if (generation !== loadWorkspaceGenerationRef.current) return
-      const loadedTranscriptFingerprint = await resolveAskTranscriptFingerprint({
-        currentFingerprint: transcript?.fingerprint ?? analysisRun.transcriptFingerprint ?? null,
-        transcriptCues: transcript?.cues ?? [],
+      const result = await historyController.loadSavedRunRestore({
+        analysisRunId,
+        isCurrent: () => generation === loadWorkspaceGenerationRef.current,
       })
+      if (result.kind === "stale" || generation !== loadWorkspaceGenerationRef.current) return
+      const { snapshot } = result
 
       publishTranscript({
-        cues: transcript?.cues ?? [],
-        identity: transcript ? {
-          platform,
-          videoId: transcript.videoId,
-          contentKey: transcript.contentKey ?? contentKey,
-          ...(transcript.partId ? { partId: transcript.partId } : partId ? { partId } : {}),
-        } : null,
-        title,
-        fingerprint: loadedTranscriptFingerprint,
-        rawVtt: transcript?.rawVtt ?? null,
+        cues: snapshot.transcript.cues,
+        identity: snapshot.transcript.identity,
+        title: snapshot.transcript.title,
+        fingerprint: snapshot.transcript.fingerprint,
+        rawVtt: snapshot.transcript.rawVtt,
       })
       transcriptController.setError(null)
 
-      const canonical = persistedLegacyAnalysisToVideoAnalysis(analysisRun, segments)
       setAnalysisView({
-        platform,
-        videoId,
-        partId,
-        contentKey,
-        title,
-        analysis: canonical,
-        analysisRunId: analysisRun.id,
-        transcriptFingerprint: analysisRun.transcriptFingerprint ?? null,
-        providerProfileId: analysisRun.providerProfileId ?? null,
-        providerBaseUrl: analysisRun.providerBaseUrl ?? null,
-        providerModel: analysisRun.providerModel ?? null,
-        analysisSchemaVersion: analysisRun.analysisSchemaVersion ?? null,
-        analysisPromptVersion: analysisRun.analysisPromptVersion ?? null,
-        lastAnalyzedAt: analysisRun.completedAt,
-        errorMessage: analysisRun.errorMessage,
+        ...snapshot.analysis!,
       })
       setAnalysisPhase("completed")
-      await restoreQaConversation(contentKey, analysisRun.id, generation, loadedTranscriptFingerprint)
+      await restoreQaConversation(
+        snapshot.analysis!.contentKey,
+        snapshot.analysis!.analysisRunId,
+        generation,
+        snapshot.transcript.fingerprint,
+      )
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [publishTranscript, restoreQaConversation, transcriptController])
+  }, [historyController, publishTranscript, restoreQaConversation, transcriptController])
 
   const loadWorkspace = useCallback(async () => {
     const generation = ++loadWorkspaceGenerationRef.current
@@ -641,26 +571,12 @@ function SidepanelWorkspace() {
     try {
       const [providerConfigs, recent] = await Promise.all([
         settingsStorage.getProviderConfigs(),
-        historyRepository.listRecentAnalyses(10) as Promise<HistoryEntry[]>,
+        historyController.listRecentAnalyses(10),
       ])
       if (generation !== loadWorkspaceGenerationRef.current) return
 
       setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
-      setRecentItems(
-        recent
-          .filter((entry) => Boolean(entry.analysis))
-          .map((entry) => ({
-            videoId: entry.recentVideo.videoId,
-            analysisRunId: entry.recentVideo.analysisRunId,
-            contentKey: entry.recentVideo.contentKey,
-            platform: entry.recentVideo.platform,
-            partId: entry.recentVideo.partId,
-            title: entry.recentVideo.title,
-            channelTitle: entry.recentVideo.channelTitle,
-            status: entry.recentVideo.status,
-            updatedAt: entry.recentVideo.updatedAt,
-          })),
-      )
+      setRecentItems(recent)
 
       if (videoContext.platform && videoContext.videoId && videoContext.contentKey) {
         await loadSavedAnalysisForContext(videoContext, generation)
@@ -670,7 +586,7 @@ function SidepanelWorkspace() {
         setIsBootstrapping(false)
       }
     }
-  }, [loadSavedAnalysisForContext, videoContext.contentKey, videoContext.platform, videoContext.videoId, videoContext.title, videoContext.partId])
+  }, [historyController, loadSavedAnalysisForContext, videoContext.contentKey, videoContext.platform, videoContext.videoId, videoContext.title, videoContext.partId])
 
   useEffect(() => {
     loadWorkspaceGenerationRef.current += 1

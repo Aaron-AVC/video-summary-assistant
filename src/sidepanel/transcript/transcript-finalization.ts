@@ -1,6 +1,8 @@
 import type {
   TranscriptSegment,
   VideoIdentity,
+  VideoInfo,
+  VideoTranscript,
 } from "@/features/platform/types"
 import type { TranscriptCacheEntity } from "@/lib/schemas/persistence"
 import {
@@ -9,6 +11,7 @@ import {
 } from "@/sidepanel/lib/load-current-transcript"
 import { resolveAskTranscriptFingerprint } from "@/sidepanel/lib/ask-transcript-identity"
 import { TRANSCRIPT_FINGERPRINT_VERSION } from "@/lib/persistence/cache-identity"
+import { computeTranscriptFingerprint } from "@/lib/persistence/cache-identity"
 
 export type CurrentTranscriptPublicationPlan = {
   identity: VideoIdentity
@@ -21,6 +24,29 @@ export type CurrentTranscriptFinalizationPlan = {
   fingerprint: string | null
   shouldInvalidateAsk: boolean
   publication: CurrentTranscriptPublicationPlan
+}
+
+export type AnalysisTaskTranscriptSource = {
+  platform: VideoInfo["platform"]
+  videoId: string
+  partId: string | null
+  contentKey: string
+  title: string
+  author: string | null
+  canonicalUrl: string | null
+}
+
+export type AnalysisTaskTranscriptPublicationPlan = {
+  identity: VideoIdentity
+  title: string
+  cues: TranscriptSegment[]
+  rawVtt: string | null
+}
+
+export type AnalysisTaskTranscriptFinalizationPlan = {
+  sourceVideo: VideoInfo
+  transcriptFingerprint: string
+  publication: AnalysisTaskTranscriptPublicationPlan
 }
 
 export async function prepareCurrentTranscriptFinalization({
@@ -76,6 +102,68 @@ export function buildTranscriptCacheWrite({
     sourceUrl: result.transcript.raw?.sourceUrl ?? null,
     rawVtt: result.transcript.raw?.text ?? null,
     cues: result.transcript.segments,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+export async function prepareAnalysisTaskTranscriptFinalization({
+  result,
+  taskSource,
+}: {
+  result: CurrentTranscriptResult
+  taskSource: AnalysisTaskTranscriptSource
+}): Promise<AnalysisTaskTranscriptFinalizationPlan> {
+  const sourceVideo: VideoInfo = {
+    ...result.video,
+    title: result.video.title || taskSource.title,
+    author: result.video.author ?? taskSource.author,
+    canonicalUrl: result.video.canonicalUrl || taskSource.canonicalUrl || "",
+  }
+  const transcriptFingerprint = await computeTranscriptFingerprint(result.transcript.segments)
+
+  return {
+    sourceVideo,
+    transcriptFingerprint,
+    publication: {
+      identity: {
+        platform: sourceVideo.platform,
+        videoId: sourceVideo.videoId,
+        contentKey: sourceVideo.contentKey,
+        ...(sourceVideo.partId ? { partId: sourceVideo.partId } : {}),
+      },
+      title: sourceVideo.title,
+      cues: result.transcript.segments,
+      rawVtt: result.transcript.raw?.text ?? null,
+    },
+  }
+}
+
+export function buildAnalysisTaskTranscriptCacheWrite({
+  sourceVideo,
+  transcript,
+  taskContentKey,
+  fingerprint,
+  now,
+}: {
+  sourceVideo: VideoInfo
+  transcript: VideoTranscript
+  taskContentKey: string
+  fingerprint: string
+  now: string
+}): TranscriptCacheEntity {
+  return {
+    id: `transcript:${taskContentKey}:${fingerprint}`,
+    contentKey: taskContentKey,
+    platform: sourceVideo.platform,
+    videoId: sourceVideo.videoId,
+    partId: sourceVideo.partId ?? null,
+    fingerprint,
+    fingerprintVersion: TRANSCRIPT_FINGERPRINT_VERSION,
+    language: transcript.language ?? null,
+    sourceUrl: transcript.raw?.sourceUrl ?? null,
+    rawVtt: transcript.raw?.text ?? null,
+    cues: transcript.segments,
     createdAt: now,
     updatedAt: now,
   }

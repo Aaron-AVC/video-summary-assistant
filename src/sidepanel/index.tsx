@@ -49,9 +49,7 @@ import {
 import {
   computeAnalysisCacheKey,
   computeQaCacheKey,
-  computeTranscriptFingerprint,
   isExactCurrentAnalysis,
-  TRANSCRIPT_FINGERPRINT_VERSION,
   VIDEO_QA_PROMPT_VERSION,
   VIDEO_QA_SCHEMA_VERSION,
 } from "@/lib/persistence/cache-identity"
@@ -107,6 +105,8 @@ import {
 } from "@/sidepanel/transcript/transcript-acquisition"
 import {
   buildTranscriptCacheWrite,
+  buildAnalysisTaskTranscriptCacheWrite,
+  prepareAnalysisTaskTranscriptFinalization,
   prepareCurrentTranscriptFinalization,
 } from "@/sidepanel/transcript/transcript-finalization"
 import {
@@ -860,31 +860,29 @@ function SidepanelWorkspace() {
             if (signal.aborted) throw new AnalysisAbortedError()
           }
 
-          const { video, transcript } = await loadTranscriptForTask(
+          const result = await loadTranscriptForTask(
             task,
             executionPolicy.forceReloadTranscript,
           )
           ensureTaskCurrent()
-          const sourceVideo = {
-            ...video,
-            title: video.title || task.snapshot.title,
-            author: video.author ?? task.snapshot.author,
-            canonicalUrl: video.canonicalUrl || task.snapshot.canonicalUrl || "",
-          }
-          const transcriptFingerprint = await computeTranscriptFingerprint(transcript.segments)
+          const transcriptFinalization = await prepareAnalysisTaskTranscriptFinalization({
+            result,
+            taskSource: task.snapshot,
+          })
           ensureTaskCurrent()
+          const {
+            sourceVideo,
+            transcriptFingerprint,
+            publication,
+          } = transcriptFinalization
+          const { transcript } = result
           if (shouldPublishAnalysisToWorkspace(videoContextRef.current.contentKey, task.snapshot.contentKey)) {
             currentTranscriptFingerprintRef.current = transcriptFingerprint
             setCurrentTranscriptFingerprint(transcriptFingerprint)
-            setTranscriptCues(transcript.segments)
-            setRawVtt(transcript.raw?.text ?? null)
-            setTranscriptIdentity({
-              platform: sourceVideo.platform,
-              videoId: sourceVideo.videoId,
-              contentKey: sourceVideo.contentKey,
-              ...(sourceVideo.partId ? { partId: sourceVideo.partId } : {}),
-            })
-            setTranscriptTitle(sourceVideo.title)
+            setTranscriptCues(publication.cues)
+            setRawVtt(publication.rawVtt)
+            setTranscriptIdentity(publication.identity)
+            setTranscriptTitle(publication.title)
           }
 
           setPhase("analyzing")
@@ -898,21 +896,13 @@ function SidepanelWorkspace() {
             model: task.snapshot.providerModel,
           })
           const transcriptCapturedAt = new Date().toISOString()
-          await historyRepository.saveTranscriptCache({
-            id: `transcript:${task.snapshot.contentKey}:${transcriptFingerprint}`,
-            contentKey: task.snapshot.contentKey,
-            platform: sourceVideo.platform,
-            videoId: sourceVideo.videoId,
-            partId: sourceVideo.partId ?? null,
+          await historyRepository.saveTranscriptCache(buildAnalysisTaskTranscriptCacheWrite({
+            sourceVideo,
+            transcript,
+            taskContentKey: task.snapshot.contentKey,
             fingerprint: transcriptFingerprint,
-            fingerprintVersion: TRANSCRIPT_FINGERPRINT_VERSION,
-            language: transcript.language ?? null,
-            sourceUrl: transcript.raw?.sourceUrl ?? null,
-            rawVtt: transcript.raw?.text ?? null,
-            cues: transcript.segments,
-            createdAt: transcriptCapturedAt,
-            updatedAt: transcriptCapturedAt,
-          })
+            now: transcriptCapturedAt,
+          }))
 
           if (!executionPolicy.bypassAnalysisCache) {
             const cached = await historyRepository.getAnalysisCache(cacheKey)

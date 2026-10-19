@@ -100,6 +100,7 @@ import {
   identityFromContext,
 } from "@/sidepanel/lib/sidepanel-pure-helpers"
 import { getAnalysisHeaderPresentation } from "@/sidepanel/lib/task-presentation"
+import { navigateToTimestamp } from "@/sidepanel/navigation/timestamp-navigation"
 import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
@@ -1653,19 +1654,23 @@ function SidepanelWorkspace() {
     identity: VideoIdentity | null,
     timestampSeconds: number,
   ) => {
-    if (!identity) {
-      toast.error(t("toast.noVideoContext"))
-      return
-    }
-    const result = await jumpToTimestamp(identity, timestampSeconds)
-    if (result.ok === true) {
-      toast.success(
-        result.openedNewTab
-          ? t("runtime.openedVideoAt", { timestamp: formatTimestamp(timestampSeconds) })
-          : t("runtime.jumpedActive", { timestamp: formatTimestamp(timestampSeconds) }),
-      )
-    } else {
-      toast.error(result.error)
+    const outcome = await navigateToTimestamp({
+      identity,
+      timestampSeconds,
+      navigate: jumpToTimestamp,
+    })
+    switch (outcome.kind) {
+      case "missing-identity":
+        toast.error(t("toast.noVideoContext"))
+        return
+      case "jumped-active":
+        toast.success(t("runtime.jumpedActive", { timestamp: formatTimestamp(timestampSeconds) }))
+        return
+      case "opened-new-tab":
+        toast.success(t("runtime.openedVideoAt", { timestamp: formatTimestamp(timestampSeconds) }))
+        return
+      case "runtime-failure":
+        toast.error(outcome.error)
     }
   }, [jumpToTimestamp, t])
 

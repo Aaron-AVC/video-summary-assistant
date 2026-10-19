@@ -10,8 +10,12 @@ import {
   type TranscriptSessionSnapshot,
 } from "@/sidepanel/transcript/transcript-acquisition"
 import {
+  buildAnalysisTaskTranscriptCacheWrite,
   buildTranscriptCacheWrite,
+  prepareAnalysisTaskTranscriptFinalization,
   prepareCurrentTranscriptFinalization,
+  type AnalysisTaskTranscriptFinalizationPlan,
+  type AnalysisTaskTranscriptSource,
 } from "@/sidepanel/transcript/transcript-finalization"
 
 export type TranscriptSnapshot = {
@@ -54,6 +58,20 @@ export type LoadCurrentTranscriptInput = {
   }) => void
   onPublished?: (snapshot: TranscriptSnapshot) => void
 }
+
+export type AcquireTranscriptForTaskInput = {
+  request: TranscriptAcquisitionRequest
+  session: TranscriptSessionSnapshot
+  forceReload: boolean
+  isTaskCurrent: () => boolean
+}
+
+export type PrepareTaskFinalizationInput = {
+  result: CurrentTranscriptResult
+  taskSource: AnalysisTaskTranscriptSource
+}
+
+export type SaveTaskCacheInput = Parameters<typeof buildAnalysisTaskTranscriptCacheWrite>[0]
 
 function createInitialSnapshot(): TranscriptSnapshot {
   return {
@@ -202,6 +220,33 @@ export class TranscriptController {
     } finally {
       if (isCurrent()) this.setLoading(false)
     }
+  }
+
+  async acquireForTask({
+    request,
+    session,
+    forceReload,
+    isTaskCurrent,
+  }: AcquireTranscriptForTaskInput): Promise<CurrentTranscriptResult> {
+    return acquireTranscript({
+      request,
+      session,
+      forceReload,
+      isCurrent: isTaskCurrent,
+      readCached: this.dependencies.readCached,
+      loadRemote: this.dependencies.loadRemote,
+    })
+  }
+
+  async prepareTaskFinalization({
+    result,
+    taskSource,
+  }: PrepareTaskFinalizationInput): Promise<AnalysisTaskTranscriptFinalizationPlan> {
+    return prepareAnalysisTaskTranscriptFinalization({ result, taskSource })
+  }
+
+  async saveTaskCache(input: SaveTaskCacheInput): Promise<void> {
+    await this.dependencies.saveCache(buildAnalysisTaskTranscriptCacheWrite(input))
   }
 
   publish(publication: TranscriptPublication): TranscriptSnapshot {

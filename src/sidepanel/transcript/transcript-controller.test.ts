@@ -7,8 +7,13 @@ import type { CurrentTranscriptResult } from "@/sidepanel/lib/load-current-trans
 import type {
   CachedTranscriptCandidate,
   TranscriptAcquisitionRequest,
+  TranscriptSessionSnapshot,
 } from "@/sidepanel/transcript/transcript-acquisition"
-import { buildTranscriptCacheWrite } from "@/sidepanel/transcript/transcript-finalization"
+import {
+  buildAnalysisTaskTranscriptCacheWrite,
+  buildTranscriptCacheWrite,
+  type AnalysisTaskTranscriptSource,
+} from "@/sidepanel/transcript/transcript-finalization"
 import {
   TranscriptController,
   type TranscriptControllerDependencies,
@@ -61,6 +66,45 @@ const cachedCandidate: CachedTranscriptCandidate = {
   rawVtt: "WEBVTT",
   sourceUrl: "https://captions.example/video-a.vtt",
   cues,
+}
+
+const taskSource: AnalysisTaskTranscriptSource = {
+  platform: "bilibili",
+  videoId: "video-a",
+  partId: "2",
+  contentKey: "bilibili:video-a:p2",
+  title: "Task Video",
+  author: "Task Author",
+  canonicalUrl: "https://www.bilibili.com/video/video-a?p=2",
+}
+
+const taskRequest: TranscriptAcquisitionRequest = {
+  video: {
+    platform: "bilibili",
+    videoId: "video-a",
+    partId: "2",
+    contentKey: taskSource.contentKey,
+    title: taskSource.title,
+    author: taskSource.author,
+    canonicalUrl: taskSource.canonicalUrl,
+  },
+  sourceTabId: 17,
+  cachedPartIdFallback: "2",
+}
+
+const taskResult: CurrentTranscriptResult = {
+  video: {
+    ...taskRequest.video,
+    title: "",
+    author: null,
+    canonicalUrl: "",
+  },
+  transcript: {
+    segments: cues,
+    source: "unknown",
+    language: "en",
+    raw: { format: "vtt", text: "WEBVTT", sourceUrl: "https://captions.example/task.vtt" },
+  },
 }
 
 const fixedNow = "2026-10-20T10:00:00.000Z"
@@ -590,5 +634,214 @@ describe("TranscriptController", () => {
       error: "newer request error",
       isLoading: false,
     })
+  })
+
+  it("acquires a task transcript from the supplied session without cache or remote", async () => {
+    let cacheCalls = 0
+    let remoteCalls = 0
+    const session: TranscriptSessionSnapshot = {
+      identity: taskRequest.video,
+      segments: cues,
+      rawVtt: "WEBVTT",
+    }
+    const controller = createController({
+      readCached: async () => { cacheCalls += 1; return cachedCandidate },
+      loadRemote: async () => { remoteCalls += 1; return taskResult },
+    })
+
+    const acquired = await controller.acquireForTask({
+      request: taskRequest,
+      session,
+      forceReload: false,
+      isTaskCurrent: () => true,
+    })
+
+    expect(acquired.video.contentKey).toBe(taskRequest.video.contentKey)
+    expect(acquired.transcript.segments).toEqual(cues)
+    expect(cacheCalls).toBe(0)
+    expect(remoteCalls).toBe(0)
+  })
+
+  it("force reloads a task transcript without cache or session reuse", async () => {
+    let cacheCalls = 0
+    let remoteCalls = 0
+    const controller = createController({
+      readCached: async () => { cacheCalls += 1; return cachedCandidate },
+      loadRemote: async () => { remoteCalls += 1; return taskResult },
+    })
+
+    await controller.acquireForTask({
+      request: taskRequest,
+      session: { identity: taskRequest.video, segments: cues, rawVtt: "WEBVTT" },
+      forceReload: true,
+      isTaskCurrent: () => true,
+    })
+
+    expect(cacheCalls).toBe(0)
+    expect(remoteCalls).toBe(1)
+  })
+
+  it("preserves task cache part fallback and source tab in the remote request", async () => {
+    let receivedRequest: TranscriptAcquisitionRequest | undefined
+    const controller = createController({
+      readCached: async () => ({ ...cachedCandidate, partId: null, contentKey: taskRequest.video.contentKey }),
+      loadRemote: async ({ request: remoteRequest }) => {
+        receivedRequest = remoteRequest
+        return taskResult
+      },
+    })
+
+    const acquired = await controller.acquireForTask({
+      request: taskRequest,
+      session: { identity: null, segments: [], rawVtt: null },
+      forceReload: false,
+      isTaskCurrent: () => true,
+    })
+
+    expect(acquired.video.partId).toBe("2")
+    expect(receivedRequest).toBeUndefined()
+
+    await controller.acquireForTask({
+      request: taskRequest,
+      session: { identity: null, segments: [], rawVtt: null },
+      forceReload: true,
+      isTaskCurrent: () => true,
+    })
+    expect(receivedRequest).toMatchObject({ sourceTabId: 17, cachedPartIdFallback: "2" })
+  })
+
+  it("does not use or change the current transcript load epoch for task acquisition", async () => {
+    const controller = createController()
+    const before = controller.beginLoadEpoch()
+
+    await controller.acquireForTask({
+      request: taskRequest,
+      session: { identity: taskRequest.video, segments: cues, rawVtt: "WEBVTT" },
+      forceReload: false,
+      isTaskCurrent: () => true,
+    })
+
+    expect(controller.captureLoadEpoch()).toBe(before)
+    expect(controller.isLoadEpochCurrent(before)).toBe(true)
+  })
+
+  it("completes task acquisition when the current load epoch changes while remote loading is pending", async () => {
+    const pending = deferred<CurrentTranscriptResult>()
+    const remoteStarted = deferred<void>()
+    const controller = createController({
+      loadRemote: async () => {
+        remoteStarted.resolve()
+        return pending.promise
+      },
+    })
+    const before = controller.getSnapshot()
+    const initialEpoch = controller.captureLoadEpoch()
+    const isTaskCurrent = () => true
+
+    const taskLoad = controller.acquireForTask({
+      request: taskRequest,
+      session: { identity: null, segments: [], rawVtt: null },
+      forceReload: true,
+      isTaskCurrent,
+    })
+
+    await remoteStarted.promise
+    expect(controller.getSnapshot()).toEqual(before)
+
+    controller.invalidateLoadEpoch()
+    expect(controller.captureLoadEpoch()).not.toBe(initialEpoch)
+    expect(isTaskCurrent()).toBe(true)
+    expect(controller.getSnapshot()).toEqual(before)
+
+    pending.resolve(taskResult)
+    await expect(taskLoad).resolves.toEqual(taskResult)
+    expect(controller.getSnapshot()).toEqual(before)
+  })
+
+  it("rejects a task acquisition that is no longer current without mutating snapshot state", async () => {
+    const controller = createController({
+      loadRemote: async () => taskResult,
+    })
+    controller.publish(publication)
+    const before = controller.getSnapshot()
+
+    await expect(controller.acquireForTask({
+      request: taskRequest,
+      session: { identity: null, segments: [], rawVtt: null },
+      forceReload: true,
+      isTaskCurrent: () => false,
+    })).rejects.toMatchObject({ name: "StaleTranscriptError" })
+
+    expect(controller.getSnapshot()).toEqual(before)
+  })
+
+  it("does not mutate loading, error, fingerprint, or transcript fields during task acquisition errors", async () => {
+    const acquisitionError = new Error("task captions failed")
+    const controller = createController({
+      loadRemote: async () => { throw acquisitionError },
+    })
+    controller.publish(publication)
+    const before = controller.getSnapshot()
+
+    await expect(controller.acquireForTask({
+      request: taskRequest,
+      session: { identity: null, segments: [], rawVtt: null },
+      forceReload: true,
+      isTaskCurrent: () => true,
+    })).rejects.toBe(acquisitionError)
+
+    expect(controller.getSnapshot()).toEqual(before)
+  })
+
+  it("prepares task finalization with existing metadata fallback and fingerprint semantics", async () => {
+    const controller = createController()
+
+    const finalization = await controller.prepareTaskFinalization({
+      result: taskResult,
+      taskSource: taskSource,
+    })
+
+    expect(finalization.sourceVideo.title).toBe(taskSource.title)
+    expect(finalization.sourceVideo.author).toBe(taskSource.author)
+    expect(finalization.sourceVideo.canonicalUrl).toBe(taskSource.canonicalUrl)
+    expect(finalization.sourceVideo.contentKey).toBe(taskSource.contentKey)
+    expect(finalization.transcriptFingerprint).toBe(await computeTranscriptFingerprint(cues))
+    expect(controller.getSnapshot()).toMatchObject({ identity: null, fingerprint: null })
+  })
+
+  it("saves task cache through the injected dependency with taskContentKey authority", async () => {
+    let saved: TranscriptCacheEntity | undefined
+    const controller = createController({ saveCache: async (payload) => { saved = payload } })
+    const sourceVideo = { ...taskResult.video, contentKey: "bilibili:video-a:p1", partId: "1" }
+    const input = {
+      sourceVideo,
+      transcript: taskResult.transcript,
+      taskContentKey: taskSource.contentKey,
+      fingerprint: "task-fingerprint",
+      now: fixedNow,
+    }
+
+    await controller.saveTaskCache(input)
+
+    expect(saved).toEqual(buildAnalysisTaskTranscriptCacheWrite(input))
+    expect(saved?.contentKey).toBe(taskSource.contentKey)
+    expect(saved?.id).toBe(`transcript:${taskSource.contentKey}:task-fingerprint`)
+  })
+
+  it("rethrows task cache failures without changing controller snapshot state", async () => {
+    const persistenceError = new Error("task cache quota exceeded")
+    const controller = createController({ saveCache: async () => { throw persistenceError } })
+    controller.publish(publication)
+    const before = controller.getSnapshot()
+
+    await expect(controller.saveTaskCache({
+      sourceVideo: taskResult.video,
+      transcript: taskResult.transcript,
+      taskContentKey: taskSource.contentKey,
+      fingerprint: "task-fingerprint",
+      now: fixedNow,
+    })).rejects.toBe(persistenceError)
+
+    expect(controller.getSnapshot()).toEqual(before)
   })
 })

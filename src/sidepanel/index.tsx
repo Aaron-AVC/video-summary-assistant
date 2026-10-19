@@ -98,14 +98,9 @@ import {
 import { getAnalysisHeaderPresentation } from "@/sidepanel/lib/task-presentation"
 import { navigateToTimestamp } from "@/sidepanel/navigation/timestamp-navigation"
 import {
-  acquireTranscript,
   type TranscriptAcquisitionRequest,
   type TranscriptSessionSnapshot,
 } from "@/sidepanel/transcript/transcript-acquisition"
-import {
-  buildAnalysisTaskTranscriptCacheWrite,
-  prepareAnalysisTaskTranscriptFinalization,
-} from "@/sidepanel/transcript/transcript-finalization"
 import {
   TranscriptController,
   type TranscriptPublication,
@@ -769,20 +764,14 @@ function SidepanelWorkspace() {
       rawVtt,
     }
 
-    const result = await acquireTranscript({
+    const result = await transcriptController.acquireForTask({
       request,
       session,
-      isCurrent: isCurrentTask,
       forceReload: forceReloadTranscript,
-      readCached: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
-      loadRemote: ({ request: remoteRequest, isCurrent: isCurrentRequest }) => loadCurrentTranscript({
-        requestedContentKey: remoteRequest.video.contentKey,
-        ...(remoteRequest.sourceTabId === undefined ? {} : { tabId: remoteRequest.sourceTabId }),
-        isCurrent: isCurrentRequest,
-      }),
+      isTaskCurrent: isCurrentTask,
     })
     return result
-  }, [analysisTaskController, rawVtt, transcriptCues, transcriptIdentity])
+  }, [analysisTaskController, rawVtt, transcriptCues, transcriptIdentity, transcriptController])
 
   const handleAnalyze = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     if (activeAnalysisTask) {
@@ -844,7 +833,7 @@ function SidepanelWorkspace() {
             executionPolicy.forceReloadTranscript,
           )
           ensureTaskCurrent()
-          const transcriptFinalization = await prepareAnalysisTaskTranscriptFinalization({
+          const transcriptFinalization = await transcriptController.prepareTaskFinalization({
             result,
             taskSource: task.snapshot,
           })
@@ -876,13 +865,13 @@ function SidepanelWorkspace() {
             model: task.snapshot.providerModel,
           })
           const transcriptCapturedAt = new Date().toISOString()
-          await historyRepository.saveTranscriptCache(buildAnalysisTaskTranscriptCacheWrite({
+          await transcriptController.saveTaskCache({
             sourceVideo,
             transcript,
             taskContentKey: task.snapshot.contentKey,
             fingerprint: transcriptFingerprint,
             now: transcriptCapturedAt,
-          }))
+          })
 
           if (!executionPolicy.bypassAnalysisCache) {
             const cached = await historyRepository.getAnalysisCache(cacheKey)
@@ -1103,7 +1092,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, videoContext])
+  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()

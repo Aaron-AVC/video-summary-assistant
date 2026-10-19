@@ -208,7 +208,6 @@ function SidepanelWorkspace() {
   const [activeAskTask, setActiveAskTask] = useState<ActiveAskTask | null>(
     askTaskController.getSnapshot(),
   )
-  const transcriptLoadGenerationRef = useRef(0)
   const askGenerationRef = useRef(0)
   const askStartLockRef = useRef(false)
   const loadWorkspaceGenerationRef = useRef(0)
@@ -391,7 +390,7 @@ function SidepanelWorkspace() {
         loadWorkspaceGenerationRef.current += 1
         qaLoadGenerationRef.current += 1
         askGenerationRef.current += 1
-        if (clearTranscript) transcriptLoadGenerationRef.current += 1
+        if (clearTranscript) transcriptController.invalidateLoadEpoch()
       },
       clearAnalysis: () => {
         setAnalysisView(null)
@@ -416,7 +415,7 @@ function SidepanelWorkspace() {
         setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
       },
     })
-  }, [clearQaWorkspace, refreshRecentAnalyses, resetTranscript])
+  }, [clearQaWorkspace, refreshRecentAnalyses, resetTranscript, transcriptController])
 
   useEffect(() => {
     const getTasks = () => {
@@ -673,7 +672,7 @@ function SidepanelWorkspace() {
   useEffect(() => {
     loadWorkspaceGenerationRef.current += 1
     qaLoadGenerationRef.current += 1
-    transcriptLoadGenerationRef.current += 1
+    transcriptController.invalidateLoadEpoch()
     askGenerationRef.current += 1
 
     setAnalysisView(null)
@@ -684,7 +683,7 @@ function SidepanelWorkspace() {
     clearQaWorkspace()
     setAskError(null)
     setIsAnalysisFetching(false)
-  }, [clearQaWorkspace, resetTranscript, videoContext.contentKey])
+  }, [clearQaWorkspace, resetTranscript, transcriptController, videoContext.contentKey])
 
   useEffect(() => {
     void loadWorkspace()
@@ -697,9 +696,9 @@ function SidepanelWorkspace() {
     }
 
     const requestedContentKey = current.contentKey
-    const generation = ++transcriptLoadGenerationRef.current
+    const generation = transcriptController.beginLoadEpoch()
     const isCurrent = () => (
-      transcriptLoadGenerationRef.current === generation
+      transcriptController.isLoadEpochCurrent(generation)
       && videoContextRef.current.contentKey === requestedContentKey
     )
     const request: TranscriptAcquisitionRequest = {
@@ -1154,7 +1153,7 @@ function SidepanelWorkspace() {
     analysisRunId?: string,
   ) => {
     askGenerationRef.current += 1
-    transcriptLoadGenerationRef.current += 1
+    transcriptController.invalidateLoadEpoch()
     setAskQuestion("")
     setAskAnswer(null)
     setAskError(null)
@@ -1175,7 +1174,7 @@ function SidepanelWorkspace() {
       await loadSavedAnalysis(videoId, generation)
     }
     toast.success(t("toast.loadedHistory"))
-  }, [loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun])
+  }, [loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController])
 
   const hasActiveTaskForContent = useCallback((contentKey?: string) => {
     if (!contentKey) return false
@@ -1276,14 +1275,14 @@ function SidepanelWorkspace() {
       toast.error(message)
       return
     }
-    const requestedTranscriptLoadGeneration = transcriptLoadGenerationRef.current
+    const requestedTranscriptLoadGeneration = transcriptController.captureLoadEpoch()
     const requestIdentity = await resolveAskTranscriptRequestIdentity({
       analysisFingerprint: analysisView.transcriptFingerprint,
       currentFingerprint: currentTranscriptFingerprintRef.current,
       transcriptCues,
       contentMatches: transcriptIdentity?.contentKey === analysisView.contentKey,
     })
-    if (transcriptLoadGenerationRef.current !== requestedTranscriptLoadGeneration) {
+    if (!transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)) {
       const message = t("toast.transcriptChangedWhileLoading")
       setAskError(message)
       toast.error(message)
@@ -1329,7 +1328,7 @@ function SidepanelWorkspace() {
         threadId: activeQaThreadIdRef.current,
         transcriptFingerprint: currentTranscriptFingerprintRef.current,
       })
-      && transcriptLoadGenerationRef.current === requestedTranscriptLoadGeneration
+      && transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
     )
 
     setAskError(null)
@@ -1520,7 +1519,7 @@ function SidepanelWorkspace() {
       pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }
-  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptCues, transcriptIdentity])
+  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptController, transcriptCues, transcriptIdentity])
 
   const handleCancelAsk = useCallback(() => {
     askTaskController.cancel()
@@ -1546,7 +1545,7 @@ function SidepanelWorkspace() {
       currentFingerprint: currentTranscriptFingerprintRef.current,
       transcriptCues,
     })
-    const requestedTranscriptLoadGeneration = transcriptLoadGenerationRef.current
+    const requestedTranscriptLoadGeneration = transcriptController.captureLoadEpoch()
     askGenerationRef.current += 1
     const generation = ++qaLoadGenerationRef.current
     const thread = await qaConversationRepository.getQaThread(threadId)
@@ -1560,7 +1559,7 @@ function SidepanelWorkspace() {
     const messages = await qaConversationRepository.listQaMessages(threadId)
     if (
       qaLoadGenerationRef.current !== generation
-      || transcriptLoadGenerationRef.current !== requestedTranscriptLoadGeneration
+      || !transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
       || activeAnalysisContentKeyRef.current !== requestedContentKey
       || activeAnalysisRunIdRef.current !== requestedAnalysisRunId
       || currentTranscriptFingerprintRef.current !== requestedTranscriptFingerprint
@@ -1576,7 +1575,7 @@ function SidepanelWorkspace() {
       suggestedJumps: latestAssistant.suggestedJumps ?? [],
       followUps: latestAssistant.followUps ?? [],
     } : null)
-  }, [analysisView, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, transcriptCues])
+  }, [analysisView, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, transcriptController, transcriptCues])
 
   const handleDeleteQaThread = useCallback(async (threadId: string) => {
     if (isAsking) return

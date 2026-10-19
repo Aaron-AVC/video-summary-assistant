@@ -155,4 +155,74 @@ describe("TranscriptController", () => {
       isLoading: false,
     })
   })
+
+  it("starts with load epoch token zero", () => {
+    const controller = new TranscriptController()
+
+    expect(controller.captureLoadEpoch()).toBe(0)
+    expect(controller.isLoadEpochCurrent(0)).toBe(true)
+  })
+
+  it("increments load epochs and invalidates older tokens", () => {
+    const controller = new TranscriptController()
+
+    const first = controller.beginLoadEpoch()
+    const second = controller.beginLoadEpoch()
+
+    expect(first).toBe(1)
+    expect(second).toBe(2)
+    expect(controller.isLoadEpochCurrent(first)).toBe(false)
+    expect(controller.isLoadEpochCurrent(second)).toBe(true)
+  })
+
+  it("invalidates a captured epoch once per invalidation", () => {
+    const controller = new TranscriptController()
+    const captured = controller.captureLoadEpoch()
+
+    expect(controller.invalidateLoadEpoch()).toBe(1)
+    expect(controller.invalidateLoadEpoch()).toBe(2)
+    expect(controller.captureLoadEpoch()).toBe(2)
+    expect(controller.isLoadEpochCurrent(captured)).toBe(false)
+  })
+
+  it("captures the current epoch without changing it", () => {
+    const controller = new TranscriptController()
+    controller.beginLoadEpoch()
+
+    expect(controller.captureLoadEpoch()).toBe(1)
+    expect(controller.captureLoadEpoch()).toBe(1)
+  })
+
+  it("does not notify snapshot subscribers for epoch changes", () => {
+    const controller = new TranscriptController()
+    let notifications = 0
+    controller.subscribe(() => {
+      notifications += 1
+    })
+
+    controller.beginLoadEpoch()
+    controller.invalidateLoadEpoch()
+
+    expect(notifications).toBe(0)
+  })
+
+  it("does not implicitly invalidate the load epoch on reset", () => {
+    const controller = new TranscriptController()
+    const epoch = controller.beginLoadEpoch()
+    controller.publish(publication)
+
+    controller.reset()
+
+    expect(controller.captureLoadEpoch()).toBe(epoch)
+    expect(controller.isLoadEpochCurrent(epoch)).toBe(true)
+    expect(controller.getSnapshot()).toEqual({
+      cues: [],
+      identity: null,
+      title: null,
+      fingerprint: null,
+      rawVtt: null,
+      error: null,
+      isLoading: false,
+    })
+  })
 })

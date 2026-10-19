@@ -72,6 +72,7 @@ function sameSnapshot(left: TranscriptSnapshot, right: TranscriptSnapshot): bool
 
 export class TranscriptController {
   private snapshot = createInitialSnapshot()
+  private loadEpoch = 0
   private readonly listeners = new Set<TranscriptListener>()
 
   getSnapshot(): TranscriptSnapshot {
@@ -81,6 +82,24 @@ export class TranscriptController {
   subscribe(listener: TranscriptListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  beginLoadEpoch(): number {
+    this.loadEpoch += 1
+    return this.loadEpoch
+  }
+
+  invalidateLoadEpoch(): number {
+    this.loadEpoch += 1
+    return this.loadEpoch
+  }
+
+  captureLoadEpoch(): number {
+    return this.loadEpoch
+  }
+
+  isLoadEpochCurrent(epoch: number): boolean {
+    return this.loadEpoch === epoch
   }
 
   publish(publication: TranscriptPublication): TranscriptSnapshot {

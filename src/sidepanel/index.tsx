@@ -86,7 +86,6 @@ import { TranscriptTab } from "@/sidepanel/components/transcript-tab"
 import {
   StaleTranscriptError,
   loadCurrentTranscript,
-  resolveCurrentTranscript,
   type CurrentTranscriptResult,
 } from "@/sidepanel/lib/load-current-transcript"
 import {
@@ -101,6 +100,11 @@ import {
 } from "@/sidepanel/lib/sidepanel-pure-helpers"
 import { getAnalysisHeaderPresentation } from "@/sidepanel/lib/task-presentation"
 import { navigateToTimestamp } from "@/sidepanel/navigation/timestamp-navigation"
+import {
+  acquireTranscript,
+  type TranscriptAcquisitionRequest,
+  type TranscriptSessionSnapshot,
+} from "@/sidepanel/transcript/transcript-acquisition"
 import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
@@ -677,59 +681,37 @@ function SidepanelWorkspace() {
       transcriptLoadGenerationRef.current === generation
       && videoContextRef.current.contentKey === requestedContentKey
     )
+    const request: TranscriptAcquisitionRequest = {
+      video: {
+        platform: current.platform!,
+        videoId: current.videoId!,
+        contentKey: requestedContentKey,
+        ...(current.partId ? { partId: current.partId } : {}),
+        title: current.title ?? current.videoId!,
+        author: current.author,
+        canonicalUrl: current.canonicalUrl ?? current.url,
+      },
+    }
+    const session: TranscriptSessionSnapshot = {
+      identity: transcriptIdentity,
+      segments: transcriptCues,
+      rawVtt,
+    }
 
     setIsTranscriptLoading(true)
     setTranscriptError(null)
     try {
-      const sessionResult = transcriptIdentity?.contentKey === requestedContentKey && transcriptCues.length > 0
-        ? {
-            video: {
-              platform: current.platform!,
-              videoId: current.videoId!,
-              contentKey: current.contentKey!,
-              ...(current.partId ? { partId: current.partId } : {}),
-              title: current.title ?? current.videoId!,
-              author: current.author,
-              canonicalUrl: current.canonicalUrl ?? current.url,
-            },
-            transcript: {
-              segments: transcriptCues,
-              source: "unknown" as const,
-              raw: rawVtt ? { format: "vtt" as const, text: rawVtt } : undefined,
-            },
-          }
-        : null
-      const result = await resolveCurrentTranscript({
-        requestedContentKey,
+      const result = await acquireTranscript({
+        request,
+        session,
         isCurrent,
         forceReload,
-        sessionResult,
-        loadCached: async () => {
-          const cached = await historyRepository.getLatestTranscriptByContentKey(requestedContentKey)
-          if (!cached) return null
-          const cachedVideo = {
-            platform: cached.platform,
-            videoId: cached.videoId,
-            contentKey: cached.contentKey,
-            ...(cached.partId ? { partId: cached.partId } : {}),
-            title: current.title ?? cached.videoId,
-            author: current.author,
-            canonicalUrl: current.canonicalUrl ?? current.url,
-          }
-          const cachedTranscript = {
-            segments: cached.cues,
-            source: "unknown" as const,
-            language: cached.language,
-            raw: cached.rawVtt
-              ? { format: "vtt" as const, text: cached.rawVtt, sourceUrl: cached.sourceUrl }
-              : undefined,
-          }
-          return { video: cachedVideo, transcript: cachedTranscript }
-        },
-        loadRemote: () => loadCurrentTranscript({ requestedContentKey, isCurrent }),
+        readCached: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
+        loadRemote: ({ request: remoteRequest, isCurrent: isCurrentRequest }) => loadCurrentTranscript({
+          requestedContentKey: remoteRequest.video.contentKey,
+          isCurrent: isCurrentRequest,
+        }),
       })
-      if (!isCurrent()) throw new StaleTranscriptError()
-
       const previousFingerprint = currentTranscriptFingerprintRef.current
       const fingerprint = await resolveAskTranscriptFingerprint({
         currentFingerprint: previousFingerprint,
@@ -797,84 +779,40 @@ function SidepanelWorkspace() {
   ): Promise<CurrentTranscriptResult> => {
     const { snapshot } = task
     const isCurrentTask = () => analysisTaskController.isCurrent(snapshot.taskId)
-    const fallbackVideo = (cached: {
-      videoId: string
-      contentKey: string
-      platform: "youtube" | "bilibili"
-      partId: string | null
-      title: string
-      author: string | null
-      canonicalUrl: string
-    }) => ({
-      platform: cached.platform,
-      videoId: cached.videoId,
-      contentKey: cached.contentKey,
-      ...(cached.partId ? { partId: cached.partId } : {}),
-      title: cached.title,
-      author: cached.author,
-      canonicalUrl: cached.canonicalUrl,
-    })
+    const request: TranscriptAcquisitionRequest = {
+      video: {
+        platform: snapshot.platform,
+        videoId: snapshot.videoId,
+        contentKey: snapshot.contentKey,
+        ...(snapshot.partId ? { partId: snapshot.partId } : {}),
+        title: snapshot.title,
+        author: snapshot.author,
+        canonicalUrl: snapshot.canonicalUrl
+          ?? (snapshot.platform === "youtube"
+            ? `https://www.youtube.com/watch?v=${snapshot.videoId}`
+            : `https://www.bilibili.com/video/${snapshot.videoId}?p=${snapshot.partId ?? "1"}`),
+      },
+      sourceTabId: snapshot.sourceTabId,
+      cachedPartIdFallback: snapshot.partId,
+    }
+    const session: TranscriptSessionSnapshot = {
+      identity: transcriptIdentity,
+      segments: transcriptCues,
+      rawVtt,
+    }
 
-    const sessionResult = transcriptIdentity?.contentKey === snapshot.contentKey && transcriptCues.length > 0
-      ? {
-          video: {
-            platform: snapshot.platform,
-            videoId: snapshot.videoId,
-            contentKey: snapshot.contentKey,
-            ...(snapshot.partId ? { partId: snapshot.partId } : {}),
-            title: snapshot.title,
-            author: snapshot.author,
-            canonicalUrl: snapshot.canonicalUrl
-              ?? (snapshot.platform === "youtube"
-                ? `https://www.youtube.com/watch?v=${snapshot.videoId}`
-                : `https://www.bilibili.com/video/${snapshot.videoId}?p=${snapshot.partId ?? "1"}`),
-          },
-          transcript: {
-            segments: transcriptCues,
-            source: "unknown" as const,
-            raw: rawVtt ? { format: "vtt" as const, text: rawVtt } : undefined,
-          },
-        }
-      : null
-
-    const result = await resolveCurrentTranscript({
-      requestedContentKey: snapshot.contentKey,
+    const result = await acquireTranscript({
+      request,
+      session,
       isCurrent: isCurrentTask,
       forceReload: forceReloadTranscript,
-      sessionResult,
-      loadCached: async () => {
-        const cached = await historyRepository.getLatestTranscriptByContentKey(snapshot.contentKey)
-        if (!cached) return null
-        return {
-          video: fallbackVideo({
-            videoId: cached.videoId,
-            contentKey: cached.contentKey,
-            platform: cached.platform,
-            partId: cached.partId ?? snapshot.partId,
-            title: snapshot.title,
-            author: snapshot.author,
-            canonicalUrl: snapshot.canonicalUrl
-              ?? (snapshot.platform === "youtube"
-                ? `https://www.youtube.com/watch?v=${snapshot.videoId}`
-                : `https://www.bilibili.com/video/${snapshot.videoId}?p=${snapshot.partId ?? "1"}`),
-          }),
-          transcript: {
-            segments: cached.cues,
-            source: "unknown" as const,
-            language: cached.language,
-            raw: cached.rawVtt
-              ? { format: "vtt" as const, text: cached.rawVtt, sourceUrl: cached.sourceUrl }
-              : undefined,
-          },
-        }
-      },
-      loadRemote: () => loadCurrentTranscript({
-        requestedContentKey: snapshot.contentKey,
-        tabId: snapshot.sourceTabId,
-        isCurrent: isCurrentTask,
+      readCached: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
+      loadRemote: ({ request: remoteRequest, isCurrent: isCurrentRequest }) => loadCurrentTranscript({
+        requestedContentKey: remoteRequest.video.contentKey,
+        ...(remoteRequest.sourceTabId === undefined ? {} : { tabId: remoteRequest.sourceTabId }),
+        isCurrent: isCurrentRequest,
       }),
     })
-    if (!isCurrentTask()) throw new StaleTranscriptError()
     return result
   }, [analysisTaskController, rawVtt, transcriptCues, transcriptIdentity])
 

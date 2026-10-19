@@ -106,6 +106,10 @@ import {
   type TranscriptSessionSnapshot,
 } from "@/sidepanel/transcript/transcript-acquisition"
 import {
+  buildTranscriptCacheWrite,
+  prepareCurrentTranscriptFinalization,
+} from "@/sidepanel/transcript/transcript-finalization"
+import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
 } from "@/sidepanel/lib/ask-conversation-identity"
@@ -713,45 +717,30 @@ function SidepanelWorkspace() {
         }),
       })
       const previousFingerprint = currentTranscriptFingerprintRef.current
-      const fingerprint = await resolveAskTranscriptFingerprint({
-        currentFingerprint: previousFingerprint,
-        transcriptCues: result.transcript.segments,
+      const finalization = await prepareCurrentTranscriptFinalization({
+        result,
+        previousFingerprint,
+        isCurrent,
       })
-      if (!isCurrent()) throw new StaleTranscriptError()
-      if (previousFingerprint && previousFingerprint !== fingerprint) {
+      if (finalization.shouldInvalidateAsk) {
         askGenerationRef.current += 1
         clearQaWorkspace()
         setAskQuestion("")
         setAskAnswer(null)
         setAskError(null)
       }
-      currentTranscriptFingerprintRef.current = fingerprint
-      setCurrentTranscriptFingerprint(fingerprint)
-      setTranscriptCues(result.transcript.segments)
-      setRawVtt(result.transcript.raw?.text ?? null)
-      setTranscriptIdentity({
-        platform: result.video.platform,
-        videoId: result.video.videoId,
-        contentKey: result.video.contentKey,
-        ...(result.video.partId ? { partId: result.video.partId } : {}),
-      })
-      setTranscriptTitle(result.video.title)
+      currentTranscriptFingerprintRef.current = finalization.fingerprint
+      setCurrentTranscriptFingerprint(finalization.fingerprint)
+      setTranscriptCues(finalization.publication.cues)
+      setRawVtt(finalization.publication.rawVtt)
+      setTranscriptIdentity(finalization.publication.identity)
+      setTranscriptTitle(finalization.publication.title)
       const now = new Date().toISOString()
-      await historyRepository.saveTranscriptCache({
-        id: `transcript:${result.video.contentKey}:${fingerprint}`,
-        contentKey: result.video.contentKey,
-        platform: result.video.platform,
-        videoId: result.video.videoId,
-        partId: result.video.partId ?? null,
-        fingerprint,
-        fingerprintVersion: TRANSCRIPT_FINGERPRINT_VERSION,
-        language: result.transcript.language ?? null,
-        sourceUrl: result.transcript.raw?.sourceUrl ?? null,
-        rawVtt: result.transcript.raw?.text ?? null,
-        cues: result.transcript.segments,
-        createdAt: now,
-        updatedAt: now,
-      })
+      await historyRepository.saveTranscriptCache(buildTranscriptCacheWrite({
+        result,
+        fingerprint: finalization.fingerprint,
+        now,
+      }))
       return result
     } catch (error) {
       if (isCurrent()) {

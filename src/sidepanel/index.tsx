@@ -103,10 +103,8 @@ import {
   type TranscriptSessionSnapshot,
 } from "@/sidepanel/transcript/transcript-acquisition"
 import {
-  buildTranscriptCacheWrite,
   buildAnalysisTaskTranscriptCacheWrite,
   prepareAnalysisTaskTranscriptFinalization,
-  prepareCurrentTranscriptFinalization,
 } from "@/sidepanel/transcript/transcript-finalization"
 import {
   TranscriptController,
@@ -188,7 +186,17 @@ function SidepanelWorkspace() {
   if (!askTaskControllerRef.current) askTaskControllerRef.current = new AskTaskController()
   const askTaskController = askTaskControllerRef.current
   const transcriptControllerRef = useRef<TranscriptController | null>(null)
-  if (!transcriptControllerRef.current) transcriptControllerRef.current = new TranscriptController()
+  if (!transcriptControllerRef.current) {
+    transcriptControllerRef.current = new TranscriptController({
+      readCached: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
+      loadRemote: ({ request, isCurrent }) => loadCurrentTranscript({
+        requestedContentKey: request.video.contentKey,
+        ...(request.sourceTabId === undefined ? {} : { tabId: request.sourceTabId }),
+        isCurrent,
+      }),
+      saveCache: (payload) => historyRepository.saveTranscriptCache(payload),
+    })
+  }
   const transcriptController = transcriptControllerRef.current
   const [transcriptSnapshot, setTranscriptSnapshot] = useState(
     transcriptController.getSnapshot(),
@@ -695,79 +703,33 @@ function SidepanelWorkspace() {
       throw new Error("Open a supported video page before loading its transcript.")
     }
 
-    const requestedContentKey = current.contentKey
-    const generation = transcriptController.beginLoadEpoch()
-    const isCurrent = () => (
-      transcriptController.isLoadEpochCurrent(generation)
-      && videoContextRef.current.contentKey === requestedContentKey
-    )
     const request: TranscriptAcquisitionRequest = {
       video: {
         platform: current.platform!,
         videoId: current.videoId!,
-        contentKey: requestedContentKey,
+        contentKey: current.contentKey,
         ...(current.partId ? { partId: current.partId } : {}),
         title: current.title ?? current.videoId!,
         author: current.author,
         canonicalUrl: current.canonicalUrl ?? current.url,
       },
     }
-    const session: TranscriptSessionSnapshot = {
-      identity: transcriptIdentity,
-      segments: transcriptCues,
-      rawVtt,
-    }
-
-    transcriptController.setLoading(true)
-    transcriptController.setError(null)
-    try {
-      const result = await acquireTranscript({
-        request,
-        session,
-        isCurrent,
-        forceReload,
-        readCached: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
-        loadRemote: ({ request: remoteRequest, isCurrent: isCurrentRequest }) => loadCurrentTranscript({
-          requestedContentKey: remoteRequest.video.contentKey,
-          isCurrent: isCurrentRequest,
-        }),
-      })
-      const previousFingerprint = currentTranscriptFingerprintRef.current
-      const finalization = await prepareCurrentTranscriptFinalization({
-        result,
-        previousFingerprint,
-        isCurrent,
-      })
-      if (finalization.shouldInvalidateAsk) {
+    return transcriptController.loadCurrent({
+      request,
+      forceReload,
+      isTargetCurrent: () => videoContextRef.current.contentKey === request.video.contentKey,
+      onFingerprintChanged: () => {
         askGenerationRef.current += 1
         clearQaWorkspace()
         setAskQuestion("")
         setAskAnswer(null)
         setAskError(null)
-      }
-      publishTranscript({
-        cues: finalization.publication.cues,
-        identity: finalization.publication.identity,
-        title: finalization.publication.title,
-        fingerprint: finalization.fingerprint,
-        rawVtt: finalization.publication.rawVtt,
-      })
-      const now = new Date().toISOString()
-      await historyRepository.saveTranscriptCache(buildTranscriptCacheWrite({
-        result,
-        fingerprint: finalization.fingerprint,
-        now,
-      }))
-      return result
-    } catch (error) {
-      if (isCurrent()) {
-        transcriptController.setError(error instanceof Error ? error.message : "Unknown transcript error.")
-      }
-      throw error
-    } finally {
-      if (isCurrent()) transcriptController.setLoading(false)
-    }
-  }, [clearQaWorkspace, publishTranscript, rawVtt, transcriptCues, transcriptController, transcriptIdentity])
+      },
+      onPublished: (snapshot) => {
+        currentTranscriptFingerprintRef.current = snapshot.fingerprint
+      },
+    })
+  }, [clearQaWorkspace, transcriptController])
 
   const handleLoadTranscript = useCallback(async () => {
     try {

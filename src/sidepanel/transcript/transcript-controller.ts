@@ -1,4 +1,18 @@
 import type { TranscriptSegment, VideoIdentity } from "@/features/platform/types"
+import type { TranscriptCacheEntity } from "@/lib/schemas/persistence"
+import {
+  type CurrentTranscriptResult,
+} from "@/sidepanel/lib/load-current-transcript"
+import {
+  acquireTranscript,
+  type CachedTranscriptCandidate,
+  type TranscriptAcquisitionRequest,
+  type TranscriptSessionSnapshot,
+} from "@/sidepanel/transcript/transcript-acquisition"
+import {
+  buildTranscriptCacheWrite,
+  prepareCurrentTranscriptFinalization,
+} from "@/sidepanel/transcript/transcript-finalization"
 
 export type TranscriptSnapshot = {
   cues: TranscriptSegment[]
@@ -19,6 +33,27 @@ export type TranscriptPublication = {
 }
 
 type TranscriptListener = () => void
+
+export type TranscriptControllerDependencies = {
+  readCached: (contentKey: string) => Promise<CachedTranscriptCandidate | null>
+  loadRemote: (input: {
+    request: TranscriptAcquisitionRequest
+    isCurrent: () => boolean
+  }) => Promise<CurrentTranscriptResult>
+  saveCache: (input: TranscriptCacheEntity) => Promise<unknown>
+  now?: () => string
+}
+
+export type LoadCurrentTranscriptInput = {
+  request: TranscriptAcquisitionRequest
+  forceReload: boolean
+  isTargetCurrent: () => boolean
+  onFingerprintChanged?: (change: {
+    previousFingerprint: string
+    fingerprint: string | null
+  }) => void
+  onPublished?: (snapshot: TranscriptSnapshot) => void
+}
 
 function createInitialSnapshot(): TranscriptSnapshot {
   return {
@@ -75,6 +110,8 @@ export class TranscriptController {
   private loadEpoch = 0
   private readonly listeners = new Set<TranscriptListener>()
 
+  constructor(private readonly dependencies: TranscriptControllerDependencies) {}
+
   getSnapshot(): TranscriptSnapshot {
     return cloneSnapshot(this.snapshot)
   }
@@ -100,6 +137,71 @@ export class TranscriptController {
 
   isLoadEpochCurrent(epoch: number): boolean {
     return this.loadEpoch === epoch
+  }
+
+  async loadCurrent({
+    request,
+    forceReload,
+    isTargetCurrent,
+    onFingerprintChanged,
+    onPublished,
+  }: LoadCurrentTranscriptInput): Promise<CurrentTranscriptResult> {
+    const epoch = this.beginLoadEpoch()
+    const isCurrent = () => this.isLoadEpochCurrent(epoch) && isTargetCurrent()
+
+    this.setLoading(true)
+    this.setError(null)
+
+    try {
+      const currentSnapshot = this.getSnapshot()
+      const session: TranscriptSessionSnapshot = {
+        identity: currentSnapshot.identity,
+        segments: currentSnapshot.cues,
+        rawVtt: currentSnapshot.rawVtt,
+      }
+      const result = await acquireTranscript({
+        request,
+        session,
+        forceReload,
+        isCurrent,
+        readCached: this.dependencies.readCached,
+        loadRemote: this.dependencies.loadRemote,
+      })
+      const previousFingerprint = this.snapshot.fingerprint
+      const finalization = await prepareCurrentTranscriptFinalization({
+        result,
+        previousFingerprint,
+        isCurrent,
+      })
+
+      if (finalization.shouldInvalidateAsk && previousFingerprint) {
+        onFingerprintChanged?.({
+          previousFingerprint,
+          fingerprint: finalization.fingerprint,
+        })
+      }
+
+      this.publish({
+        ...finalization.publication,
+        fingerprint: finalization.fingerprint,
+      })
+      onPublished?.(this.getSnapshot())
+
+      const now = this.dependencies.now?.() ?? new Date().toISOString()
+      await this.dependencies.saveCache(buildTranscriptCacheWrite({
+        result,
+        fingerprint: finalization.fingerprint,
+        now,
+      }))
+      return result
+    } catch (error) {
+      if (isCurrent()) {
+        this.setError(error instanceof Error ? error.message : "Unknown transcript error.")
+      }
+      throw error
+    } finally {
+      if (isCurrent()) this.setLoading(false)
+    }
   }
 
   publish(publication: TranscriptPublication): TranscriptSnapshot {

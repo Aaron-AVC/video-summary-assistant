@@ -63,7 +63,6 @@ import {
 } from "@/features/platform/persistence-compat"
 import type {
   ActiveVideoContext,
-  TranscriptSegment,
   VideoIdentity,
 } from "@/features/platform/types"
 import {
@@ -109,6 +108,10 @@ import {
   prepareAnalysisTaskTranscriptFinalization,
   prepareCurrentTranscriptFinalization,
 } from "@/sidepanel/transcript/transcript-finalization"
+import {
+  TranscriptController,
+  type TranscriptPublication,
+} from "@/sidepanel/transcript/transcript-controller"
 import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
@@ -167,13 +170,6 @@ function SidepanelWorkspace() {
   const [provider, setProvider] = useState<ProviderConfigRecord | null>(null)
   const [analysisView, setAnalysisView] = useState<AnalysisView | null>(null)
   const [recentItems, setRecentItems] = useState<RecentAnalysisListItem[]>([])
-  const [transcriptCues, setTranscriptCues] = useState<TranscriptSegment[]>([])
-  const [transcriptIdentity, setTranscriptIdentity] = useState<VideoIdentity | null>(null)
-  const [transcriptTitle, setTranscriptTitle] = useState<string | null>(null)
-  const [currentTranscriptFingerprint, setCurrentTranscriptFingerprint] = useState<string | null>(null)
-  const [rawVtt, setRawVtt] = useState<string | null>(null)
-  const [transcriptError, setTranscriptError] = useState<string | null>(null)
-  const [isTranscriptLoading, setIsTranscriptLoading] = useState(false)
   const [askQuestion, setAskQuestion] = useState("")
   const [askAnswer, setAskAnswer] = useState<AskVideoAnswer | null>(null)
   const [qaThreadId, setQaThreadId] = useState<string | null>(null)
@@ -191,6 +187,21 @@ function SidepanelWorkspace() {
   const askTaskControllerRef = useRef<AskTaskController | null>(null)
   if (!askTaskControllerRef.current) askTaskControllerRef.current = new AskTaskController()
   const askTaskController = askTaskControllerRef.current
+  const transcriptControllerRef = useRef<TranscriptController | null>(null)
+  if (!transcriptControllerRef.current) transcriptControllerRef.current = new TranscriptController()
+  const transcriptController = transcriptControllerRef.current
+  const [transcriptSnapshot, setTranscriptSnapshot] = useState(
+    transcriptController.getSnapshot(),
+  )
+  const {
+    cues: transcriptCues,
+    identity: transcriptIdentity,
+    title: transcriptTitle,
+    fingerprint: currentTranscriptFingerprint,
+    rawVtt,
+    error: transcriptError,
+    isLoading: isTranscriptLoading,
+  } = transcriptSnapshot
   const [activeAnalysisTask, setActiveAnalysisTask] = useState<ActiveAnalysisTask | null>(
     analysisTaskController.getSnapshot(),
   )
@@ -216,7 +227,7 @@ function SidepanelWorkspace() {
   })
   activeAnalysisContentKeyRef.current = analysisView?.contentKey ?? null
   activeAnalysisRunIdRef.current = analysisView?.analysisRunId ?? "legacy"
-  currentTranscriptFingerprintRef.current = currentTranscriptFingerprint
+  currentTranscriptFingerprintRef.current = transcriptSnapshot.fingerprint
   activeQaThreadIdRef.current = qaThreadId
   destructiveWorkspaceRef.current = {
     analysisRunId: analysisView?.analysisRunId ?? null,
@@ -225,6 +236,21 @@ function SidepanelWorkspace() {
     transcriptContentKey: transcriptIdentity?.contentKey ?? null,
     videoContextContentKey: videoContext.contentKey,
   }
+
+  const publishTranscript = useCallback((publication: TranscriptPublication) => {
+    const next = transcriptController.publish(publication)
+    currentTranscriptFingerprintRef.current = next.fingerprint
+  }, [transcriptController])
+
+  const setTranscriptFingerprint = useCallback((fingerprint: string | null) => {
+    const next = transcriptController.setFingerprint(fingerprint)
+    currentTranscriptFingerprintRef.current = next.fingerprint
+  }, [transcriptController])
+
+  const resetTranscript = useCallback(() => {
+    const next = transcriptController.reset()
+    currentTranscriptFingerprintRef.current = next.fingerprint
+  }, [transcriptController])
 
   const clearQaWorkspace = useCallback(() => {
     activeQaThreadIdRef.current = null
@@ -275,6 +301,10 @@ function SidepanelWorkspace() {
   useEffect(() => askTaskController.subscribe(() => {
     setActiveAskTask(askTaskController.getSnapshot())
   }), [askTaskController])
+
+  useEffect(() => transcriptController.subscribe(() => {
+    setTranscriptSnapshot(transcriptController.getSnapshot())
+  }), [transcriptController])
 
   const title = videoContext.title ?? "Open a supported video page to start"
   const canonicalUrl = videoContext.canonicalUrl ?? videoContext.url ?? "No supported video page detected"
@@ -378,14 +408,7 @@ function SidepanelWorkspace() {
         setAskError(null)
       },
       clearTranscriptWorkspace: () => {
-        currentTranscriptFingerprintRef.current = null
-        setTranscriptCues([])
-        setTranscriptIdentity(null)
-        setTranscriptTitle(null)
-        setCurrentTranscriptFingerprint(null)
-        setRawVtt(null)
-        setTranscriptError(null)
-        setIsTranscriptLoading(false)
+        resetTranscript()
       },
       refreshRecentAnalyses,
       refreshProvider: async () => {
@@ -393,7 +416,7 @@ function SidepanelWorkspace() {
         setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
       },
     })
-  }, [clearQaWorkspace, refreshRecentAnalyses])
+  }, [clearQaWorkspace, refreshRecentAnalyses, resetTranscript])
 
   useEffect(() => {
     const getTasks = () => {
@@ -448,15 +471,14 @@ function SidepanelWorkspace() {
         currentFingerprint: latestTranscriptSnapshot?.fingerprint ?? null,
         transcriptCues: latestTranscriptSnapshot?.cues ?? [],
       })
-      setRawVtt(latestTranscriptSnapshot?.rawVtt ?? null)
-      setTranscriptCues(latestTranscriptSnapshot?.cues ?? [])
-      setTranscriptIdentity(latestTranscriptSnapshot ? identity : null)
-      currentTranscriptFingerprintRef.current = loadedTranscriptFingerprint
-      setCurrentTranscriptFingerprint(loadedTranscriptFingerprint)
-      setTranscriptTitle(
-        recent.find((entry) => entry.recentVideo.videoId === videoId)?.recentVideo.title ?? videoId,
-      )
-      setTranscriptError(null)
+      publishTranscript({
+        cues: latestTranscriptSnapshot?.cues ?? [],
+        identity: latestTranscriptSnapshot ? identity : null,
+        title: recent.find((entry) => entry.recentVideo.videoId === videoId)?.recentVideo.title ?? videoId,
+        fingerprint: loadedTranscriptFingerprint,
+        rawVtt: latestTranscriptSnapshot?.rawVtt ?? null,
+      })
+      transcriptController.setError(null)
 
       if (!analysis) {
         setAnalysisView(null)
@@ -491,7 +513,7 @@ function SidepanelWorkspace() {
         setIsAnalysisFetching(false)
       }
     }
-  }, [clearQaWorkspace, restoreQaConversation])
+  }, [clearQaWorkspace, publishTranscript, restoreQaConversation, transcriptController])
 
   const loadSavedAnalysisForContext = useCallback(async (
     context: ActiveVideoContext,
@@ -509,19 +531,20 @@ function SidepanelWorkspace() {
         currentFingerprint: latestTranscript?.fingerprint ?? null,
         transcriptCues: latestTranscript?.cues ?? [],
       })
-      setRawVtt(latestTranscript?.rawVtt ?? null)
-      setTranscriptCues(latestTranscript?.cues ?? [])
-      setTranscriptIdentity(latestTranscript ? {
-        platform: latestTranscript.platform ?? context.platform,
-        videoId: latestTranscript.videoId,
-        contentKey: latestTranscript.contentKey ?? context.contentKey,
-        ...(latestTranscript.partId ?? context.partId
-          ? { partId: latestTranscript.partId ?? context.partId }
-          : {}),
-      } : null)
-      currentTranscriptFingerprintRef.current = loadedTranscriptFingerprint
-      setCurrentTranscriptFingerprint(loadedTranscriptFingerprint)
-      setTranscriptTitle(context.title)
+      publishTranscript({
+        cues: latestTranscript?.cues ?? [],
+        identity: latestTranscript ? {
+          platform: latestTranscript.platform ?? context.platform,
+          videoId: latestTranscript.videoId,
+          contentKey: latestTranscript.contentKey ?? context.contentKey,
+          ...(latestTranscript.partId ?? context.partId
+            ? { partId: latestTranscript.partId ?? context.partId }
+            : {}),
+        } : null,
+        title: context.title,
+        fingerprint: loadedTranscriptFingerprint,
+        rawVtt: latestTranscript?.rawVtt ?? null,
+      })
       if (!analysis) {
         setAnalysisView(null)
         setAnalysisPhase("idle")
@@ -551,7 +574,7 @@ function SidepanelWorkspace() {
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [clearQaWorkspace, restoreQaConversation])
+  }, [clearQaWorkspace, publishTranscript, restoreQaConversation])
 
   const loadSavedAnalysisRun = useCallback(async (analysisRunId: string, generation: number) => {
     setIsAnalysisFetching(true)
@@ -571,18 +594,19 @@ function SidepanelWorkspace() {
         transcriptCues: transcript?.cues ?? [],
       })
 
-      setRawVtt(transcript?.rawVtt ?? null)
-      setTranscriptCues(transcript?.cues ?? [])
-      setTranscriptIdentity(transcript ? {
-        platform,
-        videoId: transcript.videoId,
-        contentKey: transcript.contentKey ?? contentKey,
-        ...(transcript.partId ? { partId: transcript.partId } : partId ? { partId } : {}),
-      } : null)
-      currentTranscriptFingerprintRef.current = loadedTranscriptFingerprint
-      setCurrentTranscriptFingerprint(loadedTranscriptFingerprint)
-      setTranscriptTitle(title)
-      setTranscriptError(null)
+      publishTranscript({
+        cues: transcript?.cues ?? [],
+        identity: transcript ? {
+          platform,
+          videoId: transcript.videoId,
+          contentKey: transcript.contentKey ?? contentKey,
+          ...(transcript.partId ? { partId: transcript.partId } : partId ? { partId } : {}),
+        } : null,
+        title,
+        fingerprint: loadedTranscriptFingerprint,
+        rawVtt: transcript?.rawVtt ?? null,
+      })
+      transcriptController.setError(null)
 
       const canonical = persistedLegacyAnalysisToVideoAnalysis(analysisRun, segments)
       setAnalysisView({
@@ -607,7 +631,7 @@ function SidepanelWorkspace() {
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [restoreQaConversation])
+  }, [publishTranscript, restoreQaConversation, transcriptController])
 
   const loadWorkspace = useCallback(async () => {
     const generation = ++loadWorkspaceGenerationRef.current
@@ -655,19 +679,12 @@ function SidepanelWorkspace() {
     setAnalysisView(null)
     setAnalysisError(null)
     setAnalysisPhase("idle")
-    setTranscriptCues([])
-    setTranscriptIdentity(null)
-    setTranscriptTitle(null)
-    currentTranscriptFingerprintRef.current = null
-    setCurrentTranscriptFingerprint(null)
-    setRawVtt(null)
-    setTranscriptError(null)
-    setIsTranscriptLoading(false)
+    resetTranscript()
     setAskQuestion("")
     clearQaWorkspace()
     setAskError(null)
     setIsAnalysisFetching(false)
-  }, [clearQaWorkspace, videoContext.contentKey])
+  }, [clearQaWorkspace, resetTranscript, videoContext.contentKey])
 
   useEffect(() => {
     void loadWorkspace()
@@ -702,8 +719,8 @@ function SidepanelWorkspace() {
       rawVtt,
     }
 
-    setIsTranscriptLoading(true)
-    setTranscriptError(null)
+    transcriptController.setLoading(true)
+    transcriptController.setError(null)
     try {
       const result = await acquireTranscript({
         request,
@@ -729,12 +746,13 @@ function SidepanelWorkspace() {
         setAskAnswer(null)
         setAskError(null)
       }
-      currentTranscriptFingerprintRef.current = finalization.fingerprint
-      setCurrentTranscriptFingerprint(finalization.fingerprint)
-      setTranscriptCues(finalization.publication.cues)
-      setRawVtt(finalization.publication.rawVtt)
-      setTranscriptIdentity(finalization.publication.identity)
-      setTranscriptTitle(finalization.publication.title)
+      publishTranscript({
+        cues: finalization.publication.cues,
+        identity: finalization.publication.identity,
+        title: finalization.publication.title,
+        fingerprint: finalization.fingerprint,
+        rawVtt: finalization.publication.rawVtt,
+      })
       const now = new Date().toISOString()
       await historyRepository.saveTranscriptCache(buildTranscriptCacheWrite({
         result,
@@ -744,13 +762,13 @@ function SidepanelWorkspace() {
       return result
     } catch (error) {
       if (isCurrent()) {
-        setTranscriptError(error instanceof Error ? error.message : "Unknown transcript error.")
+        transcriptController.setError(error instanceof Error ? error.message : "Unknown transcript error.")
       }
       throw error
     } finally {
-      if (isCurrent()) setIsTranscriptLoading(false)
+      if (isCurrent()) transcriptController.setLoading(false)
     }
-  }, [clearQaWorkspace, rawVtt, transcriptCues, transcriptIdentity])
+  }, [clearQaWorkspace, publishTranscript, rawVtt, transcriptCues, transcriptController, transcriptIdentity])
 
   const handleLoadTranscript = useCallback(async () => {
     try {
@@ -877,12 +895,13 @@ function SidepanelWorkspace() {
           } = transcriptFinalization
           const { transcript } = result
           if (shouldPublishAnalysisToWorkspace(videoContextRef.current.contentKey, task.snapshot.contentKey)) {
-            currentTranscriptFingerprintRef.current = transcriptFingerprint
-            setCurrentTranscriptFingerprint(transcriptFingerprint)
-            setTranscriptCues(publication.cues)
-            setRawVtt(publication.rawVtt)
-            setTranscriptIdentity(publication.identity)
-            setTranscriptTitle(publication.title)
+            publishTranscript({
+              cues: publication.cues,
+              identity: publication.identity,
+              title: publication.title,
+              fingerprint: transcriptFingerprint,
+              rawVtt: publication.rawVtt,
+            })
           }
 
           setPhase("analyzing")
@@ -1123,7 +1142,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, refreshRecentAnalyses, restoreQaConversation, t, videoContext])
+  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, videoContext])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()
@@ -1280,8 +1299,7 @@ function SidepanelWorkspace() {
       return
     }
     const actualTranscriptFingerprint = requestIdentity.transcriptFingerprint
-    currentTranscriptFingerprintRef.current = actualTranscriptFingerprint
-    setCurrentTranscriptFingerprint(actualTranscriptFingerprint)
+    setTranscriptFingerprint(actualTranscriptFingerprint)
     const requestedContentKey = analysisView.contentKey
     const requestedAnalysisRunId = analysisView.analysisRunId ?? "legacy"
     const requestedTranscriptFingerprint = actualTranscriptFingerprint
@@ -1502,7 +1520,7 @@ function SidepanelWorkspace() {
       pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }
-  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, t, transcriptCues, transcriptIdentity])
+  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptCues, transcriptIdentity])
 
   const handleCancelAsk = useCallback(() => {
     askTaskController.cancel()

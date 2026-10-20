@@ -189,6 +189,9 @@ function SidepanelWorkspace() {
       getCurrentAnalysisByContentKey: (contentKey) => historyRepository.getCurrentAnalysisByContentKey(contentKey),
       getLatestTranscriptByContentKey: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
       getSavedAnalysisRunById: (analysisRunId) => historyRepository.getSavedAnalysisRunById(analysisRunId),
+      deleteAnalysisRun: (analysisRunId) => historyRepository.deleteAnalysisRun(analysisRunId),
+      deleteVideoData: (contentKey) => historyRepository.deleteVideoData(contentKey),
+      performDestructiveOperation,
     })
   }
   const historyController = historyControllerRef.current
@@ -1057,17 +1060,16 @@ function SidepanelWorkspace() {
     }
     if (!window.confirm(`${t("history.deleteAnalysis")}\n\n${item.title}`)) return
     try {
-      await performDestructiveOperation(
-        "delete-analysis-run",
-        { analysisRunId: item.analysisRunId, contentKey: item.contentKey },
-        () => historyRepository.deleteAnalysisRun(item.analysisRunId!),
-      )
-      await applyMutation({ type: "delete-analysis-run", analysisRunId: item.analysisRunId })
+      const mutation = await historyController.deleteAnalysisRun({
+        analysisRunId: item.analysisRunId,
+        contentKey: item.contentKey,
+      })
+      await applyMutation(mutation)
       toast.success(t("history.deleted"))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("history.deleteFailed"))
     }
-  }, [applyMutation, hasActiveTaskForContent])
+  }, [applyMutation, hasActiveTaskForContent, historyController, t])
 
   const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
     if (!item.contentKey) return
@@ -1078,17 +1080,13 @@ function SidepanelWorkspace() {
     if (!window.confirm(`${t("history.deleteVideo")}\n\n${item.title}`)) return
     if (!window.confirm(t("history.deleteVideoDetail", { title: item.title }))) return
     try {
-      await performDestructiveOperation(
-        "delete-video-data",
-        { contentKey: item.contentKey },
-        () => historyRepository.deleteVideoData(item.contentKey!),
-      )
-      await applyMutation({ type: "delete-video-data", contentKey: item.contentKey })
+      const mutation = await historyController.deleteVideoData({ contentKey: item.contentKey })
+      await applyMutation(mutation)
       toast.success(t("history.allDeleted"))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("history.videoDeleteFailed"))
     }
-  }, [applyMutation, hasActiveTaskForContent])
+  }, [applyMutation, hasActiveTaskForContent, historyController, t])
 
   useEffect(() => {
     let isCurrent = true

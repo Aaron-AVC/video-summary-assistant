@@ -108,6 +108,9 @@ function createDependencies(overrides: Partial<HistoryControllerDependencies> = 
     getCurrentAnalysisByContentKey: async () => null,
     getLatestTranscriptByContentKey: async () => null,
     getSavedAnalysisRunById: async () => null,
+    deleteAnalysisRun: async () => {},
+    deleteVideoData: async () => {},
+    performDestructiveOperation: async (_action, _target, mutate) => mutate(),
     ...overrides,
   }
 }
@@ -375,5 +378,95 @@ describe("HistoryController", () => {
       context: { platform: "youtube", videoId: "video-1", partId: null, contentKey: "youtube:video-1", title: "Video" },
       isCurrent: () => true,
     })).rejects.toBe(error)
+  })
+
+  it("deletes only the requested analysis run through the matching destructive action", async () => {
+    const repositoryCalls: string[] = []
+    let coordination: { action: string; target: unknown } | null = null
+    const controller = createHistoryController(createDependencies({
+      deleteAnalysisRun: async (analysisRunId) => { repositoryCalls.push(analysisRunId) },
+      deleteVideoData: async (contentKey) => { repositoryCalls.push(`video:${contentKey}`) },
+      performDestructiveOperation: async (action, target, mutate) => {
+        coordination = { action, target }
+        await mutate()
+      },
+    }))
+
+    await expect(controller.deleteAnalysisRun({
+      analysisRunId: "run-requested",
+      contentKey: "youtube:video-requested",
+    })).resolves.toEqual({ type: "delete-analysis-run", analysisRunId: "run-requested" })
+    expect(coordination).toEqual({
+      action: "delete-analysis-run",
+      target: { analysisRunId: "run-requested", contentKey: "youtube:video-requested" },
+    })
+    expect(repositoryCalls).toEqual(["run-requested"])
+  })
+
+  it("deletes only the requested video data through the matching destructive action", async () => {
+    const repositoryCalls: string[] = []
+    let coordination: { action: string; target: unknown } | null = null
+    const controller = createHistoryController(createDependencies({
+      deleteAnalysisRun: async (analysisRunId) => { repositoryCalls.push(`analysis:${analysisRunId}`) },
+      deleteVideoData: async (contentKey) => { repositoryCalls.push(contentKey) },
+      performDestructiveOperation: async (action, target, mutate) => {
+        coordination = { action, target }
+        await mutate()
+      },
+    }))
+
+    await expect(controller.deleteVideoData({ contentKey: "bilibili:BV1:p:2" }))
+      .resolves.toEqual({ type: "delete-video-data", contentKey: "bilibili:BV1:p:2" })
+    expect(coordination).toEqual({
+      action: "delete-video-data",
+      target: { contentKey: "bilibili:BV1:p:2" },
+    })
+    expect(repositoryCalls).toEqual(["bilibili:BV1:p:2"])
+  })
+
+  it("runs the repository mutation before destructive coordination completes", async () => {
+    const calls: string[] = []
+    const controller = createHistoryController(createDependencies({
+      deleteVideoData: async () => { calls.push("repository") },
+      performDestructiveOperation: async (_action, _target, mutate) => {
+        calls.push("coordination:start")
+        await mutate()
+        calls.push("coordination:done")
+      },
+    }))
+
+    await controller.deleteVideoData({ contentKey: "youtube:video-1" })
+    expect(calls).toEqual(["coordination:start", "repository", "coordination:done"])
+  })
+
+  it("does not delete when destructive coordination rejects", async () => {
+    const coordinationError = new Error("operation blocked")
+    let repositoryCalls = 0
+    const controller = createHistoryController(createDependencies({
+      deleteAnalysisRun: async () => { repositoryCalls += 1 },
+      performDestructiveOperation: async () => { throw coordinationError },
+    }))
+
+    await expect(controller.deleteAnalysisRun({ analysisRunId: "run-1" })).rejects.toBe(coordinationError)
+    expect(repositoryCalls).toBe(0)
+  })
+
+  it("propagates analysis deletion repository failures unchanged", async () => {
+    const repositoryError = new Error("analysis delete failed")
+    const controller = createHistoryController(createDependencies({
+      deleteAnalysisRun: async () => { throw repositoryError },
+      performDestructiveOperation: async (_action, _target, mutate) => mutate(),
+    }))
+
+    await expect(controller.deleteAnalysisRun({ analysisRunId: "run-1" })).rejects.toBe(repositoryError)
+  })
+
+  it("propagates video deletion coordination failures unchanged", async () => {
+    const coordinationError = new Error("video operation blocked")
+    const controller = createHistoryController(createDependencies({
+      performDestructiveOperation: async () => { throw coordinationError },
+    }))
+
+    await expect(controller.deleteVideoData({ contentKey: "youtube:video-1" })).rejects.toBe(coordinationError)
   })
 })

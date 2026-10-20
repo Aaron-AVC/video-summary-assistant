@@ -16,6 +16,10 @@ import type {
 } from "@/lib/schemas/persistence"
 import type { ActiveVideoContext } from "@/features/platform/types"
 import { resolveAskTranscriptFingerprint } from "@/sidepanel/lib/ask-transcript-identity"
+import type {
+  DestructiveMutation,
+  DestructiveOperationTarget,
+} from "@/features/history/lib/destructive-operation-coordinator"
 
 type SavedAnalysisRunAggregate = {
   analysisRun: AnalysisRunEntity
@@ -67,6 +71,13 @@ export type HistoryControllerDependencies = {
   getCurrentAnalysisByContentKey: (contentKey: string) => Promise<HistoricalAnalysisRecord | null>
   getLatestTranscriptByContentKey: (contentKey: string) => Promise<HistoricalTranscriptRecord | null>
   getSavedAnalysisRunById: (analysisRunId: string) => Promise<SavedAnalysisRunAggregate | null>
+  deleteAnalysisRun: (analysisRunId: string) => Promise<void>
+  deleteVideoData: (contentKey: string) => Promise<void>
+  performDestructiveOperation: (
+    action: Extract<DestructiveMutation["type"], "delete-analysis-run" | "delete-video-data">,
+    target: DestructiveOperationTarget,
+    mutate: () => Promise<void>,
+  ) => Promise<void>
 }
 
 export type HistoryTranscriptSnapshot = {
@@ -106,6 +117,11 @@ export type HistoryRestoreResult =
   | { kind: "stale" }
   | { kind: "ready"; snapshot: HistoryRestoreSnapshot }
 
+export type HistoryDeletionResult = Extract<
+  DestructiveMutation,
+  { type: "delete-analysis-run" | "delete-video-data" }
+>
+
 export type HistoryController = {
   listRecentAnalyses: (limit: number) => Promise<HistoryRecentAnalysisItem[]>
   loadLegacyVideoRestore: (input: {
@@ -120,6 +136,13 @@ export type HistoryController = {
     analysisRunId: string
     isCurrent: () => boolean
   }) => Promise<HistoryRestoreResult>
+  deleteAnalysisRun: (input: {
+    analysisRunId: string
+    contentKey?: string
+  }) => Promise<HistoryDeletionResult>
+  deleteVideoData: (input: {
+    contentKey: string
+  }) => Promise<HistoryDeletionResult>
 }
 
 function toRecentAnalysisItem(entry: HistoryRecentEntry): HistoryRecentAnalysisItem {
@@ -358,6 +381,24 @@ export function createHistoryController(
           analysisRunId: analysisRun.id,
         }),
       })
+    },
+
+    async deleteAnalysisRun({ analysisRunId, contentKey }) {
+      await dependencies.performDestructiveOperation(
+        "delete-analysis-run",
+        { analysisRunId, contentKey },
+        () => dependencies.deleteAnalysisRun(analysisRunId),
+      )
+      return { type: "delete-analysis-run", analysisRunId }
+    },
+
+    async deleteVideoData({ contentKey }) {
+      await dependencies.performDestructiveOperation(
+        "delete-video-data",
+        { contentKey },
+        () => dependencies.deleteVideoData(contentKey),
+      )
+      return { type: "delete-video-data", contentKey }
     },
   }
 }

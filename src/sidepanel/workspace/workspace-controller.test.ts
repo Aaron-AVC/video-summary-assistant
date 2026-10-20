@@ -12,6 +12,10 @@ import type {
 } from "@/sidepanel/history/history-controller"
 import {
   WorkspaceController,
+  type WorkspaceAnalysisCancelledPublicationEffects,
+  type WorkspaceAnalysisErrorPublicationEffects,
+  type WorkspaceAnalysisResultPublicationEffects,
+  type WorkspaceAnalysisTranscriptPublicationEffects,
   type WorkspaceAskCurrentIdentity,
   type WorkspaceAskPublicationEffects,
   type WorkspaceAskRequestedIdentity,
@@ -1255,6 +1259,581 @@ describe("WorkspaceController publishAskResult workspace semantics", () => {
       requested: askRequested({ contentKey: "bilibili:historical-video:p:2" }),
       current: askCurrent({ contentKey: "bilibili:historical-video:p:2" }),
       effects: createAskEffectsRecorder().effects,
+    })
+
+    expect(controller.getSnapshot()).toEqual(before)
+  })
+})
+// --- Task 6D: Analysis workspace publication --------------------------------
+
+type AnalysisTranscriptRecorder = {
+  effects: WorkspaceAnalysisTranscriptPublicationEffects
+  publishTranscript: number
+}
+
+function createAnalysisTranscriptRecorder(
+  onPublish: () => void = () => {},
+): AnalysisTranscriptRecorder {
+  const recorder: AnalysisTranscriptRecorder = {
+    effects: {
+      publishTranscript: () => {
+        recorder.publishTranscript += 1
+        onPublish()
+      },
+    },
+    publishTranscript: 0,
+  }
+  return recorder
+}
+
+type AnalysisResultRecorder = {
+  effects: WorkspaceAnalysisResultPublicationEffects
+  order: string[]
+  publishAnalysis: number
+  setAnalysisCompleted: number
+  restoreQaConversation: number
+}
+
+function createAnalysisResultRecorder({
+  onPublishAnalysis = () => {},
+  restoreQaConversation = async () => {},
+}: {
+  onPublishAnalysis?: () => void
+  restoreQaConversation?: () => Promise<void>
+} = {}): AnalysisResultRecorder {
+  const recorder: AnalysisResultRecorder = {
+    effects: {
+      publishAnalysis: () => {
+        recorder.order.push("publishAnalysis")
+        recorder.publishAnalysis += 1
+        onPublishAnalysis()
+      },
+      setAnalysisCompleted: () => {
+        recorder.order.push("setAnalysisCompleted")
+        recorder.setAnalysisCompleted += 1
+      },
+      restoreQaConversation: async () => {
+        recorder.order.push("restoreQaConversation")
+        recorder.restoreQaConversation += 1
+        await restoreQaConversation()
+      },
+    },
+    order: [],
+    publishAnalysis: 0,
+    setAnalysisCompleted: 0,
+    restoreQaConversation: 0,
+  }
+  return recorder
+}
+
+type AnalysisCancelledRecorder = {
+  effects: WorkspaceAnalysisCancelledPublicationEffects
+  order: string[]
+}
+
+function createAnalysisCancelledRecorder(
+  onClearAnalysisError: () => void = () => {},
+): AnalysisCancelledRecorder {
+  const recorder: AnalysisCancelledRecorder = {
+    effects: {
+      clearAnalysisError: () => {
+        recorder.order.push("clearAnalysisError")
+        onClearAnalysisError()
+      },
+      setAnalysisCancelled: () => {
+        recorder.order.push("setAnalysisCancelled")
+      },
+    },
+    order: [],
+  }
+  return recorder
+}
+
+type AnalysisErrorRecorder = {
+  effects: WorkspaceAnalysisErrorPublicationEffects
+  order: string[]
+}
+
+function createAnalysisErrorRecorder(
+  onPublishAnalysisError: () => void = () => {},
+): AnalysisErrorRecorder {
+  const recorder: AnalysisErrorRecorder = {
+    effects: {
+      publishAnalysisError: () => {
+        recorder.order.push("publishAnalysisError")
+        onPublishAnalysisError()
+      },
+      setAnalysisErrorPhase: () => {
+        recorder.order.push("setAnalysisErrorPhase")
+      },
+      markDisplayedAnalysisError: () => {
+        recorder.order.push("markDisplayedAnalysisError")
+      },
+    },
+    order: [],
+  }
+  return recorder
+}
+
+const TASK_CONTENT_KEY = "youtube:video-a"
+
+describe("WorkspaceController publishAnalysisTranscript", () => {
+  it("publishes the task transcript exactly once when the target is current", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisTranscriptRecorder()
+    const result = controller.publishAnalysisTranscript({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.publishTranscript).toBe(1)
+  })
+
+  it("returns stale with zero effects when the captured workspace epoch is no longer current", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+
+    const recorder = createAnalysisTranscriptRecorder()
+    const result = controller.publishAnalysisTranscript({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.publishTranscript).toBe(0)
+  })
+
+  it("returns stale with zero effects when the current content no longer matches the task", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisTranscriptRecorder()
+    const result = controller.publishAnalysisTranscript({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: "youtube:video-b",
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.publishTranscript).toBe(0)
+  })
+
+  it("returns stale without re-checking once the transcript effect has run", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisTranscriptRecorder(() => {
+      observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+    })
+    const result = controller.publishAnalysisTranscript({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.publishTranscript).toBe(1)
+    expect(controller.isEpochCurrent(captured)).toBe(false)
+  })
+})
+
+describe("WorkspaceController publishAnalysisResult", () => {
+  it("publishes the analysis result in the analysis-completed-QA order", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisResultRecorder()
+    const result = await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual([
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+
+  it("returns stale with zero effects when the captured workspace epoch is no longer current", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+
+    const recorder = createAnalysisResultRecorder()
+    const result = await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the current content no longer matches the task", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisResultRecorder()
+    const result = await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: "bilibili:other-video:p:2",
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("propagates the restoreQaConversation rejection unchanged after the earlier effects ran", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const failure = new Error("qa restore failed")
+    const recorder = createAnalysisResultRecorder({
+      restoreQaConversation: async () => {
+        throw failure
+      },
+    })
+
+    let caught: unknown = null
+    try {
+      await controller.publishAnalysisResult({
+        workspaceEpoch: captured,
+        taskContentKey: TASK_CONTENT_KEY,
+        currentContentKey: TASK_CONTENT_KEY,
+        effects: recorder.effects,
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBe(failure)
+    expect(recorder.publishAnalysis).toBe(1)
+    expect(recorder.setAnalysisCompleted).toBe(1)
+    expect(recorder.restoreQaConversation).toBe(1)
+  })
+
+  it("uses one policy for the cache-hit and fresh-completion callers", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const cachedRecorder = createAnalysisResultRecorder()
+    const freshRecorder = createAnalysisResultRecorder()
+
+    const cachedResult = await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: cachedRecorder.effects,
+    })
+    const freshResult = await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: freshRecorder.effects,
+    })
+
+    expect(cachedResult).toEqual({ kind: "published" })
+    expect(freshResult).toEqual({ kind: "published" })
+    expect(cachedRecorder.order).toEqual(freshRecorder.order)
+    expect(typeof controller.publishAnalysisResult).toBe("function")
+    expect((controller as unknown as Record<string, unknown>).publishCachedAnalysis).toBeUndefined()
+    expect((controller as unknown as Record<string, unknown>).publishFreshAnalysis).toBeUndefined()
+  })
+
+  it("does not re-check eligibility once the first publication effect has run", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisResultRecorder({
+      onPublishAnalysis: () => {
+        observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+      },
+    })
+
+    const result = await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual([
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+})
+
+describe("WorkspaceController publishAnalysisCancelled", () => {
+  it("publishes the cancelled state in order", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisCancelledRecorder()
+    const result = controller.publishAnalysisCancelled({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual(["clearAnalysisError", "setAnalysisCancelled"])
+  })
+
+  it("returns stale with zero effects when the workspace epoch is stale", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+
+    const recorder = createAnalysisCancelledRecorder()
+    const result = controller.publishAnalysisCancelled({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("does not re-check eligibility once the first cancelled effect has run", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisCancelledRecorder(() => {
+      observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+    })
+    const result = controller.publishAnalysisCancelled({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual(["clearAnalysisError", "setAnalysisCancelled"])
+  })
+})
+
+describe("WorkspaceController publishAnalysisError", () => {
+  it("publishes the error state in order", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisErrorRecorder()
+    const result = controller.publishAnalysisError({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual([
+      "publishAnalysisError",
+      "setAnalysisErrorPhase",
+      "markDisplayedAnalysisError",
+    ])
+  })
+
+  it("returns stale with zero effects when the workspace epoch is stale", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+
+    const recorder = createAnalysisErrorRecorder()
+    const result = controller.publishAnalysisError({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("does not re-check eligibility once the first error effect has run", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAnalysisErrorRecorder(() => {
+      observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+    })
+    const result = controller.publishAnalysisError({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual([
+      "publishAnalysisError",
+      "setAnalysisErrorPhase",
+      "markDisplayedAnalysisError",
+    ])
+  })
+})
+
+describe("WorkspaceController analysis publication epoch hardening", () => {
+  it("treats an A to B to A round trip as stale even though the current content matches the task again", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+    observe(controller, context())
+
+    expect(controller.getSnapshot().runtimeContent.contentKey).toBe(TASK_CONTENT_KEY)
+    expect(controller.isEpochCurrent(captured)).toBe(false)
+
+    const transcriptRecorder = createAnalysisTranscriptRecorder()
+    expect(controller.publishAnalysisTranscript({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: transcriptRecorder.effects,
+    })).toEqual({ kind: "stale" })
+    expect(transcriptRecorder.publishTranscript).toBe(0)
+
+    const cancelledRecorder = createAnalysisCancelledRecorder()
+    expect(controller.publishAnalysisCancelled({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: cancelledRecorder.effects,
+    })).toEqual({ kind: "stale" })
+    expect(cancelledRecorder.order).toEqual([])
+
+    const errorRecorder = createAnalysisErrorRecorder()
+    expect(controller.publishAnalysisError({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: errorRecorder.effects,
+    })).toEqual({ kind: "stale" })
+    expect(errorRecorder.order).toEqual([])
+  })
+
+  it("treats an A to B to A round trip as stale for the analysis result publication", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+    observe(controller, context())
+
+    const recorder = createAnalysisResultRecorder()
+    const result = await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("publishes across a same-content metadata refresh", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({
+      title: "Renamed video",
+      author: "Another author",
+      canonicalUrl: "https://www.youtube.com/watch?v=video-a&t=9",
+      isReady: false,
+    }))
+
+    expect(controller.isEpochCurrent(captured)).toBe(true)
+
+    const recorder = createAnalysisTranscriptRecorder()
+    const result = controller.publishAnalysisTranscript({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.publishTranscript).toBe(1)
+  })
+
+  it("rejects publication when the caller content still differs even though the epoch is current", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    expect(controller.isEpochCurrent(captured)).toBe(true)
+
+    const recorder = createAnalysisTranscriptRecorder()
+    const result = controller.publishAnalysisTranscript({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: "youtube:video-b",
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.publishTranscript).toBe(0)
+  })
+
+  it("never mutates runtime content while publishing an analysis result", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+    const before = controller.getSnapshot()
+
+    await controller.publishAnalysisResult({
+      workspaceEpoch: captured,
+      taskContentKey: TASK_CONTENT_KEY,
+      currentContentKey: TASK_CONTENT_KEY,
+      effects: createAnalysisResultRecorder().effects,
     })
 
     expect(controller.getSnapshot()).toEqual(before)

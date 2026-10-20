@@ -10,6 +10,9 @@ import {
   matchesAskRequestWorkspaceIdentity,
 } from "@/sidepanel/lib/ask-transcript-identity"
 import {
+  shouldPublishAnalysisToWorkspace,
+} from "@/features/analysis/lib/analysis-task-lifecycle"
+import {
   projectWorkspaceRuntimeContent,
   type WorkspaceRuntimeContent,
   type WorkspaceRuntimeContentInput,
@@ -147,6 +150,47 @@ export type WorkspaceAskPublicationRequest = {
 }
 
 export type WorkspaceAskPublicationResult =
+  | { kind: "stale" }
+  | { kind: "published" }
+
+/**
+ * The Analysis publication target an analysis task was captured against.
+ *
+ * `currentContentKey` is supplied by the caller instead of being read from
+ * `runtimeContent` on purpose: the React `videoContextRef` updates with render
+ * before the runtime observation effect necessarily runs, so the live
+ * current-content guard must stay able to reject publication during that
+ * window.
+ */
+export type WorkspaceAnalysisPublicationTarget = {
+  /** Captured once when the analysis task snapshot is built. */
+  workspaceEpoch: number
+  taskContentKey: string
+  currentContentKey: string | null
+}
+
+export type WorkspaceAnalysisTranscriptPublicationEffects = {
+  publishTranscript: () => void
+}
+
+export type WorkspaceAnalysisResultPublicationEffects = {
+  publishAnalysis: () => void
+  setAnalysisCompleted: () => void
+  restoreQaConversation: () => Promise<void>
+}
+
+export type WorkspaceAnalysisCancelledPublicationEffects = {
+  clearAnalysisError: () => void
+  setAnalysisCancelled: () => void
+}
+
+export type WorkspaceAnalysisErrorPublicationEffects = {
+  publishAnalysisError: () => void
+  setAnalysisErrorPhase: () => void
+  markDisplayedAnalysisError: () => void
+}
+
+export type WorkspaceAnalysisPublicationResult =
   | { kind: "stale" }
   | { kind: "published" }
 
@@ -340,6 +384,101 @@ export class WorkspaceController {
 
     effects.publishAssistantMessage()
     effects.publishAnswer()
+
+    return { kind: "published" }
+  }
+
+  /**
+   * The single Analysis publication eligibility policy.
+   *
+   * In addition to the reused current-content/task-content policy, the captured
+   * workspace epoch must still be current. That makes a workspace epoch stale
+   * after *any* runtime `contentKey` identity transition, so an A -> B -> A
+   * round trip no longer lets the original A task publish UI state even though
+   * the runtime content key reads A again.
+   */
+  private canPublishAnalysis(
+    target: WorkspaceAnalysisPublicationTarget,
+  ): boolean {
+    return this.isEpochCurrent(target.workspaceEpoch)
+      && shouldPublishAnalysisToWorkspace(
+        target.currentContentKey,
+        target.taskContentKey,
+      )
+  }
+
+  /**
+   * Publishes the transcript captured for a still-current analysis task.
+   *
+   * The publication payload is supplied by the root closure so no transcript
+   * data type crosses this boundary.
+   */
+  publishAnalysisTranscript(
+    request: WorkspaceAnalysisPublicationTarget & {
+      effects: WorkspaceAnalysisTranscriptPublicationEffects
+    },
+  ): WorkspaceAnalysisPublicationResult {
+    if (!this.canPublishAnalysis(request)) return { kind: "stale" }
+
+    request.effects.publishTranscript()
+
+    return { kind: "published" }
+  }
+
+  /**
+   * Publishes a completed analysis result, shared by the cache-hit and the
+   * fresh-completion paths because the workspace policy is identical.
+   *
+   * The decision is made exactly once, before any effect. A rejection from
+   * `restoreQaConversation` propagates unchanged after the earlier effects ran;
+   * they are deliberately not rolled back.
+   */
+  async publishAnalysisResult(
+    request: WorkspaceAnalysisPublicationTarget & {
+      effects: WorkspaceAnalysisResultPublicationEffects
+    },
+  ): Promise<WorkspaceAnalysisPublicationResult> {
+    const { effects } = request
+    if (!this.canPublishAnalysis(request)) return { kind: "stale" }
+
+    effects.publishAnalysis()
+    effects.setAnalysisCompleted()
+    await effects.restoreQaConversation()
+
+    return { kind: "published" }
+  }
+
+  /**
+   * Publishes the cancelled analysis state into the current workspace.
+   */
+  publishAnalysisCancelled(
+    request: WorkspaceAnalysisPublicationTarget & {
+      effects: WorkspaceAnalysisCancelledPublicationEffects
+    },
+  ): WorkspaceAnalysisPublicationResult {
+    const { effects } = request
+    if (!this.canPublishAnalysis(request)) return { kind: "stale" }
+
+    effects.clearAnalysisError()
+    effects.setAnalysisCancelled()
+
+    return { kind: "published" }
+  }
+
+  /**
+   * Publishes the failed analysis state into the current workspace.
+   */
+  publishAnalysisError(
+    request: WorkspaceAnalysisPublicationTarget & {
+      effects: WorkspaceAnalysisErrorPublicationEffects
+    },
+  ): WorkspaceAnalysisPublicationResult {
+    const { effects } = request
+    if (!this.canPublishAnalysis(request)) return { kind: "stale" }
+
+    effects.publishAnalysisError()
+    effects.setAnalysisErrorPhase()
+    effects.markDisplayedAnalysisError()
 
     return { kind: "published" }
   }

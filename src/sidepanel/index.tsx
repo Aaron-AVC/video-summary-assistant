@@ -16,7 +16,6 @@ import { qaConversationRepository } from "@/features/analysis/lib/qa-conversatio
 import {
   captureAnalysisCompletionTimes,
   getAnalysisTaskExecutionPolicy,
-  shouldPublishAnalysisToWorkspace,
 } from "@/features/analysis/lib/analysis-task-lifecycle"
 import {
   AnalysisTaskAlreadyRunningError,
@@ -741,6 +740,7 @@ function SidepanelWorkspace() {
       providerModel: requestedProvider.model,
       generationTimeoutSec: requestedProvider.generationTimeoutSec ?? 600,
     }
+    const requestedWorkspaceEpoch = workspaceController.captureEpoch()
     setAnalysisError(null)
     setAskAnswer(null)
     setAskError(null)
@@ -779,15 +779,22 @@ function SidepanelWorkspace() {
             publication,
           } = transcriptFinalization
           const { transcript } = result
-          if (shouldPublishAnalysisToWorkspace(videoContextRef.current.contentKey, task.snapshot.contentKey)) {
-            publishTranscript({
-              cues: publication.cues,
-              identity: publication.identity,
-              title: publication.title,
-              fingerprint: transcriptFingerprint,
-              rawVtt: publication.rawVtt,
-            })
-          }
+          workspaceController.publishAnalysisTranscript({
+            workspaceEpoch: requestedWorkspaceEpoch,
+            taskContentKey: task.snapshot.contentKey,
+            currentContentKey: videoContextRef.current.contentKey,
+            effects: {
+              publishTranscript: () => {
+                publishTranscript({
+                  cues: publication.cues,
+                  identity: publication.identity,
+                  title: publication.title,
+                  fingerprint: transcriptFingerprint,
+                  rawVtt: publication.rawVtt,
+                })
+              },
+            },
+          })
 
           setPhase("analyzing")
           const resolvedProvider = await settingsStorage.resolveProvider(requestedProvider.id)
@@ -828,27 +835,38 @@ function SidepanelWorkspace() {
               analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
             })) {
               ensureTaskCurrent()
-              if (shouldPublishAnalysisToWorkspace(videoContextRef.current.contentKey, task.snapshot.contentKey)) {
-                setAnalysisView({
-                  platform: sourceVideo.platform,
-                  videoId: sourceVideo.videoId,
-                  partId: sourceVideo.partId ?? null,
-                  contentKey: sourceVideo.contentKey,
-                  title: sourceVideo.title,
-                  analysis: cached.analysis,
-                  analysisRunId: cached.analysisRunId,
-                  transcriptFingerprint,
-                  providerProfileId: cached.providerProfileId ?? null,
-                  providerBaseUrl: cached.providerBaseUrl ?? null,
-                  providerModel: cached.providerModel ?? null,
-                  analysisSchemaVersion: cached.analysisSchemaVersion ?? null,
-                  analysisPromptVersion: cached.analysisPromptVersion ?? null,
-                  lastAnalyzedAt: cached.updatedAt,
-                  errorMessage: null,
-                })
-                setAnalysisPhase("completed")
-                await restoreQaConversation(sourceVideo.contentKey, cached.analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
-              }
+              await workspaceController.publishAnalysisResult({
+                workspaceEpoch: requestedWorkspaceEpoch,
+                taskContentKey: task.snapshot.contentKey,
+                currentContentKey: videoContextRef.current.contentKey,
+                effects: {
+                  publishAnalysis: () => {
+                    setAnalysisView({
+                      platform: sourceVideo.platform,
+                      videoId: sourceVideo.videoId,
+                      partId: sourceVideo.partId ?? null,
+                      contentKey: sourceVideo.contentKey,
+                      title: sourceVideo.title,
+                      analysis: cached.analysis,
+                      analysisRunId: cached.analysisRunId,
+                      transcriptFingerprint,
+                      providerProfileId: cached.providerProfileId ?? null,
+                      providerBaseUrl: cached.providerBaseUrl ?? null,
+                      providerModel: cached.providerModel ?? null,
+                      analysisSchemaVersion: cached.analysisSchemaVersion ?? null,
+                      analysisPromptVersion: cached.analysisPromptVersion ?? null,
+                      lastAnalyzedAt: cached.updatedAt,
+                      errorMessage: null,
+                    })
+                  },
+                  setAnalysisCompleted: () => {
+                    setAnalysisPhase("completed")
+                  },
+                  restoreQaConversation: async () => {
+                    await restoreQaConversation(sourceVideo.contentKey, cached.analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
+                  },
+                },
+              })
               await refreshRecentAnalyses()
               toast.success(t("toast.loadedCached", { title: sourceVideo.title }))
               return
@@ -974,27 +992,38 @@ function SidepanelWorkspace() {
             })
           })
           await refreshRecentAnalyses()
-          if (shouldPublishAnalysisToWorkspace(videoContextRef.current.contentKey, task.snapshot.contentKey)) {
-            setAnalysisView({
-              platform: task.snapshot.platform,
-              videoId: task.snapshot.videoId,
-              partId: task.snapshot.partId,
-              contentKey: task.snapshot.contentKey,
-              title: sourceVideo.title,
-              analysis: completed.analysis,
-              analysisRunId,
-              transcriptFingerprint,
-              providerProfileId: task.snapshot.providerProfileId,
-              providerBaseUrl: task.snapshot.providerBaseUrl,
-              providerModel: task.snapshot.providerModel,
-              analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-              analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
-              lastAnalyzedAt: completedAt,
-              errorMessage: null,
-            })
-            setAnalysisPhase("completed")
-            await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
-          }
+          await workspaceController.publishAnalysisResult({
+            workspaceEpoch: requestedWorkspaceEpoch,
+            taskContentKey: task.snapshot.contentKey,
+            currentContentKey: videoContextRef.current.contentKey,
+            effects: {
+              publishAnalysis: () => {
+                setAnalysisView({
+                  platform: task.snapshot.platform,
+                  videoId: task.snapshot.videoId,
+                  partId: task.snapshot.partId,
+                  contentKey: task.snapshot.contentKey,
+                  title: sourceVideo.title,
+                  analysis: completed.analysis,
+                  analysisRunId,
+                  transcriptFingerprint,
+                  providerProfileId: task.snapshot.providerProfileId,
+                  providerBaseUrl: task.snapshot.providerBaseUrl,
+                  providerModel: task.snapshot.providerModel,
+                  analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+                  analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+                  lastAnalyzedAt: completedAt,
+                  errorMessage: null,
+                })
+              },
+              setAnalysisCompleted: () => {
+                setAnalysisPhase("completed")
+              },
+              restoreQaConversation: async () => {
+                await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
+              },
+            },
+          })
           toast.success(t("toast.analysisCompleted", { title: sourceVideo.title }))
           }, { taskId })
         })
@@ -1002,12 +1031,20 @@ function SidepanelWorkspace() {
       } catch (error) {
         const isAbort = error instanceof AnalysisAbortedError
           || (error instanceof DOMException && error.name === "AbortError")
-        const isWorkspaceCurrent = videoContextRef.current.contentKey === taskSnapshot.contentKey
         if (isAbort) {
-          if (isWorkspaceCurrent) {
-            setAnalysisError(null)
-            setAnalysisPhase("cancelled")
-          }
+          workspaceController.publishAnalysisCancelled({
+            workspaceEpoch: requestedWorkspaceEpoch,
+            taskContentKey: taskSnapshot.contentKey,
+            currentContentKey: videoContextRef.current.contentKey,
+            effects: {
+              clearAnalysisError: () => {
+                setAnalysisError(null)
+              },
+              setAnalysisCancelled: () => {
+                setAnalysisPhase("cancelled")
+              },
+            },
+          })
           toast.message(t("toast.analysisCancelled"))
           return
         }
@@ -1015,11 +1052,22 @@ function SidepanelWorkspace() {
           || (error instanceof Error && error.message.includes("video part changed while captions were loading"))
           ? "Source video changed before its transcript could be captured."
           : error instanceof Error ? error.message : t("toast.unknownAnalysisError")
-        if (isWorkspaceCurrent) {
-          setAnalysisError(message)
-          setAnalysisPhase("error")
-          setAnalysisView((current) => current ? { ...current, errorMessage: message } : null)
-        }
+        workspaceController.publishAnalysisError({
+          workspaceEpoch: requestedWorkspaceEpoch,
+          taskContentKey: taskSnapshot.contentKey,
+          currentContentKey: videoContextRef.current.contentKey,
+          effects: {
+            publishAnalysisError: () => {
+              setAnalysisError(message)
+            },
+            setAnalysisErrorPhase: () => {
+              setAnalysisPhase("error")
+            },
+            markDisplayedAnalysisError: () => {
+              setAnalysisView((current) => current ? { ...current, errorMessage: message } : null)
+            },
+          },
+        })
         toast.error(message)
       } finally {
         admission?.release()
@@ -1027,7 +1075,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext])
+  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()

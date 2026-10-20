@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
+import { KnowledgePanel } from "@/features/knowledge/components/knowledge-panel"
 import { AskTab } from "@/sidepanel/components/ask-tab"
 import { OverviewTab } from "@/sidepanel/components/overview-tab"
 import { SettingsTab } from "@/sidepanel/components/settings-tab"
@@ -453,5 +454,147 @@ describe("Analysis preset selector", () => {
     )
     expect(analyzeButton).toContain('disabled=""')
     expect(analyzeButton).toContain("Generate")
+  })
+})
+
+describe("Knowledge panel", () => {
+  const knowledgeItem = (overrides: Record<string, unknown> = {}) => ({
+    id: "knowledge-1",
+    kind: "bookmark" as const,
+    contentKey: "youtube:video-a",
+    platform: "youtube" as const,
+    videoId: "video-a",
+    partId: null,
+    videoTitle: "Video A",
+    analysisRunId: null,
+    startSec: 12,
+    endSec: 12,
+    text: null,
+    createdAt: "2026-10-20T00:00:00.000Z",
+    updatedAt: "2026-10-20T00:00:00.000Z",
+    ...overrides,
+  })
+
+  const knowledgeHandlers = {
+    onToggleBookmark: noop,
+    onCreateNote: noop,
+    onUpdateNote: noop,
+    onDeleteItem: noop,
+    onJump: noop,
+  }
+
+  const baseKnowledge = {
+    items: [] as ReturnType<typeof knowledgeItem>[],
+    isLoading: false,
+    error: null,
+    currentTimestamp: 12 as number | null,
+    formatTimestamp,
+    handlers: knowledgeHandlers,
+  }
+
+  it("renders with no analysis, no provider and no transcript", () => {
+    const markup = renderToStaticMarkup(<KnowledgePanel {...baseKnowledge} />)
+
+    expect(markup).toContain("Bookmarks and notes")
+    expect(markup).toContain("Saved locally for this video. No provider or analysis is required.")
+    expect(markup).toContain("No bookmarks or notes yet")
+    expect(markup).toContain("Bookmark current time")
+    expect(markup).toContain("Save note")
+    expect(markup).toContain("Attach current time")
+  })
+
+  it("enables the bookmark action when a playback point is available", () => {
+    const markup = renderToStaticMarkup(<KnowledgePanel {...baseKnowledge} />)
+
+    const bookmarkIndex = markup.indexOf("Bookmark current time")
+    const bookmarkButton = markup.slice(markup.lastIndexOf("<button", bookmarkIndex), bookmarkIndex)
+    expect(bookmarkButton).not.toContain('disabled=""')
+    expect(markup).not.toContain("Playback time is unavailable.")
+    expect(markup).toContain("0:12")
+  })
+
+  it("disables the bookmark action when the playback point is unavailable", () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgePanel {...baseKnowledge} currentTimestamp={null} />,
+    )
+
+    const bookmarkIndex = markup.indexOf("Bookmark current time")
+    const bookmarkButton = markup.slice(markup.lastIndexOf("<button", bookmarkIndex), bookmarkIndex)
+    expect(bookmarkButton).toContain('disabled=""')
+    expect(markup).toContain("Playback time is unavailable.")
+  })
+
+  it("keeps plain note authoring available without a playback point", () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgePanel {...baseKnowledge} currentTimestamp={null} />,
+    )
+
+    expect(markup).toContain('id="knowledge-note-input"')
+    expect(markup).toContain("Save note")
+    // Only the timestamp attachment needs a playback point.
+    expect(markup).toMatch(/<input[^>]*type="checkbox"[^>]*disabled=""/)
+  })
+
+  it("distinguishes anchored and unanchored notes", () => {
+    const anchored = renderToStaticMarkup(
+      <KnowledgePanel
+        {...baseKnowledge}
+        items={[knowledgeItem({ id: "n1", kind: "note", text: "Anchored", startSec: 30, endSec: 30 })]}
+      />,
+    )
+    const unanchored = renderToStaticMarkup(
+      <KnowledgePanel
+        {...baseKnowledge}
+        items={[knowledgeItem({ id: "n2", kind: "note", text: "Free form", startSec: null, endSec: null })]}
+      />,
+    )
+
+    expect(anchored).toContain("Anchored")
+    expect(anchored).toContain("0:30")
+    expect(anchored).toContain("Jump")
+    expect(unanchored).toContain("Free form")
+    expect(unanchored).not.toContain("Jump")
+  })
+
+  it("offers edit and delete for notes and delete for bookmarks", () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgePanel
+        {...baseKnowledge}
+        items={[
+          knowledgeItem({ id: "b1" }),
+          knowledgeItem({ id: "n1", kind: "note", text: "Note text", startSec: null, endSec: null }),
+        ]}
+      />,
+    )
+
+    expect(markup).toContain("Bookmark")
+    expect(markup).toContain("Note text")
+    expect(markup.match(/aria-label="Edit"/g)).toHaveLength(1)
+    expect(markup.match(/aria-label="Delete"/g)).toHaveLength(2)
+  })
+
+  it("shows the loading state and the load error", () => {
+    const loading = renderToStaticMarkup(
+      <KnowledgePanel {...baseKnowledge} isLoading items={[]} />,
+    )
+    const failed = renderToStaticMarkup(
+      <KnowledgePanel {...baseKnowledge} error="db down" />,
+    )
+
+    expect(loading).toContain("Loading bookmarks and notes…")
+    expect(loading).not.toContain("No bookmarks or notes yet")
+    expect(failed).toContain('role="alert"')
+    expect(failed).toContain("db down")
+  })
+
+  it("ships Simplified Chinese translations for every Knowledge string", async () => {
+    const { en } = await import("@/lib/i18n/en")
+    const { zhCN } = await import("@/lib/i18n/zh-CN")
+
+    const knowledgeKeys = Object.keys(en).filter((key) => key.startsWith("knowledge."))
+    expect(knowledgeKeys.length).toBeGreaterThan(20)
+    for (const key of knowledgeKeys) {
+      expect((zhCN as Record<string, string>)[key]).toBeTruthy()
+    }
   })
 })

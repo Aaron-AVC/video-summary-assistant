@@ -232,6 +232,26 @@ export const MIGRATION_BLOCKS: MigrationBlock[] = [
         })
       }
     }
+  },
+  {
+    // V1.1 Bookmark + Notes: a brand-new store only. Every v5 store is
+    // re-declared verbatim so Dexie keeps its version chain intact, and no
+    // upgrade callback is needed because the store starts empty.
+    version: 6,
+    stores: {
+      providerConfigs: "id, name, updatedAt",
+      transcriptSnapshots: "id, videoId, updatedAt, [videoId+updatedAt]",
+      analysisRuns: "id, videoId, status, updatedAt, [videoId+updatedAt]",
+      segmentSummaries: "id, analysisRunId, videoId, [videoId+startSec]",
+      recentVideos: "videoId, updatedAt, status",
+      videoRecords: "&contentKey, platform, videoId, updatedAt, [platform+updatedAt]",
+      transcriptCache: "id, contentKey, fingerprint, updatedAt, [contentKey+fingerprint], [contentKey+updatedAt]",
+      analysisCache: "&cacheKey, contentKey, transcriptFingerprint, providerProfileId, updatedAt, [contentKey+updatedAt]",
+      qaAnswers: "&cacheKey, contentKey, analysisRunId, question, updatedAt, [contentKey+updatedAt]",
+      qaThreads: "&id, contentKey, analysisRunId, updatedAt, [contentKey+updatedAt], [contentKey+analysisRunId]",
+      qaMessages: "&id, threadId, sequence, [threadId+sequence], createdAt",
+      knowledgeItems: "&id, contentKey, kind, analysisRunId, updatedAt, [contentKey+updatedAt], [contentKey+kind]"
+    }
   }
 ]
 

@@ -235,6 +235,94 @@ export const qaMessageSchema = z.object({
   createdAt: isoDateTimeSchema
 })
 
+export const knowledgeItemKindSchema = z.enum(["bookmark", "note"])
+
+export const MAX_KNOWLEDGE_NOTE_LENGTH = 10000
+
+/**
+ * Canonical Bookmark / Note row. `contentKey` is the authoritative identity so
+ * Bilibili `p1` and `p2` never collapse into one another; a bare `videoId` is
+ * only carried for presentation and export readability.
+ *
+ * Kind invariants:
+ *  - `bookmark` is a point anchor created by the UI: `startSec === endSec` and
+ *    `text` is null.
+ *  - `note` carries trimmed text and either has no anchor at all or a complete
+ *    range; a one-sided range is never valid.
+ */
+export const knowledgeItemSchema = z.object({
+  id: z.string().min(1),
+  kind: knowledgeItemKindSchema,
+  contentKey: z.string().trim().min(1),
+  platform: z.enum(["youtube", "bilibili"]),
+  videoId: z.string().trim().min(1),
+  partId: z.string().trim().min(1).nullable(),
+  videoTitle: z.string().trim().min(1),
+  analysisRunId: z.string().min(1).nullable(),
+  startSec: z.number().finite().min(0).nullable(),
+  endSec: z.number().finite().min(0).nullable(),
+  text: z.string().nullable(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema
+}).superRefine((item, context) => {
+  const hasStart = item.startSec !== null
+  const hasEnd = item.endSec !== null
+  if (hasStart !== hasEnd) {
+    context.addIssue({
+      code: "custom",
+      message: "Knowledge anchors must declare both start and end seconds",
+      path: ["endSec"]
+    })
+    return
+  }
+  if (hasStart && hasEnd && item.endSec! < item.startSec!) {
+    context.addIssue({
+      code: "custom",
+      message: "End time must be greater than or equal to start time",
+      path: ["endSec"]
+    })
+  }
+  if (item.kind === "bookmark") {
+    if (!hasStart) {
+      context.addIssue({
+        code: "custom",
+        message: "Bookmarks must record a timestamp",
+        path: ["startSec"]
+      })
+    } else if (item.startSec !== item.endSec) {
+      context.addIssue({
+        code: "custom",
+        message: "UI-created bookmarks are point anchors",
+        path: ["endSec"]
+      })
+    }
+    if (item.text !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "Bookmarks cannot carry note text",
+        path: ["text"]
+      })
+    }
+    return
+  }
+  const trimmedText = item.text?.trim() ?? ""
+  if (!trimmedText) {
+    context.addIssue({
+      code: "custom",
+      message: "Notes require non-empty text",
+      path: ["text"]
+    })
+    return
+  }
+  if (trimmedText.length > MAX_KNOWLEDGE_NOTE_LENGTH) {
+    context.addIssue({
+      code: "custom",
+      message: `Notes cannot exceed ${MAX_KNOWLEDGE_NOTE_LENGTH} characters`,
+      path: ["text"]
+    })
+  }
+})
+
 export const persistenceExportSchema = z.object({
   providerConfigs: z.array(providerConfigExportSchema),
   transcriptSnapshots: z.array(transcriptSnapshotSchema),
@@ -246,7 +334,9 @@ export const persistenceExportSchema = z.object({
   analysisCache: z.array(analysisCacheSchema).optional(),
   qaAnswers: z.array(qaAnswerSchema).optional(),
   qaThreads: z.array(qaThreadSchema).optional(),
-  qaMessages: z.array(qaMessageSchema).optional()
+  qaMessages: z.array(qaMessageSchema).optional(),
+  // Optional so exports produced before V1.1 Bookmark + Notes still validate.
+  knowledgeItems: z.array(knowledgeItemSchema).optional()
 })
 
 export type PersistedRunStatus = z.infer<typeof persistedRunStatusSchema>
@@ -266,3 +356,5 @@ export type QaThreadEntity = z.infer<typeof qaThreadSchema>
 export type QaMessageCitation = z.infer<typeof qaMessageCitationSchema>
 export type QaMessageSuggestedJump = z.infer<typeof qaMessageSuggestedJumpSchema>
 export type QaMessageEntity = z.infer<typeof qaMessageSchema>
+export type KnowledgeItemKind = z.infer<typeof knowledgeItemKindSchema>
+export type KnowledgeItemEntity = z.infer<typeof knowledgeItemSchema>

@@ -45,6 +45,7 @@ type DataInventory = {
   qaAnswers: number
   qaThreads: number
   qaMessages: number
+  knowledgeItems: number
   diagnosticLogs: number
 }
 
@@ -60,6 +61,7 @@ const EMPTY_INVENTORY: DataInventory = {
   qaAnswers: 0,
   qaThreads: 0,
   qaMessages: 0,
+  knowledgeItems: 0,
   diagnosticLogs: 0
 }
 
@@ -206,6 +208,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         inventory.qaAnswers,
         inventory.qaThreads,
         inventory.qaMessages,
+        inventory.knowledgeItems,
         inventory.diagnosticLogs
       ].reduce((sum, count) => sum + count, 0),
     [inventory]
@@ -226,6 +229,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       qaAnswers: localData.qaAnswers?.length ?? 0,
       qaThreads: localData.qaThreads?.length ?? 0,
       qaMessages: localData.qaMessages?.length ?? 0,
+      knowledgeItems: localData.knowledgeItems?.length ?? 0,
       diagnosticLogs: diagnosticLogs.length
     })
   }
@@ -311,6 +315,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
           <InventoryStat label={t("data.qaAnswers")} value={inventory.qaAnswers} />
           <InventoryStat label={t("data.qaThreads")} value={inventory.qaThreads} />
           <InventoryStat label={t("data.qaMessages")} value={inventory.qaMessages} />
+          <InventoryStat label={t("data.knowledgeItems")} value={inventory.knowledgeItems} />
           <InventoryStat label={t("data.diagnosticLogs")} value={inventory.diagnosticLogs} />
         </div>
 

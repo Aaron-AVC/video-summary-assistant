@@ -16,6 +16,7 @@ export type SidepanelMutationEffects = {
   setAnalysisIdle: () => void
   clearAskWorkspace: () => void
   clearTranscriptWorkspace: () => void
+  clearKnowledgeWorkspace: () => void
   refreshRecentAnalyses: () => void | Promise<void>
   refreshProvider: () => void | Promise<void>
   refreshAnalysisPreset: () => void | Promise<void>
@@ -48,6 +49,11 @@ export async function applySidepanelDataMutation(
       effects.clearAskWorkspace()
       effects.clearTranscriptWorkspace()
     }
+    // Knowledge belongs to the deleted video even when no analysis/transcript
+    // is currently displayed, so the match is identity-based, not UI-based.
+    if (workspace.videoContextContentKey === mutation.contentKey) {
+      effects.clearKnowledgeWorkspace()
+    }
     await effects.refreshRecentAnalyses()
     return
   }
@@ -74,6 +80,7 @@ export async function applySidepanelDataMutation(
     effects.setAnalysisIdle()
     effects.clearAskWorkspace()
     effects.clearTranscriptWorkspace()
+    effects.clearKnowledgeWorkspace()
     await Promise.all([
       effects.refreshProvider(),
       effects.refreshAnalysisPreset(),

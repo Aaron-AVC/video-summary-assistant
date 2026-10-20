@@ -230,6 +230,51 @@ describe("registerMigrations", () => {
     expect(v3?.stores.transcriptCache).not.toContain("&contentKey")
   })
 
+  it("appends v6 with a knowledgeItems store without touching v1-v5", () => {
+    expect(MIGRATION_BLOCKS.map((block) => block.version)).toEqual([1, 2, 3, 4, 5, 6])
+
+    const v5 = MIGRATION_BLOCKS.find((block) => block.version === 5)!
+    const v6 = MIGRATION_BLOCKS.find((block) => block.version === 6)!
+    expect(v6).toBeDefined()
+    expect(v6.upgrade).toBeUndefined()
+    expect(v6.stores.knowledgeItems).toBe(
+      "&id, contentKey, kind, analysisRunId, updatedAt, [contentKey+updatedAt], [contentKey+kind]"
+    )
+
+    // Every v5 store is re-declared verbatim so the Dexie version chain keeps
+    // the existing tables (and their data) intact.
+    for (const [table, declaration] of Object.entries(v5.stores)) {
+      expect(v6.stores[table]).toBe(declaration)
+    }
+    expect(Object.keys(v6.stores).sort()).toEqual(
+      [...Object.keys(v5.stores), "knowledgeItems"].sort()
+    )
+  })
+
+  it("keeps every historical migration block immutable and append-only", () => {
+    const versions = MIGRATION_BLOCKS.map((block) => block.version)
+    expect(new Set(versions).size).toBe(versions.length)
+    expect([...versions].sort((left, right) => left - right)).toEqual(versions)
+
+    // v5 is a data-only cleanup on the v4 schema; v4 added the QA stores.
+    const v3 = MIGRATION_BLOCKS.find((block) => block.version === 3)!
+    const v4 = MIGRATION_BLOCKS.find((block) => block.version === 4)!
+    const v5 = MIGRATION_BLOCKS.find((block) => block.version === 5)!
+    expect(v5.stores).toEqual(v4.stores)
+    expect(Object.keys(v3.stores)).toContain("analysisCache")
+    expect(Object.keys(v3.stores)).toContain("qaAnswers")
+    expect(Object.keys(v3.stores)).not.toContain("qaThreads")
+    expect(Object.keys(v4.stores)).toContain("qaThreads")
+    expect(Object.keys(v5.stores)).not.toContain("knowledgeItems")
+    expect(Object.keys(MIGRATION_BLOCKS.find((block) => block.version === 1)!.stores)).toEqual([
+      "providerConfigs",
+      "transcriptSnapshots",
+      "analysisRuns",
+      "segmentSummaries",
+      "recentVideos"
+    ])
+  })
+
   it("appends a schema-compatible cleanup for stored transcript fetch URLs", async () => {
     const v4 = MIGRATION_BLOCKS.find((block) => block.version === 4)
     const v5 = MIGRATION_BLOCKS.find((block) => block.version === 5)

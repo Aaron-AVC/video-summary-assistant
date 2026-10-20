@@ -27,6 +27,7 @@ function createEffects() {
       setAnalysisIdle: () => calls.push("idle"),
       clearAskWorkspace: () => calls.push("ask"),
       clearTranscriptWorkspace: () => calls.push("transcript"),
+      clearKnowledgeWorkspace: () => calls.push("knowledge"),
       refreshRecentAnalyses: () => { calls.push("recent") },
       refreshProvider: () => { calls.push("provider") },
       refreshAnalysisPreset: () => { calls.push("preset") },
@@ -53,7 +54,7 @@ describe("Side Panel destructive mutation handling", () => {
       analysisContentKey: null,
       hasPersistedAnalysis: false,
     }), effects)
-    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "recent"])
+    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "knowledge", "recent"])
   })
 
   it("clearing conversations preserves analysis and transcript", async () => {
@@ -80,10 +81,47 @@ describe("Side Panel destructive mutation handling", () => {
     expect(calls).toEqual([])
   })
 
+  it("preserves the Knowledge collection when deleting a different video", async () => {
+    const { calls, effects } = createEffects()
+    await applySidepanelDataMutation(
+      { type: "delete-video-data", contentKey: "youtube:other" },
+      createWorkspace({ analysisContentKey: null, transcriptContentKey: null }),
+      effects
+    )
+    expect(calls).not.toContain("knowledge")
+    expect(calls).toEqual(["recent"])
+  })
+
+  it("clears the Knowledge collection only for the deleted video identity", async () => {
+    const { calls, effects } = createEffects()
+    await applySidepanelDataMutation(
+      { type: "delete-video-data", contentKey: "youtube:current" },
+      createWorkspace(),
+      effects
+    )
+    expect(calls).toContain("knowledge")
+  })
+
+  it("keeps Knowledge across narrower destructive mutations", async () => {
+    const mutations = [
+      { type: "delete-analysis-run", analysisRunId: "run-current" },
+      { type: "clear-conversations" },
+      { type: "clear-analysis-history" },
+      { type: "clear-transcript-cache" },
+      { type: "clear-diagnostics" },
+    ] as const
+
+    for (const mutation of mutations) {
+      const { calls, effects } = createEffects()
+      await applySidepanelDataMutation(mutation, createWorkspace(), effects)
+      expect(calls).not.toContain("knowledge")
+    }
+  })
+
   it("clears full workspace and refreshes providers after clear all", async () => {
     const { calls, effects } = createEffects()
     await applySidepanelDataMutation({ type: "clear-all" }, createWorkspace(), effects)
-    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "provider", "preset", "recent"])
+    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "knowledge", "provider", "preset", "recent"])
   })
   it("refreshes the global analysis preset only for clear all", async () => {
     const mutations = [
@@ -116,7 +154,7 @@ describe("Side Panel destructive mutation handling", () => {
       },
     })
 
-    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "provider", "preset", "recent"])
+    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "knowledge", "provider", "preset", "recent"])
     expect(published).toEqual([DEFAULT_ANALYSIS_PRESET_ID])
     expect(published[0]).toBe("standard")
   })

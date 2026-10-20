@@ -8,6 +8,7 @@ import { registerMigrations } from "@/lib/db/migrations"
 import type {
   AnalysisRunEntity,
   AnalysisCacheEntity,
+  KnowledgeItemEntity,
   QaAnswerEntity,
   QaMessageEntity,
   QaThreadEntity,
@@ -31,6 +32,7 @@ export class YoutubeSummarizerDatabase extends Dexie {
   qaAnswers!: Table<QaAnswerEntity, string>
   qaThreads!: Table<QaThreadEntity, string>
   qaMessages!: Table<QaMessageEntity, string>
+  knowledgeItems!: Table<KnowledgeItemEntity, string>
 
   constructor(name = DATABASE_NAME) {
     super(name)
@@ -48,6 +50,7 @@ export class YoutubeSummarizerDatabase extends Dexie {
     this.qaAnswers = this.table("qaAnswers")
     this.qaThreads = this.table("qaThreads")
     this.qaMessages = this.table("qaMessages")
+    this.knowledgeItems = this.table("knowledgeItems")
   }
 }
 

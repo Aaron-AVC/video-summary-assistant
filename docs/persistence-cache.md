@@ -12,9 +12,11 @@ can continue to open existing user data. Legacy storage keys such as
 identifiers. They must not be renamed as a branding cleanup because doing so
 could strand existing data.
 
-The shipped schema has append-only migration blocks through v4. v1, v2, and v3
+The shipped schema has append-only migration blocks through v6. v1, v2, and v3
 are left unchanged. v3 adds content-aware stores and v4 adds `qaThreads` and
-`qaMessages` without deleting the original compatibility rows or `qaAnswers`.
+`qaMessages` without deleting the original compatibility rows or `qaAnswers`. v5
+drops stored transcript fetch URLs. v6 reproduces the full v5 declaration and
+adds the empty `knowledgeItems` store.
 
 ## Canonical identity
 
@@ -50,6 +52,14 @@ chapter details. `recentVideos` and `transcriptSnapshots` remain for legacy
 history compatibility. `qaThreads` and `qaMessages` are the local-only Ask
 Video conversation store; `qaAnswers` remains an independent exact-request
 optimization cache.
+
+`knowledgeItems` stores user-authored bookmarks and notes keyed by `id` and
+indexed by `contentKey`. `contentKey` is the authoritative identity, so a
+Bilibili P1 bookmark and a P2 bookmark never collapse into one collection. A
+bookmark is a point anchor (`startSec === endSec`, no text); a note carries
+trimmed text and either no anchor at all or a complete range. `analysisRunId`
+exists for future analysis-bound annotations and is always `null` in the current
+UI. Knowledge does not require a Provider, an analysis, or a transcript.
 
 ## Analysis cache identity
 
@@ -100,9 +110,19 @@ provider metadata; those rows remain historical compatibility data and do not
 masquerade as current exact cache hits.
 
 The v3-to-v4 migration only creates empty conversation stores. Existing
-`qaAnswers`, analysis, transcript, and video rows remain untouched. A future
-schema change must append a new version and preserve the existing migration
-blocks.
+`qaAnswers`, analysis, transcript, and video rows remain untouched. v5 removes
+stored transcript fetch URLs. The v5-to-v6 migration only creates an empty
+`knowledgeItems` store and keeps every existing table and row. A future schema
+change must append a new version and preserve the existing migration blocks.
+
+## Knowledge destructive semantics
+
+Knowledge is user-authored content, so it is preserved by every destructive path
+except the two whole-video scopes. `deleteAnalysisRun`, `clearAnalysisHistory`,
+`clearQaData`, and `clearTranscriptCache` leave `knowledgeItems` untouched.
+`deleteVideoData(contentKey)` removes only the rows for that exact canonical
+`contentKey`, so deleting Bilibili P1 keeps P2. `clearAll` removes every
+knowledge row.
 
 ## Secrets and exports
 
@@ -112,7 +132,8 @@ IndexedDB cache rows, cache-key serialization, transcript/history entities,
 exports, URLs, runtime page messages, or diagnostic output.
 
 The local-data export includes the new content-aware stores as well as legacy
-tables, but only sanitized provider metadata. Clear-all removes provider
-metadata, the provider secret map and legacy provider settings, content-aware
-stores, legacy transcript/history tables, analysis runs, chapter summaries,
-and QA answers.
+tables, but only sanitized provider metadata. `knowledgeItems` is exported as an
+optional field so older export payloads without Knowledge still parse. Clear-all
+removes provider metadata, the provider secret map and legacy provider settings,
+content-aware stores, legacy transcript/history tables, analysis runs, chapter
+summaries, QA answers, and knowledge items.

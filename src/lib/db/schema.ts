@@ -3,6 +3,7 @@ import type { Table } from "dexie"
 import type {
   AnalysisRunEntity,
   AnalysisCacheEntity,
+  KnowledgeItemEntity,
   QaAnswerEntity,
   QaMessageEntity,
   QaThreadEntity,
@@ -63,4 +64,5 @@ export type DatabaseSchema = {
   qaAnswers: Table<QaAnswerEntity, string>
   qaThreads: Table<QaThreadEntity, string>
   qaMessages: Table<QaMessageEntity, string>
+  knowledgeItems: Table<KnowledgeItemEntity, string>
 }

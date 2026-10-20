@@ -10,6 +10,7 @@ import {
   analysisRunSchema,
   segmentSummarySchema,
   analysisCacheSchema,
+  knowledgeItemSchema,
   qaAnswerSchema,
   qaMessageSchema,
   qaThreadSchema,
@@ -138,6 +139,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
     qaAnswers?: typeof database.qaAnswers
     qaThreads?: typeof database.qaThreads
     qaMessages?: typeof database.qaMessages
+    knowledgeItems?: typeof database.knowledgeItems
   }
 
   type AnyRow = Record<string, any>
@@ -627,7 +629,8 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
           "analysisCache",
           "qaAnswers",
           "qaThreads",
-          "qaMessages"
+          "qaMessages",
+          "knowledgeItems"
         ],
         async () => {
           const runs = await rowsBy(database.analysisRuns, (run) => (
@@ -669,6 +672,13 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
             )
           ))
           await deleteRows(database.recentVideos, recentRows, (recent) => recent.videoId)
+
+          // Knowledge is user-authored: only an explicit whole-video delete
+          // removes it. Every narrower destructive path preserves it.
+          const knowledgeItems = await rowsBy(stores.knowledgeItems, (item) => (
+            item.contentKey === contentKey
+          ))
+          await deleteRows(stores.knowledgeItems, knowledgeItems, (item) => item.id)
         }
       )
     },
@@ -832,6 +842,9 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       const qaMessages = (await optionalRows("qaMessages")).flatMap((row) => {
         try { return [qaMessageSchema.parse(row)] } catch { return [] }
       })
+      const knowledgeItems = (await optionalRows("knowledgeItems")).flatMap((row) => {
+        try { return [knowledgeItemSchema.parse(row)] } catch { return [] }
+      })
       return {
         providerConfigs: providerConfigs.map(sanitizeProviderConfigForExport),
         transcriptSnapshots: transcriptSnapshots.map(withoutTranscriptSourceUrl),
@@ -843,7 +856,8 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         analysisCache,
         qaAnswers,
         qaThreads,
-        qaMessages
+        qaMessages,
+        knowledgeItems
       }
     },
     async clearAll() {
@@ -856,6 +870,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
           "segmentSummaries",
           "recentVideos"
           ,"videoRecords", "transcriptCache", "analysisCache", "qaAnswers", "qaThreads", "qaMessages"
+          ,"knowledgeItems"
         ],
         async () => {
           await Promise.all([
@@ -870,6 +885,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
             ,(database as typeof database & { qaAnswers?: typeof database.analysisRuns }).qaAnswers?.clear()
             ,(database as typeof database & { qaThreads?: typeof database.analysisRuns }).qaThreads?.clear()
             ,(database as typeof database & { qaMessages?: typeof database.analysisRuns }).qaMessages?.clear()
+            ,(database as typeof database & { knowledgeItems?: typeof database.recentVideos }).knowledgeItems?.clear()
           ])
         }
       )

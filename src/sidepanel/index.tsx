@@ -20,6 +20,10 @@ import {
 } from "@/features/analysis/lib/analysis-preset"
 import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
 import {
+  knowledgeRepository,
+  normalizeKnowledgeTimestamp,
+} from "@/features/knowledge/lib/knowledge-repository"
+import {
   getAnalysisTaskExecutionPolicy,
 } from "@/features/analysis/lib/analysis-task-lifecycle"
 import {
@@ -104,6 +108,7 @@ import {
 } from "@/sidepanel/history/history-controller"
 import { createPendingHistoryOpenAdapter } from "@/sidepanel/history/pending-history-open-adapter"
 import { createAskController } from "@/sidepanel/ask/ask-controller"
+import { createKnowledgeController } from "@/sidepanel/knowledge/knowledge-controller"
 import {
   WorkspaceController,
   type WorkspaceHistoryRestoreMode,
@@ -227,9 +232,23 @@ function SidepanelWorkspace() {
     )
   }
   const analysisPresetWriter = analysisPresetWriterRef.current
+  const knowledgeControllerRef = useRef<ReturnType<typeof createKnowledgeController> | null>(null)
+  if (!knowledgeControllerRef.current) {
+    knowledgeControllerRef.current = createKnowledgeController({
+      repository: {
+        listByContentKey: (contentKey) => knowledgeRepository.listByContentKey(contentKey),
+        createBookmark: (input) => knowledgeRepository.createBookmark(input),
+        createNote: (input) => knowledgeRepository.createNote(input),
+        updateNote: (input) => knowledgeRepository.updateNote(input),
+        deleteItem: (id) => knowledgeRepository.deleteItem(id),
+      },
+    })
+  }
+  const knowledgeController = knowledgeControllerRef.current
   const [transcriptSnapshot, setTranscriptSnapshot] = useState(
     transcriptController.getSnapshot(),
   )
+  const [knowledgeSnapshot, setKnowledgeSnapshot] = useState(knowledgeController.getSnapshot())
   const {
     cues: transcriptCues,
     identity: transcriptIdentity,
@@ -365,6 +384,10 @@ function SidepanelWorkspace() {
     setTranscriptSnapshot(transcriptController.getSnapshot())
   }), [transcriptController])
 
+  useEffect(() => knowledgeController.subscribe(() => {
+    setKnowledgeSnapshot(knowledgeController.getSnapshot())
+  }), [knowledgeController])
+
   const title = videoContext.title ?? "Open a supported video page to start"
   const canonicalUrl = videoContext.canonicalUrl ?? videoContext.url ?? "No supported video page detected"
   const workspaceTask = activeAnalysisTask?.snapshot.contentKey === videoContext.contentKey
@@ -453,6 +476,9 @@ function SidepanelWorkspace() {
       clearTranscriptWorkspace: () => {
         resetTranscript()
       },
+      clearKnowledgeWorkspace: () => {
+        knowledgeController.reset()
+      },
       refreshRecentAnalyses,
       refreshProvider: async () => {
         const providerConfigs = await settingsStorage.getProviderConfigs()
@@ -464,7 +490,7 @@ function SidepanelWorkspace() {
         setAnalysisPresetId(await settingsStorage.getAnalysisPresetId())
       },
     })
-  }, [askController, clearQaWorkspace, refreshRecentAnalyses, resetTranscript, transcriptController, workspaceController])
+  }, [askController, clearQaWorkspace, knowledgeController, refreshRecentAnalyses, resetTranscript, transcriptController, workspaceController])
 
   useEffect(() => {
     const getTasks = () => {
@@ -650,6 +676,30 @@ function SidepanelWorkspace() {
     videoContext.url,
     videoContext.videoId,
     workspaceController,
+  ])
+
+  /**
+   * Knowledge follows the authoritative runtime contentKey only. Unsupported or
+   * missing content resets the controller so the previous video's collection can
+   * never leak into the next one.
+   */
+  useEffect(() => {
+    const context = videoContextRef.current
+    const identity = context.isReady && context.contentKey
+      ? identityFromContext(context)
+      : null
+    if (!identity) {
+      knowledgeController.reset()
+      return
+    }
+    void knowledgeController.loadForContent({ identity })
+  }, [
+    knowledgeController,
+    videoContext.contentKey,
+    videoContext.isReady,
+    videoContext.partId,
+    videoContext.platform,
+    videoContext.videoId,
   ])
 
   useEffect(() => {
@@ -1328,6 +1378,81 @@ function SidepanelWorkspace() {
     jumpWithIdentity(transcriptIdentity, timestampSeconds)
   ), [jumpWithIdentity, transcriptIdentity])
 
+  /**
+   * Knowledge commands always receive the complete canonical identity captured
+   * from the authoritative runtime content; a bare `videoId` is never enough.
+   */
+  const knowledgeIdentity = videoContext.isReady && videoContext.contentKey
+    ? identityFromContext(videoContext)
+    : null
+  const knowledgeVideoTitle = videoContext.title ?? knowledgeIdentity?.videoId ?? null
+
+  const handleToggleKnowledgeBookmark = useCallback(async () => {
+    if (!knowledgeIdentity || !knowledgeVideoTitle) return
+    const timestampSeconds = videoContextRef.current.timestampSeconds
+    if (!Number.isFinite(timestampSeconds)) {
+      toast.error(t("knowledge.bookmarkUnavailable"))
+      return
+    }
+    const normalized = normalizeKnowledgeTimestamp(timestampSeconds)
+    try {
+      const result = await knowledgeController.toggleBookmark({
+        identity: knowledgeIdentity,
+        videoTitle: knowledgeVideoTitle,
+        timestampSeconds: normalized,
+      })
+      if (result.kind === "created") {
+        toast.success(t("knowledge.bookmarkSaved", { timestamp: formatTimestamp(normalized) }))
+      } else {
+        toast.success(t("knowledge.bookmarkRemoved", { timestamp: formatTimestamp(normalized) }))
+      }
+    } catch {
+      toast.error(t("knowledge.bookmarkFailed"))
+    }
+  }, [formatTimestamp, knowledgeController, knowledgeIdentity, knowledgeVideoTitle, t])
+
+  const handleCreateKnowledgeNote = useCallback(async (input: {
+    text: string
+    attachTimestamp: boolean
+  }) => {
+    if (!knowledgeIdentity || !knowledgeVideoTitle) return
+    const anchor = input.attachTimestamp
+      ? normalizeKnowledgeTimestamp(videoContextRef.current.timestampSeconds)
+      : null
+    try {
+      await knowledgeController.createNote({
+        identity: knowledgeIdentity,
+        videoTitle: knowledgeVideoTitle,
+        text: input.text,
+        timestampSeconds: anchor,
+      })
+      toast.success(t("knowledge.noteSaved"))
+    } catch {
+      toast.error(t("knowledge.noteFailed"))
+    }
+  }, [knowledgeController, knowledgeIdentity, knowledgeVideoTitle, t])
+
+  const handleUpdateKnowledgeNote = useCallback(async (id: string, text: string) => {
+    try {
+      await knowledgeController.updateNote({ id, text })
+      toast.success(t("knowledge.noteSaved"))
+    } catch {
+      toast.error(t("knowledge.updateFailed"))
+    }
+  }, [knowledgeController, t])
+
+  const handleDeleteKnowledgeItem = useCallback(async (id: string) => {
+    try {
+      await knowledgeController.deleteItem(id)
+    } catch {
+      toast.error(t("knowledge.deleteFailed"))
+    }
+  }, [knowledgeController, t])
+
+  const handleKnowledgeJump = useCallback((timestampSeconds: number) => (
+    jumpWithIdentity(knowledgeIdentity, timestampSeconds)
+  ), [jumpWithIdentity, knowledgeIdentity])
+
   const handleDownload = useCallback(async () => {
     if (!rawVtt || !transcriptIdentity) {
       toast.error(t("toast.originalUnavailable"))
@@ -1456,6 +1581,19 @@ function SidepanelWorkspace() {
               void chrome.tabs.create({ url })
             }}
             formatTimestamp={formatTimestamp}
+            knowledgeItems={knowledgeSnapshot.items}
+            isKnowledgeLoading={knowledgeSnapshot.isLoading}
+            knowledgeError={knowledgeSnapshot.error}
+            currentTimestamp={Number.isFinite(videoContext.timestampSeconds)
+              ? normalizeKnowledgeTimestamp(videoContext.timestampSeconds)
+              : null}
+            knowledgeHandlers={{
+              onToggleBookmark: handleToggleKnowledgeBookmark,
+              onCreateNote: handleCreateKnowledgeNote,
+              onUpdateNote: handleUpdateKnowledgeNote,
+              onDeleteItem: handleDeleteKnowledgeItem,
+              onJump: handleKnowledgeJump,
+            }}
           />
         )}
         transcript={(

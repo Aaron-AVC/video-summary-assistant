@@ -109,6 +109,7 @@ function buildFakeDatabase() {
   const qaThreads = new FakeTable<any>()
   const qaMessages = new FakeTable<any>()
   const qaAnswers = new FakeTable<any>()
+  const knowledgeItems = new FakeTable<any>()
 
   return {
     providerConfigs,
@@ -122,6 +123,7 @@ function buildFakeDatabase() {
     qaThreads,
     qaMessages,
     qaAnswers,
+    knowledgeItems,
     transaction: async (
       _mode: string,
       _tables: unknown[],
@@ -918,5 +920,149 @@ describe("historyRepository granular deletion", () => {
     await repo.clearTranscriptCache()
     expect(fake.transcriptCache.rows).toHaveLength(0)
     expect(fake.analysisRuns.rows).toHaveLength(1)
+  })
+})
+
+describe("knowledge destructive semantics", () => {
+  function seedRun(
+    id: string,
+    contentKey: string,
+    videoId: string,
+    cacheKey: string
+  ): AnalysisRunEntity {
+    return {
+      ...buildAnalysisRun(),
+      id,
+      videoId,
+      contentKey,
+      cacheKey
+    } as AnalysisRunEntity
+  }
+
+  function seedKnowledge(fake: ReturnType<typeof buildFakeDatabase>) {
+    fake.knowledgeItems.rows.push({
+      id: "knowledge-a",
+      kind: "bookmark",
+      contentKey: "youtube:video-a",
+      platform: "youtube",
+      videoId: "video-a",
+      partId: null,
+      videoTitle: "A",
+      analysisRunId: null,
+      startSec: 5,
+      endSec: 5,
+      text: null,
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    fake.knowledgeItems.rows.push({
+      id: "knowledge-b",
+      kind: "note",
+      contentKey: "youtube:video-b",
+      platform: "youtube",
+      videoId: "video-b",
+      partId: null,
+      videoTitle: "B",
+      analysisRunId: null,
+      startSec: null,
+      endSec: null,
+      text: "keep me",
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+  }
+
+  it("preserves knowledge when deleting an analysis run", async () => {
+    const fake = buildFakeDatabase()
+    const run = seedRun("run-a", "youtube:video-a", "video-a", "cache-a")
+    fake.analysisRuns.rows.push(run)
+    seedKnowledge(fake)
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    await repo.deleteAnalysisRun(run.id)
+
+    expect(fake.analysisRuns.rows).toHaveLength(0)
+    expect(fake.knowledgeItems.rows).toHaveLength(2)
+  })
+
+  it("preserves knowledge when clearing analysis history, conversations and transcript cache", async () => {
+    const fake = buildFakeDatabase()
+    fake.analysisRuns.rows.push(seedRun("run-a", "youtube:video-a", "video-a", "cache-a"))
+    fake.qaThreads.rows.push({ id: "thread-a", contentKey: "youtube:video-a" })
+    fake.transcriptCache.rows.push({ id: "transcript-a", contentKey: "youtube:video-a" })
+    seedKnowledge(fake)
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    await repo.clearAnalysisHistory()
+    await repo.clearQaData()
+    await repo.clearTranscriptCache()
+
+    expect(fake.knowledgeItems.rows).toHaveLength(2)
+  })
+
+  it("deletes only the matching contentKey on deleteVideoData", async () => {
+    const fake = buildFakeDatabase()
+    seedKnowledge(fake)
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    await repo.deleteVideoData("youtube:video-a")
+
+    expect(fake.knowledgeItems.rows.map((row) => row.id)).toEqual(["knowledge-b"])
+  })
+
+  it("keeps Bilibili p2 knowledge when deleting p1", async () => {
+    const fake = buildFakeDatabase()
+    fake.knowledgeItems.rows.push({
+      id: "knowledge-p1",
+      kind: "bookmark",
+      contentKey: "bilibili:BV1xx:p:1",
+      platform: "bilibili",
+      videoId: "BV1xx",
+      partId: "1",
+      videoTitle: "P1",
+      analysisRunId: null,
+      startSec: 1,
+      endSec: 1,
+      text: null,
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+    fake.knowledgeItems.rows.push({
+      id: "knowledge-p2",
+      kind: "bookmark",
+      contentKey: "bilibili:BV1xx:p:2",
+      platform: "bilibili",
+      videoId: "BV1xx",
+      partId: "2",
+      videoTitle: "P2",
+      analysisRunId: null,
+      startSec: 1,
+      endSec: 1,
+      text: null,
+      createdAt: NOW,
+      updatedAt: NOW
+    })
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    await repo.deleteVideoData("bilibili:BV1xx:p:1")
+
+    expect(fake.knowledgeItems.rows.map((row) => row.id)).toEqual(["knowledge-p2"])
+  })
+
+  it("clears every knowledge item on clear all and exports them beforehand", async () => {
+    const fake = buildFakeDatabase()
+    seedKnowledge(fake)
+
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    const exported = await repo.exportLocalData()
+    expect(exported.knowledgeItems).toHaveLength(2)
+    expect(exported.knowledgeItems?.[1]).toMatchObject({
+      id: "knowledge-b",
+      contentKey: "youtube:video-b",
+      text: "keep me"
+    })
+
+    await repo.clearAll()
+    expect(fake.knowledgeItems.rows).toHaveLength(0)
   })
 })

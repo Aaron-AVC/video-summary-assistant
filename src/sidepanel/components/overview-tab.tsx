@@ -9,6 +9,11 @@ import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
 import { DEFAULT_ANALYSIS_PRESET_ID } from "@/features/analysis/lib/analysis-preset"
 import { EmptyState } from "@/features/common/components/empty-state"
 import {
+  KnowledgePanel,
+  type KnowledgePanelHandlers,
+} from "@/features/knowledge/components/knowledge-panel"
+import type { KnowledgeItemEntity } from "@/lib/schemas/persistence"
+import {
   RecentAnalysisList,
   type RecentAnalysisListItem,
 } from "@/features/history/components/recent-analysis-list"
@@ -41,6 +46,11 @@ type OverviewTabProps = {
   onDeleteVideo?: (item: RecentAnalysisListItem) => void | Promise<void>
   onOpenFullHistory: () => void
   formatTimestamp: (timestampSeconds: number) => string
+  knowledgeItems?: KnowledgeItemEntity[]
+  isKnowledgeLoading?: boolean
+  knowledgeError?: string | null
+  currentTimestamp?: number | null
+  knowledgeHandlers?: KnowledgePanelHandlers
 }
 
 export function OverviewTab({
@@ -69,6 +79,11 @@ export function OverviewTab({
   onDeleteVideo,
   onOpenFullHistory,
   formatTimestamp,
+  knowledgeItems,
+  isKnowledgeLoading = false,
+  knowledgeError = null,
+  currentTimestamp = null,
+  knowledgeHandlers,
 }: OverviewTabProps) {
   const { t } = useI18n()
   const chapters = analysis?.chapters.map((chapter, index) => ({
@@ -111,6 +126,16 @@ export function OverviewTab({
         onJump={onJump}
         formatTimestamp={formatTimestamp}
       />
+      {knowledgeHandlers ? (
+        <KnowledgePanel
+          items={knowledgeItems ?? []}
+          isLoading={isKnowledgeLoading}
+          error={knowledgeError}
+          currentTimestamp={currentTimestamp ?? null}
+          formatTimestamp={formatTimestamp}
+          handlers={knowledgeHandlers}
+        />
+      ) : null}
       {!isLoading && !analysis ? (
         <EmptyState
           className="border border-dashed border-border/70 bg-card/70"

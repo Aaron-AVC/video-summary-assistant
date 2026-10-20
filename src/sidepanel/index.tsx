@@ -61,7 +61,6 @@ import type {
 } from "@/features/platform/types"
 import {
   settingsStorage,
-  type ResolvedProvider,
   type ProviderConfigRecord,
 } from "@/features/settings/lib/settings-storage"
 import { downloadRawVtt } from "@/features/transcript/lib/download-vtt"
@@ -99,10 +98,6 @@ import {
   TranscriptController,
   type TranscriptPublication,
 } from "@/sidepanel/transcript/transcript-controller"
-import {
-  getFrozenQaProviderRequest,
-  matchesQaThreadIdentity,
-} from "@/sidepanel/lib/ask-conversation-identity"
 import {
   compareAskTranscriptIdentity,
   matchesAskRequestWorkspaceIdentity,
@@ -201,6 +196,8 @@ function SidepanelWorkspace() {
       getQaThread: (threadId) => qaConversationRepository.getQaThread(threadId),
       listQaMessages: (threadId) => qaConversationRepository.listQaMessages(threadId),
       deleteQaThread: (threadId) => qaConversationRepository.deleteQaThread(threadId),
+      createQaThread: (input) => qaConversationRepository.createQaThread(input),
+      resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId),
     })
   }
   const askController = askControllerRef.current
@@ -1178,49 +1175,31 @@ function SidepanelWorkspace() {
         analysisRunId: requestedAnalysisRunId,
         phase: "preparing",
       }, () => {})
-      let thread = requestThreadId
-        ? await qaConversationRepository.getQaThread(requestThreadId)
-        : null
-      const canReuseThread = matchesQaThreadIdentity(thread, {
+      const preparedThread = await askController.prepareExecutionThread({
+        requestedThreadId: requestThreadId,
         contentKey: requestedContentKey,
         analysisRunId: requestedAnalysisRunId,
         transcriptFingerprint: requestedTranscriptFingerprint,
+        platform: analysisView.platform,
+        videoId: analysisView.videoId,
+        partId: analysisView.partId,
+        question: submittedQuestion,
+        selectedProviderId: provider.id,
+        isCurrent: isCurrentAsk,
       })
-
-      if (!isCurrentAsk()) return
-
-      let resolvedProviderForAsk: ResolvedProvider
-      if (canReuseThread && thread) {
-        try {
-          resolvedProviderForAsk = await settingsStorage.resolveProvider(thread.providerProfileId)
-        } catch {
-          throw new Error("The provider used by this conversation is no longer available. Start a new chat to use the current provider.")
-        }
-      } else {
-        resolvedProviderForAsk = await settingsStorage.resolveProvider(provider.id)
-        thread = await qaConversationRepository.createQaThread({
-          contentKey: requestedContentKey,
-          platform: analysisView.platform,
-          videoId: analysisView.videoId,
-          partId: analysisView.partId,
-          title: submittedQuestion.slice(0, 60),
-          analysisRunId: requestedAnalysisRunId,
-          transcriptFingerprint: requestedTranscriptFingerprint,
-          providerProfileId: provider.id,
-          providerBaseUrl: resolvedProviderForAsk.profile.baseUrl,
-          providerModel: resolvedProviderForAsk.profile.model,
-        })
+      if (preparedThread.kind === "stale") return
+      const { thread, providerRequest: frozenProviderRequest } = preparedThread
+      if (preparedThread.created) {
         requestThreadId = thread.id
         activeQaThreadIdRef.current = thread.id
         setQaThreadId(thread.id)
-        setQaThreads((current) => [thread!, ...current.filter((item) => item.id !== thread!.id)])
+        setQaThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)])
       }
-      if (!thread || !isCurrentAsk()) return
+      if (!isCurrentAsk()) return
 
       const threadProviderProfileId = thread.providerProfileId
       const threadProviderBaseUrl = thread.providerBaseUrl
       const threadProviderModel = thread.providerModel
-      const frozenProviderRequest = getFrozenQaProviderRequest(thread, resolvedProviderForAsk)
       const threadTranscriptFingerprint = thread.transcriptFingerprint
       const previousMessages = await qaConversationRepository.listQaMessages(thread.id)
       const conversationHistory = boundQaConversationContext(previousMessages.map((message) => ({

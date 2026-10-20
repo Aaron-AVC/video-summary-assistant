@@ -1,11 +1,30 @@
 import type { AskVideoAnswer } from "@/features/analysis/lib/analysis-schema"
+import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
+import {
+  getFrozenQaProviderRequest,
+  matchesQaThreadIdentity,
+} from "@/sidepanel/lib/ask-conversation-identity"
 import { filterQaThreadsByTranscript } from "@/sidepanel/lib/ask-transcript-identity"
 
+/** New-thread payload the Ask thread boundary persists. */
+export type CreateAskThreadInput = {
+  contentKey: string
+  platform: QaThreadEntity["platform"]
+  videoId: string
+  partId: string | null
+  title: string
+  analysisRunId: string
+  transcriptFingerprint: string
+  providerProfileId: string
+  providerBaseUrl: string
+  providerModel: string
+}
+
 /**
- * Narrow repository surface the Ask conversation read/open/delete boundary needs.
- * The controller never imports the qaConversationRepository singleton, React,
- * chrome, toast, or any task controller; the root wires these in.
+ * Narrow repository/settings surface the Ask conversation boundary needs.
+ * The controller never imports the qaConversationRepository or settingsStorage
+ * singleton, React, chrome, toast, or any task controller; the root wires these in.
  */
 export type AskControllerDependencies = {
   listQaThreadsForVideo: (
@@ -15,6 +34,8 @@ export type AskControllerDependencies = {
   getQaThread: (threadId: string) => Promise<QaThreadEntity | null>
   listQaMessages: (threadId: string) => Promise<QaMessageEntity[]>
   deleteQaThread: (threadId: string) => Promise<void>
+  createQaThread: (input: CreateAskThreadInput) => Promise<QaThreadEntity>
+  resolveProvider: (providerId: string) => Promise<ResolvedProvider>
 }
 
 /** Read model restored for a workspace (history restore / analysis completion). */
@@ -69,12 +90,52 @@ export type AskOpenThreadResult =
 
 export type AskDeleteThreadResult = { kind: "deleted" }
 
+export type AskExecutionThreadRequest = {
+  requestedThreadId: string | null
+  contentKey: string
+  analysisRunId: string
+  transcriptFingerprint: string
+  platform: QaThreadEntity["platform"]
+  videoId: string
+  partId: string | null
+  question: string
+  selectedProviderId: string
+  isCurrent: () => boolean
+}
+
+/**
+ * Temporary execution capability for one Ask request. It is never stored in
+ * React state, a controller snapshot, a task snapshot, or persistence.
+ */
+export type AskProviderRequest = {
+  baseUrl: string
+  apiKey: string
+  model: string
+  generationTimeoutSec: number
+}
+
+export type AskExecutionThreadResult =
+  | { kind: "stale" }
+  | {
+      kind: "ready"
+      thread: QaThreadEntity
+      created: boolean
+      providerRequest: AskProviderRequest
+    }
+
+/** Exact user-facing error the reused-thread provider path must surface. */
+export const ASK_THREAD_PROVIDER_UNAVAILABLE_MESSAGE =
+  "The provider used by this conversation is no longer available. Start a new chat to use the current provider."
+
 export type AskController = {
   restoreConversation: (
     request: AskRestoreConversationRequest,
   ) => Promise<AskRestoreConversationResult>
   openThread: (request: AskOpenThreadRequest) => Promise<AskOpenThreadResult>
   deleteThread: (request: AskDeleteThreadRequest) => Promise<AskDeleteThreadResult>
+  prepareExecutionThread: (
+    request: AskExecutionThreadRequest,
+  ) => Promise<AskExecutionThreadResult>
 }
 
 /**
@@ -97,7 +158,14 @@ export function projectAskAnswer(messages: QaMessageEntity[]): AskVideoAnswer | 
 }
 
 export function createAskController(dependencies: AskControllerDependencies): AskController {
-  const { listQaThreadsForVideo, getQaThread, listQaMessages, deleteQaThread } = dependencies
+  const {
+    listQaThreadsForVideo,
+    getQaThread,
+    listQaMessages,
+    deleteQaThread,
+    createQaThread,
+    resolveProvider,
+  } = dependencies
 
   function createEmptySnapshot(): AskConversationSnapshot {
     return { threads: [], currentThreadId: null, messages: [], answer: null }
@@ -160,5 +228,64 @@ export function createAskController(dependencies: AskControllerDependencies): As
     return { kind: "deleted" }
   }
 
-  return { restoreConversation, openThread, deleteThread }
+  async function prepareExecutionThread(
+    request: AskExecutionThreadRequest,
+  ): Promise<AskExecutionThreadResult> {
+    const {
+      requestedThreadId,
+      contentKey,
+      analysisRunId,
+      transcriptFingerprint,
+      platform,
+      videoId,
+      partId,
+      question,
+      selectedProviderId,
+      isCurrent,
+    } = request
+    let thread = requestedThreadId ? await getQaThread(requestedThreadId) : null
+    const canReuseThread = matchesQaThreadIdentity(thread, {
+      contentKey,
+      analysisRunId,
+      transcriptFingerprint,
+    })
+
+    // First currentness guard: after the thread read and the reuse decision,
+    // before any provider resolution or new-thread creation.
+    if (!isCurrent()) return { kind: "stale" }
+
+    let resolvedProvider: ResolvedProvider
+    let created = false
+    if (canReuseThread && thread) {
+      try {
+        resolvedProvider = await resolveProvider(thread.providerProfileId)
+      } catch {
+        throw new Error(ASK_THREAD_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+    } else {
+      resolvedProvider = await resolveProvider(selectedProviderId)
+      thread = await createQaThread({
+        contentKey,
+        platform,
+        videoId,
+        partId,
+        title: question.slice(0, 60),
+        analysisRunId,
+        transcriptFingerprint,
+        providerProfileId: selectedProviderId,
+        providerBaseUrl: resolvedProvider.profile.baseUrl,
+        providerModel: resolvedProvider.profile.model,
+      })
+      created = true
+    }
+    if (!thread) return { kind: "stale" }
+    return {
+      kind: "ready",
+      thread,
+      created,
+      providerRequest: getFrozenQaProviderRequest(thread, resolvedProvider),
+    }
+  }
+
+  return { restoreConversation, openThread, deleteThread, prepareExecutionThread }
 }

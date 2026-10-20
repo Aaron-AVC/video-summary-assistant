@@ -1,10 +1,14 @@
 import { describe, expect, it } from "bun:test"
 
+import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import {
+  ASK_THREAD_PROVIDER_UNAVAILABLE_MESSAGE,
   createAskController,
   projectAskAnswer,
   type AskControllerDependencies,
+  type AskExecutionThreadRequest,
+  type CreateAskThreadInput,
 } from "@/sidepanel/ask/ask-controller"
 
 const CONTENT_KEY = "youtube:video-a"
@@ -47,6 +51,8 @@ type FakeCalls = {
   getQaThread: string[]
   listQaMessages: string[]
   deleteQaThread: string[]
+  createQaThread: CreateAskThreadInput[]
+  resolveProvider: string[]
 }
 
 function createFakeDependencies(overrides: Partial<AskControllerDependencies> = {}) {
@@ -55,6 +61,8 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
     getQaThread: [],
     listQaMessages: [],
     deleteQaThread: [],
+    createQaThread: [],
+    resolveProvider: [],
   }
 
   const dependencies: AskControllerDependencies = {
@@ -74,6 +82,14 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
       calls.deleteQaThread.push(threadId)
       await overrides.deleteQaThread?.(threadId)
     },
+    createQaThread: async (input) => {
+      calls.createQaThread.push(input)
+      return await (overrides.createQaThread?.(input) ?? createThread({ id: "created-thread", ...input }))
+    },
+    resolveProvider: async (providerId) => {
+      calls.resolveProvider.push(providerId)
+      return await (overrides.resolveProvider?.(providerId) ?? createResolvedProvider())
+    },
   }
 
   return { dependencies, calls }
@@ -85,6 +101,45 @@ function alwaysCurrent() {
 
 function alwaysStale() {
   return () => false
+}
+
+const QUESTION = "What happens at the start of this video?"
+
+function createResolvedProvider(overrides: Partial<ResolvedProvider> = {}): ResolvedProvider {
+  return {
+    profile: {
+      id: "provider-a",
+      name: "Provider A",
+      baseUrl: "https://resolved-a.example/v1",
+      model: "resolved-model-a",
+      generationTimeoutSec: 900,
+      createdAt: "2026-10-14T00:00:00.000Z",
+      updatedAt: "2026-10-14T00:00:00.000Z",
+      isDefault: true,
+      hasApiKey: true,
+      ...overrides.profile,
+    },
+    apiKey: "secret-a",
+    ...overrides,
+  }
+}
+
+function createExecutionRequest(
+  overrides: Partial<AskExecutionThreadRequest> = {},
+): AskExecutionThreadRequest {
+  return {
+    requestedThreadId: "thread-a",
+    contentKey: CONTENT_KEY,
+    analysisRunId: ANALYSIS_RUN_ID,
+    transcriptFingerprint: FINGERPRINT,
+    platform: "youtube",
+    videoId: "video-a",
+    partId: null,
+    question: QUESTION,
+    selectedProviderId: "provider-selected",
+    isCurrent: alwaysCurrent(),
+    ...overrides,
+  }
 }
 
 describe("AskController restoreConversation", () => {
@@ -507,5 +562,294 @@ describe("AskController dependency errors", () => {
       transcriptFingerprint: FINGERPRINT,
       isCurrent: alwaysCurrent(),
     })).rejects.toBe(failure)
+  })
+})
+
+describe("AskController prepareExecutionThread existing thread", () => {
+  it("does not read a thread when requestedThreadId is null", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionThread(
+      createExecutionRequest({ requestedThreadId: null }),
+    )
+
+    expect(calls.getQaThread).toEqual([])
+  })
+
+  it("reuses an exact identity match without creating a thread", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => createThread(),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(createExecutionRequest())
+
+    expect(result.kind).toBe("ready")
+    if (result.kind !== "ready") throw new Error("unreachable")
+    expect(result.created).toBe(false)
+    expect(result.thread.id).toBe("thread-a")
+    expect(calls.getQaThread).toEqual(["thread-a"])
+    expect(calls.createQaThread).toEqual([])
+  })
+
+  it("resolves the provider of the reused thread, not the selected provider", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => createThread({ providerProfileId: "provider-thread" }),
+    })
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionThread(createExecutionRequest())
+
+    expect(calls.resolveProvider).toEqual(["provider-thread"])
+  })
+
+  it("maps a reused-thread provider resolution failure to the exact conversation error", async () => {
+    const { dependencies } = createFakeDependencies({
+      getQaThread: async () => createThread(),
+      resolveProvider: async () => {
+        throw new Error("provider record missing")
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    const failure = await controller
+      .prepareExecutionThread(createExecutionRequest())
+      .then(() => null)
+      .catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as Error).message).toBe(ASK_THREAD_PROVIDER_UNAVAILABLE_MESSAGE)
+    expect((failure as Error).message).toBe(
+      "The provider used by this conversation is no longer available. Start a new chat to use the current provider.",
+    )
+  })
+
+  it("freezes the provider request from persisted thread fields and resolved secrets", async () => {
+    const { dependencies } = createFakeDependencies({
+      getQaThread: async () => createThread({
+        providerBaseUrl: "https://thread-persisted.example/v1",
+        providerModel: "thread-persisted-model",
+      }),
+      resolveProvider: async () => createResolvedProvider(),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(createExecutionRequest())
+
+    if (result.kind !== "ready") throw new Error("unreachable")
+    expect(result.providerRequest).toEqual({
+      baseUrl: "https://thread-persisted.example/v1",
+      apiKey: "secret-a",
+      model: "thread-persisted-model",
+      generationTimeoutSec: 900,
+    })
+  })
+})
+
+describe("AskController prepareExecutionThread new thread", () => {
+  it("creates a new thread when the requested thread is missing", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => null,
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(createExecutionRequest())
+
+    if (result.kind !== "ready") throw new Error("unreachable")
+    expect(result.created).toBe(true)
+    expect(calls.createQaThread).toHaveLength(1)
+  })
+
+  it("creates a new thread when the content key mismatches", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => createThread({ contentKey: "youtube:video-other" }),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(createExecutionRequest())
+
+    if (result.kind !== "ready") throw new Error("unreachable")
+    expect(result.created).toBe(true)
+    expect(calls.createQaThread).toHaveLength(1)
+  })
+
+  it("creates a new thread when the analysis run mismatches", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => createThread({ analysisRunId: "run-other" }),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(createExecutionRequest())
+
+    if (result.kind !== "ready") throw new Error("unreachable")
+    expect(result.created).toBe(true)
+    expect(calls.createQaThread).toHaveLength(1)
+  })
+
+  it("creates a new thread when the transcript fingerprint mismatches", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => createThread({ transcriptFingerprint: "fp-other" }),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(createExecutionRequest())
+
+    if (result.kind !== "ready") throw new Error("unreachable")
+    expect(result.created).toBe(true)
+    expect(calls.createQaThread).toHaveLength(1)
+  })
+
+  it("resolves the selected provider on the new-thread path", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => null,
+    })
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionThread(createExecutionRequest())
+
+    expect(calls.resolveProvider).toEqual(["provider-selected"])
+  })
+
+  it("propagates the new-thread provider failure unchanged", async () => {
+    const failure = new Error("no default provider configured")
+    const { dependencies } = createFakeDependencies({
+      getQaThread: async () => null,
+      resolveProvider: async () => {
+        throw failure
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    await expect(
+      controller.prepareExecutionThread(createExecutionRequest()),
+    ).rejects.toBe(failure)
+  })
+
+  it("builds the exact new-thread payload", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => null,
+      resolveProvider: async () => createResolvedProvider(),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(
+      createExecutionRequest({ partId: "part-2", question: QUESTION }),
+    )
+
+    expect(calls.createQaThread).toEqual([{
+      contentKey: CONTENT_KEY,
+      platform: "youtube",
+      videoId: "video-a",
+      partId: "part-2",
+      title: QUESTION.slice(0, 60),
+      analysisRunId: ANALYSIS_RUN_ID,
+      transcriptFingerprint: FINGERPRINT,
+      providerProfileId: "provider-selected",
+      providerBaseUrl: "https://resolved-a.example/v1",
+      providerModel: "resolved-model-a",
+    }])
+    if (result.kind !== "ready") throw new Error("unreachable")
+    expect(result.created).toBe(true)
+    expect(result.thread.id).toBe("created-thread")
+  })
+
+  it("truncates the title to the first 60 characters", async () => {
+    const longQuestion = "q".repeat(120)
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => null,
+    })
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionThread(
+      createExecutionRequest({ question: longQuestion }),
+    )
+
+    expect(calls.createQaThread[0]!.title).toBe("q".repeat(60))
+  })
+})
+
+describe("AskController prepareExecutionThread currentness", () => {
+  it("returns stale after the reuse decision without resolving a provider or creating a thread", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => createThread(),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionThread(
+      createExecutionRequest({ isCurrent: alwaysStale() }),
+    )
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(calls.getQaThread).toEqual(["thread-a"])
+    expect(calls.resolveProvider).toEqual([])
+    expect(calls.createQaThread).toEqual([])
+  })
+
+  it("reads the existing thread before the first currentness check", async () => {
+    const order: string[] = []
+    const { dependencies } = createFakeDependencies({
+      getQaThread: async () => {
+        order.push("getQaThread")
+        return createThread()
+      },
+      resolveProvider: async () => {
+        order.push("resolveProvider")
+        return createResolvedProvider()
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionThread(createExecutionRequest({
+      isCurrent: () => {
+        order.push("isCurrent")
+        return true
+      },
+    }))
+
+    expect(order).toEqual(["getQaThread", "isCurrent", "resolveProvider"])
+  })
+
+  it("resolves the provider only when the request is current", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => null,
+    })
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionThread(createExecutionRequest())
+
+    expect(calls.resolveProvider).toHaveLength(1)
+    expect(calls.createQaThread).toHaveLength(1)
+  })
+})
+
+describe("AskController prepareExecutionThread errors", () => {
+  it("propagates getQaThread failures unchanged", async () => {
+    const failure = new Error("thread read failed")
+    const { dependencies } = createFakeDependencies({
+      getQaThread: async () => {
+        throw failure
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    await expect(
+      controller.prepareExecutionThread(createExecutionRequest()),
+    ).rejects.toBe(failure)
+  })
+
+  it("propagates createQaThread failures unchanged", async () => {
+    const failure = new Error("thread write failed")
+    const { dependencies } = createFakeDependencies({
+      getQaThread: async () => null,
+      createQaThread: async () => {
+        throw failure
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    await expect(
+      controller.prepareExecutionThread(createExecutionRequest()),
+    ).rejects.toBe(failure)
   })
 })

@@ -20,14 +20,53 @@ export type WorkspaceRuntimeContent = {
   activeTabId: number | null
 }
 
+/**
+ * The selected analysis a display is showing.
+ *
+ * This is a reference only: it deliberately carries no analysis payload, title,
+ * transcript, provider metadata, or error/loading flags. `analysisRunId` keeps
+ * the raw persisted run identity, including `null`, which is exactly what
+ * `AnalysisView.analysisRunId` and the cache/analysis-run schemas allow.
+ * The Ask compatibility projection (`analysisRunId ?? "legacy"`) is applied
+ * only at the Ask identity boundary, never in stored workspace state.
+ */
+export type WorkspaceAnalysisSelection = {
+  contentKey: string
+  analysisRunId: string | null
+}
+
+/**
+ * Cross-feature display selection references. Historical display selection is
+ * valid, so the selected analysis `contentKey` may legitimately differ from
+ * `WorkspaceRuntimeContent.contentKey`.
+ */
+export type WorkspaceDisplaySelection = {
+  analysis: WorkspaceAnalysisSelection | null
+  qaThreadId: string | null
+}
+
 export type WorkspaceSnapshot = {
   runtimeContent: WorkspaceRuntimeContent
+  displaySelection: WorkspaceDisplaySelection
   workspaceEpoch: number
 }
 
 export type WorkspaceRuntimeContentInput = {
   videoContext: ActiveVideoContext
   activeTabId: number | null
+}
+
+/**
+ * Defensive copy of a display selection, including the nested analysis
+ * reference, so a returned snapshot can never mutate controller-owned state.
+ */
+export function cloneWorkspaceDisplaySelection(
+  selection: WorkspaceDisplaySelection,
+): WorkspaceDisplaySelection {
+  return {
+    analysis: selection.analysis ? { ...selection.analysis } : null,
+    qaThreadId: selection.qaThreadId,
+  }
 }
 
 /**

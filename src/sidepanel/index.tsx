@@ -236,10 +236,7 @@ function SidepanelWorkspace() {
   const askStartLockRef = useRef(false)
   const loadWorkspaceGenerationRef = useRef(0)
   const qaLoadGenerationRef = useRef(0)
-  const activeAnalysisContentKeyRef = useRef<string | null>(null)
-  const activeAnalysisRunIdRef = useRef<string>("legacy")
   const currentTranscriptFingerprintRef = useRef<string | null>(null)
-  const activeQaThreadIdRef = useRef<string | null>(null)
   const pendingAskOperationRef = useRef<DestructiveTaskSnapshot | null>(null)
   const destructiveWorkspaceRef = useRef({
     analysisRunId: null as string | null,
@@ -248,10 +245,16 @@ function SidepanelWorkspace() {
     transcriptContentKey: null as string | null,
     videoContextContentKey: null as string | null,
   })
-  activeAnalysisContentKeyRef.current = analysisView?.contentKey ?? null
-  activeAnalysisRunIdRef.current = analysisView?.analysisRunId ?? "legacy"
   currentTranscriptFingerprintRef.current = transcriptSnapshot.fingerprint
-  activeQaThreadIdRef.current = qaThreadId
+  workspaceController.syncDisplaySelection({
+    analysis: analysisView
+      ? {
+          contentKey: analysisView.contentKey,
+          analysisRunId: analysisView.analysisRunId,
+        }
+      : null,
+    qaThreadId,
+  })
   destructiveWorkspaceRef.current = {
     analysisRunId: analysisView?.analysisRunId ?? null,
     analysisContentKey: analysisView?.contentKey ?? null,
@@ -276,12 +279,12 @@ function SidepanelWorkspace() {
   }, [transcriptController])
 
   const clearQaWorkspace = useCallback(() => {
-    activeQaThreadIdRef.current = null
+    workspaceController.setSelectedQaThreadId(null)
     setQaThreadId(null)
     setQaThreads([])
     setQaMessages([])
     setAskAnswer(null)
-  }, [])
+  }, [workspaceController])
 
   const restoreQaConversation = useCallback(async (
     contentKey: string,
@@ -299,11 +302,11 @@ function SidepanelWorkspace() {
     if (result.kind === "stale" || !isCurrent()) return
     const { threads, currentThreadId, messages, answer } = result.snapshot
     setQaThreads(threads)
-    activeQaThreadIdRef.current = currentThreadId
+    workspaceController.setSelectedQaThreadId(currentThreadId)
     setQaThreadId(currentThreadId)
     setQaMessages(messages)
     setAskAnswer(answer)
-  }, [askController])
+  }, [askController, workspaceController])
 
   const publishHistoryRestore = useCallback(async ({
     mode,
@@ -433,7 +436,6 @@ function SidepanelWorkspace() {
       clearAskWorkspace: () => {
         qaLoadGenerationRef.current += 1
         askGenerationRef.current += 1
-        activeQaThreadIdRef.current = null
         clearQaWorkspace()
         setAskQuestion("")
         setAskError(null)
@@ -1063,24 +1065,29 @@ function SidepanelWorkspace() {
       analysisRunId: requestedAnalysisRunId,
       phase: "preparing",
     }
-    const requestedThreadId = qaThreadId ?? activeQaThreadIdRef.current
+    const requestedThreadId = qaThreadId
+      ?? workspaceController.getDisplaySelection().qaThreadId
     const generation = ++askGenerationRef.current
     let requestThreadId = requestedThreadId
-    const isCurrentAsk = () => (
-      askGenerationRef.current === generation
-      && matchesAskRequestWorkspaceIdentity({
-        contentKey: requestedContentKey,
-        analysisRunId: requestedAnalysisRunId,
-        threadId: requestThreadId,
-        transcriptFingerprint: requestedTranscriptFingerprint,
-      }, {
-        contentKey: activeAnalysisContentKeyRef.current,
-        analysisRunId: activeAnalysisRunIdRef.current,
-        threadId: activeQaThreadIdRef.current,
-        transcriptFingerprint: currentTranscriptFingerprintRef.current,
-      })
-      && transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
-    )
+    const isCurrentAsk = () => {
+      const currentSelection = workspaceController.getDisplaySelection()
+
+      return (
+        askGenerationRef.current === generation
+        && matchesAskRequestWorkspaceIdentity({
+          contentKey: requestedContentKey,
+          analysisRunId: requestedAnalysisRunId,
+          threadId: requestThreadId,
+          transcriptFingerprint: requestedTranscriptFingerprint,
+        }, {
+          contentKey: currentSelection.analysis?.contentKey ?? null,
+          analysisRunId: currentSelection.analysis?.analysisRunId ?? "legacy",
+          threadId: currentSelection.qaThreadId,
+          transcriptFingerprint: currentTranscriptFingerprintRef.current,
+        })
+        && transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
+      )
+    }
 
     setAskError(null)
     const submittedQuestion = askQuestion.trim()
@@ -1110,7 +1117,7 @@ function SidepanelWorkspace() {
       const { thread, providerRequest: frozenProviderRequest } = preparedThread
       if (preparedThread.created) {
         requestThreadId = thread.id
-        activeQaThreadIdRef.current = thread.id
+        workspaceController.setSelectedQaThreadId(thread.id)
         setQaThreadId(thread.id)
         setQaThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)])
       }
@@ -1158,6 +1165,7 @@ function SidepanelWorkspace() {
           isTaskCurrent: () => askTaskController.isCurrent(taskId),
           setPhase,
         })
+        const currentSelection = workspaceController.getDisplaySelection()
         workspaceController.publishAskResult({
           workspaceEpoch: requestedWorkspaceEpoch,
           requested: {
@@ -1167,9 +1175,9 @@ function SidepanelWorkspace() {
             transcriptFingerprint: taskSnapshot.transcriptFingerprint,
           },
           current: {
-            contentKey: activeAnalysisContentKeyRef.current,
-            analysisRunId: activeAnalysisRunIdRef.current,
-            threadId: activeQaThreadIdRef.current,
+            contentKey: currentSelection.analysis?.contentKey ?? null,
+            analysisRunId: currentSelection.analysis?.analysisRunId ?? "legacy",
+            threadId: currentSelection.qaThreadId,
             transcriptFingerprint: currentTranscriptFingerprintRef.current,
           },
           effects: {
@@ -1208,13 +1216,13 @@ function SidepanelWorkspace() {
     if (isAsking) return
     askGenerationRef.current += 1
     qaLoadGenerationRef.current += 1
-    activeQaThreadIdRef.current = null
+    workspaceController.setSelectedQaThreadId(null)
     setQaThreadId(null)
     setQaMessages([])
     setAskAnswer(null)
     setAskQuestion("")
     setAskError(null)
-  }, [isAsking])
+  }, [isAsking, workspaceController])
 
   const handleOpenQaThread = useCallback(async (threadId: string) => {
     if (isAsking || isTranscriptLoading || isAnalysisFetching || isAnalysisBusy) return
@@ -1227,13 +1235,17 @@ function SidepanelWorkspace() {
     const requestedTranscriptLoadGeneration = transcriptController.captureLoadEpoch()
     askGenerationRef.current += 1
     const generation = ++qaLoadGenerationRef.current
-    const isCurrent = () => (
-      qaLoadGenerationRef.current === generation
-      && transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
-      && activeAnalysisContentKeyRef.current === requestedContentKey
-      && activeAnalysisRunIdRef.current === requestedAnalysisRunId
-      && currentTranscriptFingerprintRef.current === requestedTranscriptFingerprint
-    )
+    const isCurrent = () => {
+      const currentSelection = workspaceController.getDisplaySelection()
+
+      return (
+        qaLoadGenerationRef.current === generation
+        && transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
+        && (currentSelection.analysis?.contentKey ?? null) === requestedContentKey
+        && (currentSelection.analysis?.analysisRunId ?? "legacy") === requestedAnalysisRunId
+        && currentTranscriptFingerprintRef.current === requestedTranscriptFingerprint
+      )
+    }
     const result = await askController.openThread({
       threadId,
       contentKey: requestedContentKey,
@@ -1242,19 +1254,22 @@ function SidepanelWorkspace() {
       isCurrent,
     })
     if (result.kind !== "ready" || !isCurrent()) return
-    activeQaThreadIdRef.current = threadId
+    workspaceController.setSelectedQaThreadId(threadId)
     setQaThreadId(threadId)
     setQaMessages(result.thread.messages)
     setAskQuestion("")
     setAskAnswer(result.thread.answer)
-  }, [analysisView, askController, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, transcriptController, transcriptCues])
+  }, [analysisView, askController, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, transcriptController, transcriptCues, workspaceController])
 
   const handleDeleteQaThread = useCallback(async (threadId: string) => {
     if (isAsking) return
     await askController.deleteThread({ threadId })
     setQaThreads((current) => current.filter((thread) => thread.id !== threadId))
-    if (qaThreadId === threadId || activeQaThreadIdRef.current === threadId) handleNewQaChat()
-  }, [askController, handleNewQaChat, isAsking, qaThreadId])
+    if (
+      qaThreadId === threadId
+      || workspaceController.getDisplaySelection().qaThreadId === threadId
+    ) handleNewQaChat()
+  }, [askController, handleNewQaChat, isAsking, qaThreadId, workspaceController])
 
   const jumpWithIdentity = useCallback(async (
     identity: VideoIdentity | null,

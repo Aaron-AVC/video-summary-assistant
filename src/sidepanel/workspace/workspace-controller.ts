@@ -13,7 +13,9 @@ import {
   shouldPublishAnalysisToWorkspace,
 } from "@/features/analysis/lib/analysis-task-lifecycle"
 import {
+  cloneWorkspaceDisplaySelection,
   projectWorkspaceRuntimeContent,
+  type WorkspaceDisplaySelection,
   type WorkspaceRuntimeContent,
   type WorkspaceRuntimeContentInput,
   type WorkspaceSnapshot,
@@ -200,7 +202,11 @@ export type WorkspaceAnalysisPublicationResult =
  *
  * The workspace epoch advances once for the initial observation and once for
  * every runtime `contentKey` change. It does not advance for same-content
- * metadata refreshes. This controller still does not own React state,
+ * metadata refreshes, and it never advances for display-selection changes.
+ *
+ * Display selection is reference state only (`contentKey` + nullable
+ * `analysisRunId` + `qaThreadId`); the complete Analysis and Ask snapshots stay
+ * feature/root owned. This controller still does not own React state,
  * repositories, task lifecycle, feature state, or browser APIs; it only decides
  * whether a runtime-content transition is identity-changing and whether a
  * feature result may still be published into the current workspace.
@@ -223,11 +229,67 @@ export class WorkspaceController {
 
   private hasObserved = false
 
+  private displaySelection: WorkspaceDisplaySelection = {
+    analysis: null,
+    qaThreadId: null,
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     return {
       runtimeContent: { ...this.runtimeContent },
+      displaySelection: cloneWorkspaceDisplaySelection(this.displaySelection),
       workspaceEpoch: this.workspaceEpoch,
     }
+  }
+
+  /**
+   * Defensive copy of the current display selection.
+   *
+   * Root reads this instead of cloning the whole runtime projection: selection
+   * references are display state, not runtime identity, and are read live by
+   * every currentness check.
+   */
+  getDisplaySelection(): WorkspaceDisplaySelection {
+    return cloneWorkspaceDisplaySelection(this.displaySelection)
+  }
+
+  /**
+   * Replaces the display-selection reference projection.
+   *
+   * This is deliberately side-effect free with respect to everything else:
+   * `runtimeContent` and `workspaceEpoch` are untouched, no runtime transition
+   * is observed, no feature state changes, and no subscriber is notified. A
+   * display-selection change is *not* a workspace identity transition, so
+   * historical display selection may legitimately differ from the runtime
+   * content.
+   */
+  syncDisplaySelection(
+    input: WorkspaceDisplaySelection,
+  ): WorkspaceDisplaySelection {
+    this.displaySelection = cloneWorkspaceDisplaySelection(input)
+
+    return cloneWorkspaceDisplaySelection(this.displaySelection)
+  }
+
+  /**
+   * Immediately selects (or clears) the displayed QA thread reference.
+   *
+   * The displayed thread is written synchronously, before React re-renders, by
+   * Ask commands and by the QA workspace reset. Only the QA reference moves:
+   * the selected analysis reference, `runtimeContent`, and `workspaceEpoch` are
+   * preserved. There is intentionally no generic "patch anything" command.
+   */
+  setSelectedQaThreadId(
+    qaThreadId: string | null,
+  ): WorkspaceDisplaySelection {
+    this.displaySelection = {
+      analysis: this.displaySelection.analysis
+        ? { ...this.displaySelection.analysis }
+        : null,
+      qaThreadId,
+    }
+
+    return cloneWorkspaceDisplaySelection(this.displaySelection)
   }
 
   /**

@@ -1839,3 +1839,265 @@ describe("WorkspaceController analysis publication epoch hardening", () => {
     expect(controller.getSnapshot()).toEqual(before)
   })
 })
+
+describe("WorkspaceController display selection", () => {
+  it("A. starts with no selected analysis and no selected QA thread", () => {
+    const controller = new WorkspaceController()
+
+    expect(controller.getDisplaySelection()).toEqual({
+      analysis: null,
+      qaThreadId: null,
+    })
+    expect(controller.getSnapshot().displaySelection).toEqual({
+      analysis: null,
+      qaThreadId: null,
+    })
+    expect(Object.keys(controller.getSnapshot()).sort()).toEqual([
+      "displaySelection",
+      "runtimeContent",
+      "workspaceEpoch",
+    ])
+  })
+
+  it("B. syncs the selected analysis reference exactly", () => {
+    const controller = new WorkspaceController()
+
+    const returned = controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: null,
+    })
+
+    expect(returned).toEqual({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: null,
+    })
+    expect(controller.getDisplaySelection()).toEqual({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: null,
+    })
+  })
+
+  it("C. preserves a nullable analysis run identity without normalizing it", () => {
+    const controller = new WorkspaceController()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: null },
+      qaThreadId: null,
+    })
+
+    const selection = controller.getDisplaySelection()
+
+    expect(selection.analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: null,
+    })
+    expect(selection.analysis?.analysisRunId).toBeNull()
+    expect(JSON.stringify(selection)).not.toContain("legacy")
+  })
+
+  it("D. syncs the selected QA thread reference", () => {
+    const controller = new WorkspaceController()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+
+    expect(controller.getDisplaySelection().qaThreadId).toBe("thread-1")
+  })
+
+  it("E. never advances the workspace epoch on a display selection update", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const epoch = controller.captureEpoch()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+    controller.setSelectedQaThreadId(null)
+
+    expect(controller.captureEpoch()).toBe(epoch)
+    expect(controller.isEpochCurrent(epoch)).toBe(true)
+  })
+
+  it("F. never mutates runtime content on a display selection update", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const before = controller.getSnapshot().runtimeContent
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+
+    expect(controller.getSnapshot().runtimeContent).toEqual(before)
+  })
+
+  it("G. allows a historical analysis selection that differs from runtime content", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const epoch = controller.captureEpoch()
+
+    controller.syncDisplaySelection({
+      analysis: {
+        contentKey: "bilibili:BV-history:p:2",
+        analysisRunId: "run-history",
+      },
+      qaThreadId: "thread-history",
+    })
+
+    const snapshot = controller.getSnapshot()
+
+    expect(snapshot.runtimeContent.contentKey).toBe("youtube:video-a")
+    expect(snapshot.displaySelection).toEqual({
+      analysis: {
+        contentKey: "bilibili:BV-history:p:2",
+        analysisRunId: "run-history",
+      },
+      qaThreadId: "thread-history",
+    })
+    expect(snapshot.workspaceEpoch).toBe(epoch)
+  })
+
+  it("H. updates only the selection when the same content selects a different run", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const epoch = controller.captureEpoch()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: null,
+    })
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-2" },
+      qaThreadId: null,
+    })
+
+    const snapshot = controller.getSnapshot()
+
+    expect(snapshot.displaySelection.analysis?.analysisRunId).toBe("run-2")
+    expect(snapshot.workspaceEpoch).toBe(epoch)
+    expect(snapshot.runtimeContent.contentKey).toBe("youtube:video-a")
+  })
+
+  it("I. preserves the selected analysis when selecting a QA thread", () => {
+    const controller = new WorkspaceController()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: null,
+    })
+
+    controller.setSelectedQaThreadId("thread-2")
+
+    const selection = controller.getDisplaySelection()
+
+    expect(selection.qaThreadId).toBe("thread-2")
+    expect(selection.analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-1",
+    })
+  })
+
+  it("J. preserves the selected analysis when clearing the selected QA thread", () => {
+    const controller = new WorkspaceController()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-2",
+    })
+
+    controller.setSelectedQaThreadId(null)
+
+    const selection = controller.getDisplaySelection()
+
+    expect(selection.qaThreadId).toBeNull()
+    expect(selection.analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-1",
+    })
+  })
+
+  it("K. returns defensive nested display selection copies from getSnapshot", () => {
+    const controller = new WorkspaceController()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+
+    const snapshot = controller.getSnapshot()
+    snapshot.displaySelection.qaThreadId = "thread-mutated"
+    snapshot.displaySelection.analysis!.contentKey = "youtube:mutated"
+    snapshot.displaySelection.analysis!.analysisRunId = "run-mutated"
+
+    expect(controller.getDisplaySelection()).toEqual({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+  })
+
+  it("L. returns defensive display selection copies from getDisplaySelection", () => {
+    const controller = new WorkspaceController()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+
+    const selection = controller.getDisplaySelection()
+    selection.analysis!.contentKey = "youtube:mutated"
+    selection.qaThreadId = "thread-mutated"
+
+    expect(controller.getDisplaySelection()).toEqual({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+  })
+
+  it("M. does not rewrite display selection on a runtime identity transition", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+
+    const transition = observe(controller, context({
+      videoId: "video-b",
+      contentKey: "youtube:video-b",
+      url: "https://www.youtube.com/watch?v=video-b",
+      canonicalUrl: "https://www.youtube.com/watch?v=video-b",
+      title: "Video B",
+    }))
+
+    expect(transition.kind).toBe("identity-changed")
+    expect(transition.shouldReset).toBe(true)
+    expect(controller.getDisplaySelection()).toEqual({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+  })
+
+  it("N. preserves display selection across a same-content metadata refresh", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+    const epoch = controller.captureEpoch()
+
+    const transition = observe(controller, context({ title: "Video A renamed" }))
+
+    expect(transition.kind).toBe("same-content")
+    expect(controller.captureEpoch()).toBe(epoch)
+    expect(controller.getDisplaySelection()).toEqual({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+  })
+})

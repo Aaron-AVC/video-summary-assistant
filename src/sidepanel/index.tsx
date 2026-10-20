@@ -12,6 +12,11 @@ import type {
   VideoAnalysis,
 } from "@/features/analysis/lib/analysis-schema"
 import { askVideo } from "@/features/analysis/lib/ask-video"
+import {
+  DEFAULT_ANALYSIS_PRESET_ID,
+  createAnalysisPresetSnapshot,
+  type AnalysisPresetId,
+} from "@/features/analysis/lib/analysis-preset"
 import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
 import {
   getAnalysisTaskExecutionPolicy,
@@ -131,6 +136,7 @@ function SidepanelWorkspace() {
 
   const [activeTab, setActiveTab] = useState<SidePanelTab>(INITIAL_SIDE_PANEL_TAB)
   const [provider, setProvider] = useState<ProviderConfigRecord | null>(null)
+  const [analysisPresetId, setAnalysisPresetId] = useState<AnalysisPresetId>(DEFAULT_ANALYSIS_PRESET_ID)
   const [analysisView, setAnalysisView] = useState<AnalysisView | null>(null)
   const [recentItems, setRecentItems] = useState<RecentAnalysisListItem[]>([])
   const [askQuestion, setAskQuestion] = useState("")
@@ -574,14 +580,16 @@ function SidepanelWorkspace() {
     const generation = workspaceController.beginLoadGeneration()
     setIsBootstrapping(true)
     try {
-      const [providerConfigs, recent] = await Promise.all([
+      const [providerConfigs, recent, persistedPresetId] = await Promise.all([
         settingsStorage.getProviderConfigs(),
         historyController.listRecentAnalyses(10),
+        settingsStorage.getAnalysisPresetId(),
       ])
       if (!workspaceController.isLoadGenerationCurrent(generation)) return
 
       setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
       setRecentItems(recent)
+      setAnalysisPresetId(persistedPresetId)
 
       if (videoContext.platform && videoContext.videoId && videoContext.contentKey) {
         await loadSavedAnalysisForContext(videoContext, generation)
@@ -736,6 +744,7 @@ function SidepanelWorkspace() {
     clearQaWorkspace()
     const requestedProvider = provider
     const executionPolicy = getAnalysisTaskExecutionPolicy(force)
+    const requestedPreset = createAnalysisPresetSnapshot(analysisPresetId)
     const taskSnapshot = {
       sourceTabId: activeTabId,
       platform: videoContext.platform!,
@@ -749,6 +758,8 @@ function SidepanelWorkspace() {
       providerBaseUrl: requestedProvider.baseUrl,
       providerModel: requestedProvider.model,
       generationTimeoutSec: requestedProvider.generationTimeoutSec ?? 600,
+      analysisPresetId: requestedPreset.id,
+      analysisPromptVersion: requestedPreset.promptVersion,
     }
     const requestedWorkspaceEpoch = workspaceController.captureEpoch()
     setAnalysisError(null)
@@ -923,7 +934,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisController, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()
@@ -1321,6 +1332,23 @@ function SidepanelWorkspace() {
     setProvider(providers.find((item) => item.isDefault) ?? null)
   }, [])
 
+  /**
+   * Preset changes only move the global default, so the control stays usable
+   * while a task runs: the running task keeps the strategy it captured at start.
+   */
+  const handleAnalysisPresetChange = useCallback(async (nextPresetId: AnalysisPresetId) => {
+    if (nextPresetId === analysisPresetId) return
+    const previousPresetId = analysisPresetId
+    setAnalysisPresetId(nextPresetId)
+    try {
+      const persistedPresetId = await settingsStorage.setAnalysisPresetId(nextPresetId)
+      setAnalysisPresetId(persistedPresetId)
+    } catch {
+      setAnalysisPresetId(previousPresetId)
+      toast.error(t("toast.analysisPresetSaveFailed"))
+    }
+  }, [analysisPresetId, t])
+
   const visibleAnalysisError = analysisError
     ?? (activeAnalysisTask && activeAnalysisTask.snapshot.contentKey !== videoContext.contentKey
       ? t("analysis.otherRunning")
@@ -1385,6 +1413,9 @@ function SidepanelWorkspace() {
             lastAnalyzedAt={analysisView?.lastAnalyzedAt
               ? new Date(analysisView.lastAnalyzedAt).toLocaleString(locale)
               : null}
+            analysisPresetId={analysisPresetId}
+            isAnalysisPresetLoading={isBootstrapping}
+            onAnalysisPresetChange={handleAnalysisPresetChange}
             recentItems={recentItems}
             isHistoryLoading={isBootstrapping}
             activeVideoId={analysisView?.videoId ?? videoContext.videoId}

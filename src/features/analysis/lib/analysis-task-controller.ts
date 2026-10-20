@@ -1,3 +1,4 @@
+import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
 import type { VideoPlatform } from "@/features/platform/types"
 
 export type AnalysisTaskPhase = "loading-transcript" | "analyzing" | "finalizing" | "cancelling"
@@ -16,6 +17,10 @@ export type AnalysisTaskSnapshot = {
   providerBaseUrl: string
   providerModel: string
   generationTimeoutSec: number
+  /** Preset captured when the task started; later settings changes never alter it. */
+  analysisPresetId: AnalysisPresetId
+  /** Effective prompt version for the captured preset; drives cache identity. */
+  analysisPromptVersion: string
   startedAt: string
 }
 export type ActiveAnalysisTask = {

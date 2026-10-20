@@ -9,6 +9,7 @@ import {
   createTranscriptChunk,
   type TranscriptChunk
 } from "@/features/analysis/lib/chunk-transcript"
+import type { AnalysisPresetStrategy } from "@/features/analysis/lib/analysis-preset"
 import {
   buildChunkAnalysisPrompt,
   buildDirectAnalysisPrompt,
@@ -44,10 +45,12 @@ export function selectAnalysisStrategy(input: {
   videoTitle?: string | null
   cues: TranscriptCue[]
   budgetPolicy: AnalysisBudgetPolicy
+  preset?: AnalysisPresetStrategy | null
 }): AnalysisStrategy {
   const prompt = buildDirectAnalysisPrompt({
     videoTitle: input.videoTitle,
-    cues: input.cues
+    cues: input.cues,
+    preset: input.preset
   })
   return promptFitsBudget(prompt, input.budgetPolicy) ? "single-pass" : "map-reduce"
 }
@@ -56,6 +59,7 @@ export function planTranscriptChunks(input: {
   videoTitle?: string | null
   cues: TranscriptCue[]
   budgetPolicy: AnalysisBudgetPolicy
+  preset?: AnalysisPresetStrategy | null
 }): TranscriptChunk[] {
   const chunks: TranscriptChunk[] = []
   let currentCues: TranscriptCue[] = []
@@ -65,7 +69,8 @@ export function planTranscriptChunks(input: {
     const candidateChunk = createTranscriptChunk(chunks.length, candidateCues)
     const candidatePrompt = buildChunkAnalysisPrompt({
       chunk: candidateChunk,
-      videoTitle: input.videoTitle
+      videoTitle: input.videoTitle,
+      preset: input.preset
     })
 
     if (promptFitsBudget(candidatePrompt, input.budgetPolicy)) {
@@ -83,7 +88,8 @@ export function planTranscriptChunks(input: {
     currentCues = [cue]
     const singleCuePrompt = buildChunkAnalysisPrompt({
       chunk: createTranscriptChunk(chunks.length, currentCues),
-      videoTitle: input.videoTitle
+      videoTitle: input.videoTitle,
+      preset: input.preset
     })
     if (!promptFitsBudget(singleCuePrompt, input.budgetPolicy)) {
       throw new AnalysisInputBudgetExceededError(
@@ -102,11 +108,13 @@ export function finalAnalysisPromptFits(input: {
   videoTitle?: string | null
   summaries: EvidenceSummary[]
   budgetPolicy: AnalysisBudgetPolicy
+  preset?: AnalysisPresetStrategy | null
 }): boolean {
   return promptFitsBudget(
     buildFinalAnalysisPrompt({
       videoTitle: input.videoTitle,
-      chunkSummaries: input.summaries
+      chunkSummaries: input.summaries,
+      preset: input.preset
     }),
     input.budgetPolicy
   )
@@ -116,6 +124,7 @@ export function planReductionGroups(input: {
   level: number
   summaries: EvidenceSummary[]
   budgetPolicy: AnalysisBudgetPolicy
+  preset?: AnalysisPresetStrategy | null
 }): EvidenceSummary[][] {
   const groups: EvidenceSummary[][] = []
   let current: EvidenceSummary[] = []
@@ -124,7 +133,8 @@ export function planReductionGroups(input: {
     const candidate = [...current, summary]
     const candidatePrompt = buildSummaryReductionPrompt({
       level: input.level,
-      summaries: candidate
+      summaries: candidate,
+      preset: input.preset
     })
     if (promptFitsBudget(candidatePrompt, input.budgetPolicy)) {
       current = candidate
@@ -141,7 +151,8 @@ export function planReductionGroups(input: {
     current = [summary]
     const singleSummaryPrompt = buildSummaryReductionPrompt({
       level: input.level,
-      summaries: current
+      summaries: current,
+      preset: input.preset
     })
     if (!promptFitsBudget(singleSummaryPrompt, input.budgetPolicy)) {
       throw new AnalysisInputBudgetExceededError(

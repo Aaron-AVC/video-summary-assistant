@@ -322,3 +322,83 @@ describe("Side Panel V1 components", () => {
     expect(markup).toContain("min-[420px]:grid-cols-4")
   })
 })
+
+describe("Analysis preset selector", () => {
+  const baseOverview = {
+    analysis: null,
+    analysisError: null,
+    analysisPhase: "idle" as const,
+    isLoading: false,
+    hasProvider: true,
+    canAnalyze: true,
+    lastAnalyzedAt: null,
+    recentItems: [],
+    isHistoryLoading: false,
+    activeVideoId: "video-a",
+    onAnalyze: noop,
+    onCancel: noop,
+    onConfigureProvider: noop,
+    onJump: noop,
+    onSelectHistory: noop,
+    onOpenFullHistory: noop,
+    formatTimestamp,
+  }
+
+  it("renders the three built-in presets with localized labels", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        {...baseOverview}
+        analysisPresetId="standard"
+        onAnalysisPresetChange={noop}
+      />,
+    )
+
+    expect(markup).toContain("Standard")
+    expect(markup).toContain("Concise")
+    expect(markup).toContain("Detailed")
+    expect(markup).toContain("Analysis preset")
+    expect(markup).toContain("Global default for every video")
+  })
+
+  it("marks the persisted preset as the selected option", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        {...baseOverview}
+        analysisPresetId="detailed"
+        onAnalysisPresetChange={noop}
+      />,
+    )
+
+    expect(markup).toMatch(/data-state="on"[^>]*title="Fuller explanations/)
+    expect(markup).toMatch(/data-state="off"[^>]*title="Balanced summary/)
+  })
+
+  it("disables the selector while the persisted preset is still loading", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        {...baseOverview}
+        analysisPresetId="standard"
+        isAnalysisPresetLoading
+        onAnalysisPresetChange={noop}
+      />,
+    )
+
+    const selector = markup.slice(markup.indexOf('id="analysis-preset-label"'))
+    expect(selector).toContain('disabled=""')
+    expect(selector).toMatch(/disabled=""[^>]*>Standard</)
+  })
+
+  it("keeps the selector independent from the analyze action", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        {...baseOverview}
+        analysisPresetId="concise"
+        onAnalysisPresetChange={noop}
+      />,
+    )
+
+    expect(markup).toContain("Generate")
+    expect(markup).not.toContain("Regenerate")
+    expect(markup).toContain("Not analyzed")
+  })
+})

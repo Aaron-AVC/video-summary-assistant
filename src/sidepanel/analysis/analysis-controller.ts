@@ -2,7 +2,10 @@ import type {
   VideoAnalysis,
 } from "@/features/analysis/lib/analysis-schema"
 import {
-  VIDEO_ANALYSIS_PROMPT_VERSION,
+  resolveAnalysisPresetStrategy,
+  type AnalysisPresetStrategy,
+} from "@/features/analysis/lib/analysis-preset"
+import {
   VIDEO_ANALYSIS_SCHEMA_VERSION,
 } from "@/features/analysis/lib/analysis-schema"
 import type { AnalysisTaskPhase, AnalysisTaskSnapshot } from "@/features/analysis/lib/analysis-task-controller"
@@ -109,6 +112,15 @@ export function createAnalysisController(
 
     setPhase("analyzing")
 
+    /**
+     * The preset strategy and effective prompt version come from the task
+     * snapshot captured at task start, never from the current global setting, so
+     * a mid-flight preference change cannot alter this task's prompt or cache
+     * identity.
+     */
+    const preset: AnalysisPresetStrategy = resolveAnalysisPresetStrategy(taskSnapshot.analysisPresetId)
+    const analysisPromptVersion = taskSnapshot.analysisPromptVersion
+
     const resolvedProvider = await dependencies.resolveProvider(taskSnapshot.providerProfileId)
     ensureTaskCurrent()
 
@@ -118,6 +130,7 @@ export function createAnalysisController(
       providerProfileId: taskSnapshot.providerProfileId,
       baseUrl: taskSnapshot.providerBaseUrl,
       model: taskSnapshot.providerModel,
+      promptVersion: analysisPromptVersion,
     })
 
     const transcriptCapturedAt = now()
@@ -146,7 +159,7 @@ export function createAnalysisController(
         baseUrl: taskSnapshot.providerBaseUrl,
         model: taskSnapshot.providerModel,
         analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-        analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+        analysisPromptVersion,
       })) {
         ensureTaskCurrent()
         return {
@@ -184,6 +197,7 @@ export function createAnalysisController(
         cues: transcript.segments,
         durationSec: sourceVideo.durationSec,
       },
+      preset,
       signal,
     })
     ensureTaskCurrent()
@@ -232,7 +246,7 @@ export function createAnalysisController(
           providerConfigId: taskSnapshot.providerProfileId,
           transcriptFingerprint,
           analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-          analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+          analysisPromptVersion,
           analysisCacheKey: cacheKey,
           providerProfileId: taskSnapshot.providerProfileId,
           providerBaseUrl: taskSnapshot.providerBaseUrl,
@@ -280,7 +294,7 @@ export function createAnalysisController(
         partId: taskSnapshot.partId,
         transcriptFingerprint,
         analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-        analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+        analysisPromptVersion,
         providerProfileId: taskSnapshot.providerProfileId,
         providerBaseUrl: taskSnapshot.providerBaseUrl,
         providerModel: taskSnapshot.providerModel,
@@ -306,7 +320,7 @@ export function createAnalysisController(
         providerBaseUrl: taskSnapshot.providerBaseUrl,
         providerModel: taskSnapshot.providerModel,
         analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-        analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+        analysisPromptVersion,
         lastAnalyzedAt: completedAt,
       },
     }

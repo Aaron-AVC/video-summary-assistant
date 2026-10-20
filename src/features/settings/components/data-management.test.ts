@@ -21,7 +21,8 @@ const settingsSnapshot: SettingsExportSnapshot = {
   language: "auto",
   defaultProviderId: null,
   providerConfigs: [],
-  diagnosticLogging: true
+  diagnosticLogging: true,
+  analysisPresetId: "standard",
 }
 
 const localData: PersistenceExport = {

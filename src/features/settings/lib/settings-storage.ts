@@ -1,13 +1,14 @@
 import { sanitizeProviderConfigForExport } from "@/lib/export/provider-config-export"
 import {
-  normalizeLanguagePreference,
-  type LanguagePreference,
-} from "@/lib/i18n/i18n"
-import {
   DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC,
   MAX_PROVIDER_GENERATION_TIMEOUT_SEC,
   MIN_PROVIDER_GENERATION_TIMEOUT_SEC,
 } from "@/features/settings/lib/provider-schema"
+import { normalizeAnalysisPresetId, type AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
+import {
+  normalizeLanguagePreference,
+  type LanguagePreference,
+} from "@/lib/i18n/i18n"
 
 export type ThemePreference = "light" | "dark" | "system"
 
@@ -40,6 +41,8 @@ export type SettingsSnapshot = {
   defaultProviderId: string | null
   providerConfigs: ProviderProfileView[]
   diagnosticLogging: boolean
+  /** Global analysis preset default applied to newly started analysis tasks. */
+  analysisPresetId: AnalysisPresetId
 }
 
 export type SettingsExportSnapshot = Omit<SettingsSnapshot, "providerConfigs"> & {
@@ -62,6 +65,7 @@ export const SETTINGS_KEYS = {
   legacyProviderConfigs: "yt-summarizer.provider.configs",
   diagnosticLogging: "yt-summarizer.diagnostic-logging",
   language: "yt-summarizer.language",
+  analysisPreset: "yt-summarizer.analysis.preset",
 } as const
 
 const SETTINGS_KEY_LIST = [
@@ -72,6 +76,7 @@ const SETTINGS_KEY_LIST = [
   SETTINGS_KEYS.legacyProviderConfigs,
   SETTINGS_KEYS.diagnosticLogging,
   SETTINGS_KEYS.language,
+  SETTINGS_KEYS.analysisPreset,
 ]
 
 const DEFAULT_THEME: ThemePreference = "system"
@@ -258,6 +263,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       SETTINGS_KEYS.providerSecrets,
       SETTINGS_KEYS.diagnosticLogging,
       SETTINGS_KEYS.language,
+      SETTINGS_KEYS.analysisPreset,
     ])
     const profiles = normalizeProfiles(values[SETTINGS_KEYS.providerProfiles])
     const secrets = normalizeSecrets(values[SETTINGS_KEYS.providerSecrets])
@@ -283,6 +289,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       defaultProviderId: defaultProviderId as string | null,
       providerConfigs,
       diagnosticLogging: values[SETTINGS_KEYS.diagnosticLogging] === true,
+      analysisPresetId: normalizeAnalysisPresetId(values[SETTINGS_KEYS.analysisPreset]),
     }
   }
 
@@ -319,6 +326,15 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     async setLanguagePreference(language: LanguagePreference) {
       const normalized = normalizeLanguagePreference(language)
       await adapter.set({ [SETTINGS_KEYS.language]: normalized })
+      return normalized
+    },
+    async getAnalysisPresetId(): Promise<AnalysisPresetId> {
+      const values = await adapter.get<unknown>([SETTINGS_KEYS.analysisPreset])
+      return normalizeAnalysisPresetId(values[SETTINGS_KEYS.analysisPreset])
+    },
+    async setAnalysisPresetId(presetId: AnalysisPresetId) {
+      const normalized = normalizeAnalysisPresetId(presetId)
+      await adapter.set({ [SETTINGS_KEYS.analysisPreset]: normalized })
       return normalized
     },
     async getProviderProfiles() {
@@ -460,6 +476,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
         SETTINGS_KEYS.legacyProviderConfigs,
         SETTINGS_KEYS.diagnosticLogging,
         SETTINGS_KEYS.language,
+        SETTINGS_KEYS.analysisPreset,
       ])
       migrationPromise = null
     }

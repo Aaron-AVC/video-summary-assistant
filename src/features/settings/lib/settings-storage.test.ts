@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
 import { createSettingsStorage, type SettingsStorageAdapter } from "@/features/settings/lib/settings-storage"
+import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
 
 function createAdapter(): SettingsStorageAdapter {
   const store = new Map<string, unknown>()
@@ -92,7 +93,71 @@ describe("createSettingsStorage", () => {
       defaultProviderId: null,
       providerConfigs: [],
       diagnosticLogging: false,
+      analysisPresetId: "standard",
     })
+  })
+
+  it("persists, exports and clears the global analysis preset", async () => {
+    const storage = createSettingsStorage(createAdapter())
+
+    expect(await storage.getAnalysisPresetId()).toBe("standard")
+    expect((await storage.getSettingsSnapshot()).analysisPresetId).toBe("standard")
+
+    await storage.setAnalysisPresetId("detailed")
+    expect(await storage.getAnalysisPresetId()).toBe("detailed")
+    expect((await storage.getSettingsSnapshot()).analysisPresetId).toBe("detailed")
+    expect((await storage.exportSettings()).analysisPresetId).toBe("detailed")
+
+    await storage.clearSettings()
+    expect(await storage.getAnalysisPresetId()).toBe("standard")
+    expect((await storage.exportSettings()).analysisPresetId).toBe("standard")
+  })
+
+  it("falls back to standard for missing or invalid stored preset values", async () => {
+    for (const stored of [undefined, null, "", "legacy-unknown", "DETAILED", 7]) {
+      const store = new Map<string, unknown>([["yt-summarizer.analysis.preset", stored]])
+      const storage = createSettingsStorage({
+        async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
+          const result: Partial<Record<string, T>> = {}
+          for (const key of keys) {
+            if (store.has(key)) result[key] = store.get(key) as T
+          }
+          return result
+        },
+        async set(values) {
+          for (const [key, value] of Object.entries(values)) store.set(key, value)
+        },
+        async remove(keys) {
+          for (const key of keys) store.delete(key)
+        }
+      })
+
+      expect(await storage.getAnalysisPresetId()).toBe("standard")
+      expect((await storage.getSettingsSnapshot()).analysisPresetId).toBe("standard")
+    }
+  })
+
+  it("normalizes an invalid preset written through the setter", async () => {
+    const store = new Map<string, unknown>()
+    const storage = createSettingsStorage({
+      async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
+        const result: Partial<Record<string, T>> = {}
+        for (const key of keys) {
+          if (store.has(key)) result[key] = store.get(key) as T
+        }
+        return result
+      },
+      async set(values) {
+        for (const [key, value] of Object.entries(values)) store.set(key, value)
+      },
+      async remove(keys) {
+        for (const key of keys) store.delete(key)
+      }
+    })
+
+    await storage.setAnalysisPresetId("bogus" as AnalysisPresetId)
+    expect(store.get("yt-summarizer.analysis.preset")).toBe("standard")
+    expect(await storage.getAnalysisPresetId()).toBe("standard")
   })
 
   it("migrates legacy secret-bearing records idempotently and keeps secrets out of profile metadata", async () => {

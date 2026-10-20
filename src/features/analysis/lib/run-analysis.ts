@@ -13,6 +13,10 @@ import {
   selectAnalysisStrategy,
   type AnalysisStrategy
 } from "@/features/analysis/lib/analysis-plan"
+import {
+  DEFAULT_ANALYSIS_PRESET_STRATEGY,
+  type AnalysisPresetStrategy
+} from "@/features/analysis/lib/analysis-preset"
 import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
 import {
   createOpenAICompatibleClient,
@@ -42,6 +46,8 @@ export type RunAnalysisOptions = {
     cues: TranscriptCue[]
     durationSec?: number | null
   }
+  /** Immutable preset strategy captured into the running task's snapshot. */
+  preset?: AnalysisPresetStrategy | null
   budgetPolicy?: AnalysisBudgetPolicy
   client?: AnalysisClient
   signal?: AbortSignal
@@ -78,10 +84,12 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
 
   const budgetPolicy = options.budgetPolicy ?? DEFAULT_ANALYSIS_BUDGET_POLICY
   validateAnalysisBudgetPolicy(budgetPolicy)
+  const preset = options.preset ?? DEFAULT_ANALYSIS_PRESET_STRATEGY
   const strategy = selectAnalysisStrategy({
     videoTitle: options.transcript.title,
     cues: options.transcript.cues,
-    budgetPolicy
+    budgetPolicy,
+    preset
   })
   const client = options.client ?? createOpenAICompatibleClient(options.provider)
   const { signal } = options
@@ -90,7 +98,8 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
   if (strategy === "single-pass") {
     const prompt = buildDirectAnalysisPrompt({
       videoTitle: options.transcript.title,
-      cues: options.transcript.cues
+      cues: options.transcript.cues,
+      preset
     })
     const structured = await requestStructuredAnalysis({ client, prompt, options })
     return {
@@ -106,7 +115,8 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
   const chunks = planTranscriptChunks({
     videoTitle: options.transcript.title,
     cues: options.transcript.cues,
-    budgetPolicy
+    budgetPolicy,
+    preset
   })
   const chunkSummaries: ChunkAnalysisResult[] = []
 
@@ -114,7 +124,8 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     throwIfAborted(signal)
     const prompt = buildChunkAnalysisPrompt({
       chunk,
-      videoTitle: options.transcript.title
+      videoTitle: options.transcript.title,
+      preset
     })
     const summary = await requestCompletion(client, {
       messages: promptMessages(prompt),
@@ -133,13 +144,15 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
   while (!finalAnalysisPromptFits({
     videoTitle: options.transcript.title,
     summaries: survivingSummaries,
-    budgetPolicy
+    budgetPolicy,
+    preset
   })) {
     const nextLevel = reductionLevels + 1
     const groups = planReductionGroups({
       level: nextLevel,
       summaries: survivingSummaries,
-      budgetPolicy
+      budgetPolicy,
+      preset
     })
     const reduced: EvidenceSummary[] = []
     for (const [groupIndex, group] of groups.entries()) {
@@ -149,7 +162,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
         continue
       }
 
-      const prompt = buildSummaryReductionPrompt({ level: nextLevel, summaries: group })
+      const prompt = buildSummaryReductionPrompt({ level: nextLevel, summaries: group, preset })
       const summary = await requestCompletion(client, {
         messages: promptMessages(prompt),
         signal
@@ -170,7 +183,8 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
 
   const finalPrompt = buildFinalAnalysisPrompt({
     videoTitle: options.transcript.title,
-    chunkSummaries: survivingSummaries
+    chunkSummaries: survivingSummaries,
+    preset
   })
   const structured = await requestStructuredAnalysis({ client, prompt: finalPrompt, options })
   return {
@@ -207,7 +221,8 @@ async function requestStructuredAnalysis(input: {
     const repairPrompt = buildVideoAnalysisRepairPrompt({
       originalTask: input.prompt.userPrompt,
       validationError: initialError,
-      previousResponse: rawResponse
+      previousResponse: rawResponse,
+      preset: input.options.preset
     })
     const budgetPolicy = input.options.budgetPolicy ?? DEFAULT_ANALYSIS_BUDGET_POLICY
     if (!repairPromptFitsBudget(repairPrompt, budgetPolicy)) {

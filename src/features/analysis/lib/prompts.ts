@@ -1,4 +1,7 @@
-import { VIDEO_ANALYSIS_PROMPT_VERSION } from "@/features/analysis/lib/analysis-schema"
+import {
+  DEFAULT_ANALYSIS_PRESET_STRATEGY,
+  type AnalysisPresetStrategy,
+} from "@/features/analysis/lib/analysis-preset"
 import type { TranscriptChunk } from "@/features/analysis/lib/chunk-transcript"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
@@ -42,34 +45,54 @@ export type EvidenceSummary = {
   summary: string
 }
 
-export type DirectAnalysisPromptInput = {
+/**
+ * Every prompt builder accepts the immutable preset strategy resolved by the
+ * Analysis domain. The default stays Standard, whose style instructions are
+ * empty, so its prompt text stays byte-identical to the pre-preset contract.
+ */
+type PresetCarrier = {
+  preset?: AnalysisPresetStrategy | null
+}
+
+function resolvePreset(preset: AnalysisPresetStrategy | null | undefined): AnalysisPresetStrategy {
+  return preset ?? DEFAULT_ANALYSIS_PRESET_STRATEGY
+}
+
+function presetStyleLines(preset: AnalysisPresetStrategy | null | undefined): string[] {
+  return [...resolvePreset(preset).styleInstructions]
+}
+
+export type DirectAnalysisPromptInput = PresetCarrier & {
   videoTitle?: string | null
   cues: TranscriptCue[]
 }
 
-export type ChunkSummaryInput = {
+export type ChunkSummaryInput = PresetCarrier & {
   chunk: TranscriptChunk
   videoTitle?: string | null
 }
 
-export type FinalAnalysisPromptInput = {
+export type FinalAnalysisPromptInput = PresetCarrier & {
   videoTitle?: string | null
   chunkSummaries: EvidenceSummary[]
 }
 
-export type SummaryReductionPromptInput = {
+export type SummaryReductionPromptInput = PresetCarrier & {
   level: number
   summaries: EvidenceSummary[]
 }
 
 export function buildDirectAnalysisPrompt({
   videoTitle,
-  cues
+  cues,
+  preset
 }: DirectAnalysisPromptInput): AnalysisPrompt {
+  const strategy = resolvePreset(preset)
   return {
     systemPrompt: [
-      `You produce ${VIDEO_ANALYSIS_PROMPT_VERSION} structured video analysis. Reply with JSON only.`,
+      `You produce ${strategy.promptVersion} structured video analysis. Reply with JSON only.`,
       "Use only the supplied timed transcript evidence.",
+      ...presetStyleLines(strategy),
       UNTRUSTED_TRANSCRIPT_DIRECTIVE
     ].join(" "),
     userPrompt: [
@@ -84,10 +107,11 @@ export function buildDirectAnalysisPrompt({
   }
 }
 
-export function buildChunkAnalysisPrompt({ chunk, videoTitle }: ChunkSummaryInput): AnalysisPrompt {
+export function buildChunkAnalysisPrompt({ chunk, videoTitle, preset }: ChunkSummaryInput): AnalysisPrompt {
   return {
     systemPrompt: [
       "You summarize one section of a video transcript. Keep every claim grounded in the provided text.",
+      ...presetStyleLines(preset),
       UNTRUSTED_TRANSCRIPT_DIRECTIVE
     ].join(" "),
     userPrompt: [
@@ -107,12 +131,15 @@ export function buildChunkAnalysisPrompt({ chunk, videoTitle }: ChunkSummaryInpu
 
 export function buildFinalAnalysisPrompt({
   videoTitle,
-  chunkSummaries
+  chunkSummaries,
+  preset
 }: FinalAnalysisPromptInput): AnalysisPrompt {
+  const strategy = resolvePreset(preset)
   return {
     systemPrompt: [
-      `You produce ${VIDEO_ANALYSIS_PROMPT_VERSION} structured video analysis. Reply with JSON only.`,
+      `You produce ${strategy.promptVersion} structured video analysis. Reply with JSON only.`,
       "Use only the supplied partial-analysis evidence.",
+      ...presetStyleLines(strategy),
       UNTRUSTED_PARTIAL_ANALYSES_DIRECTIVE
     ].join(" "),
     userPrompt: [
@@ -129,12 +156,14 @@ export function buildFinalAnalysisPrompt({
 
 export function buildSummaryReductionPrompt({
   level,
-  summaries
+  summaries,
+  preset
 }: SummaryReductionPromptInput): AnalysisPrompt {
   return {
     systemPrompt: [
       "You consolidate adjacent partial analyses into one concise prose summary.",
       "Preserve chronology, important facts, and materially important differences. Do not invent facts or output JSON.",
+      ...presetStyleLines(preset),
       UNTRUSTED_PARTIAL_ANALYSES_DIRECTIVE
     ].join(" "),
     userPrompt: [

@@ -9,6 +9,11 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  ANALYSIS_PRESET_IDS,
+  type AnalysisPresetId,
+} from "@/features/analysis/lib/analysis-preset"
 import {
   getAnalysisAction,
   type AnalysisPhase,
@@ -21,6 +26,9 @@ type AnalysisToolbarProps = {
   canAnalyze: boolean
   status: AnalysisPhase
   lastAnalyzedAt: string | null
+  analysisPresetId: AnalysisPresetId
+  isAnalysisPresetLoading?: boolean
+  onAnalysisPresetChange: (presetId: AnalysisPresetId) => void | Promise<void>
   onAnalyze: (options?: { force?: boolean }) => void | Promise<void>
   onCancel: () => void
   onConfigureProvider: () => void
@@ -32,6 +40,9 @@ export function AnalysisToolbar({
   canAnalyze,
   status,
   lastAnalyzedAt,
+  analysisPresetId,
+  isAnalysisPresetLoading = false,
+  onAnalysisPresetChange,
   onAnalyze,
   onCancel,
   onConfigureProvider,
@@ -62,6 +73,39 @@ export function AnalysisToolbar({
           <Badge variant={hasProvider ? "secondary" : "outline"} className="rounded-full px-3 py-1">
             {hasProvider ? t("overview.providerReady") : t("overview.providerRequired")}
           </Badge>
+        </div>
+        <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span id="analysis-preset-label" className="text-xs font-medium text-foreground">
+              {t("toolbar.presetLabel")}
+            </span>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              aria-labelledby="analysis-preset-label"
+              className="justify-start"
+              disabled={isAnalysisPresetLoading}
+              value={analysisPresetId}
+              onValueChange={(value) => {
+                if (!value) return
+                void onAnalysisPresetChange(value as AnalysisPresetId)
+              }}>
+              {ANALYSIS_PRESET_IDS.map((presetId) => (
+                <ToggleGroupItem
+                  key={presetId}
+                  value={presetId}
+                  title={t(`analysisPreset.${presetId}Description`)}
+                  aria-label={t(`analysisPreset.${presetId}Description`)}
+                  className="px-2.5 text-xs">
+                  {t(`analysisPreset.${presetId}`)}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {t("toolbar.presetHint")}
+          </p>
         </div>
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-2 p-4 pt-0 sm:flex-row">

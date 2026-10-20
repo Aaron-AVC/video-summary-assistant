@@ -19,6 +19,8 @@ const snapshot: Omit<AnalysisTaskSnapshot, "taskId" | "startedAt"> = {
   providerBaseUrl: "https://api.example.com/v1",
   providerModel: "model-a",
   generationTimeoutSec: 600,
+  analysisPresetId: "standard",
+  analysisPromptVersion: "video-analysis-v2",
 }
 
 describe("AnalysisTaskController", () => {

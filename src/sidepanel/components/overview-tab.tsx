@@ -5,6 +5,8 @@ import { KeyPointsList } from "@/features/analysis/components/key-points-list"
 import { SegmentTimeline } from "@/features/analysis/components/segment-timeline"
 import { SummaryCard } from "@/features/analysis/components/summary-card"
 import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
+import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
+import { DEFAULT_ANALYSIS_PRESET_ID } from "@/features/analysis/lib/analysis-preset"
 import { EmptyState } from "@/features/common/components/empty-state"
 import {
   RecentAnalysisList,
@@ -22,6 +24,9 @@ type OverviewTabProps = {
   hasProvider: boolean
   canAnalyze: boolean
   lastAnalyzedAt: string | null
+  analysisPresetId?: AnalysisPresetId
+  isAnalysisPresetLoading?: boolean
+  onAnalysisPresetChange?: (presetId: AnalysisPresetId) => void | Promise<void>
   recentItems: RecentAnalysisListItem[]
   isHistoryLoading: boolean
   activeVideoId: string | null
@@ -46,6 +51,9 @@ export function OverviewTab({
   hasProvider,
   canAnalyze,
   lastAnalyzedAt,
+  analysisPresetId = DEFAULT_ANALYSIS_PRESET_ID,
+  isAnalysisPresetLoading = false,
+  onAnalysisPresetChange,
   recentItems,
   isHistoryLoading,
   activeVideoId,
@@ -74,6 +82,9 @@ export function OverviewTab({
         canAnalyze={canAnalyze}
         status={analysisPhase}
         lastAnalyzedAt={lastAnalyzedAt}
+        analysisPresetId={analysisPresetId}
+        isAnalysisPresetLoading={isAnalysisPresetLoading}
+        onAnalysisPresetChange={onAnalysisPresetChange ?? (() => {})}
         onAnalyze={onAnalyze}
         onCancel={onCancel}
         onConfigureProvider={onConfigureProvider}

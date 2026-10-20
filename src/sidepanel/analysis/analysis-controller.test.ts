@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
+import { VIDEO_ANALYSIS_PROMPT_VERSION } from "@/features/analysis/lib/analysis-schema"
+import { ANALYSIS_PRESET_STRATEGIES } from "@/features/analysis/lib/analysis-preset"
 import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
 import type { AnalysisTaskPhase, AnalysisTaskSnapshot } from "@/features/analysis/lib/analysis-task-controller"
 import type { AnalysisTaskExecutionPolicy } from "@/features/analysis/lib/analysis-task-lifecycle"
@@ -45,6 +47,8 @@ function snapshotFixture(
     providerBaseUrl: "https://api.example.com/v1",
     providerModel: "model-1",
     generationTimeoutSec: 120,
+    analysisPresetId: "standard",
+    analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
     startedAt: TASK_STARTED_AT,
     ...overrides,
   }
@@ -854,5 +858,160 @@ describe("analysis controller — error propagation and dependency surface", () 
     ]) {
       expect(keys).not.toContain(forbidden)
     }
+  })
+})
+
+describe("analysis controller — analysis preset identity", () => {
+  const CONCISE_VERSION = ANALYSIS_PRESET_STRATEGIES.concise.promptVersion
+  const DETAILED_VERSION = ANALYSIS_PRESET_STRATEGIES.detailed.promptVersion
+
+  function conciseSnapshot(): AnalysisTaskSnapshot {
+    return snapshotFixture({
+      analysisPresetId: "concise",
+      analysisPromptVersion: CONCISE_VERSION,
+    })
+  }
+
+  it("S1. keeps the standard cache identity byte-compatible with the pre-preset contract", async () => {
+    const harness = createHarness()
+    const { request } = createRequest(harness.events)
+
+    const result = await harness.controller.runExecutionTask(request)
+
+    expect(harness.calls.getAnalysisCache[0]).toBe(await expectedCacheKey())
+    expect(harness.calls.runAnalysis[0]?.preset?.id).toBe("standard")
+    expect(harness.calls.runAnalysis[0]?.preset?.styleInstructions).toEqual([])
+    expect(harness.calls.saveAnalysisRun[0]?.analysisRun.analysisPromptVersion).toBe(
+      VIDEO_ANALYSIS_PROMPT_VERSION,
+    )
+    if (result.kind !== "completed") throw new Error("expected a completed run")
+    expect(result.publication.analysisPromptVersion).toBe(VIDEO_ANALYSIS_PROMPT_VERSION)
+  })
+
+  it("S2. sends the snapshot preset strategy to the model request", async () => {
+    const harness = createHarness()
+    const { request } = createRequest(harness.events, { taskSnapshot: conciseSnapshot() })
+
+    await harness.controller.runExecutionTask(request)
+
+    const preset = harness.calls.runAnalysis[0]?.preset
+    expect(preset?.id).toBe("concise")
+    expect(preset?.promptVersion).toBe(CONCISE_VERSION)
+    expect(preset?.styleInstructions.length).toBeGreaterThan(0)
+  })
+
+  it("S3. uses the snapshot prompt version for lookup, persistence and publication", async () => {
+    const harness = createHarness()
+    const { request } = createRequest(harness.events, { taskSnapshot: conciseSnapshot() })
+
+    const result = await harness.controller.runExecutionTask(request)
+
+    const expectedKey = await computeAnalysisCacheKey({
+      contentKey: CONTENT_KEY,
+      transcriptFingerprint: TRANSCRIPT_FINGERPRINT,
+      providerProfileId: "profile-1",
+      baseUrl: "https://api.example.com/v1",
+      model: "model-1",
+      promptVersion: CONCISE_VERSION,
+    })
+    expect(harness.calls.getAnalysisCache).toEqual([expectedKey])
+    expect(harness.calls.saveAnalysisRun[0]?.analysisRun.analysisPromptVersion).toBe(CONCISE_VERSION)
+    expect(harness.calls.saveAnalysisCache[0]?.analysisPromptVersion).toBe(CONCISE_VERSION)
+    if (result.kind !== "completed") throw new Error("expected a completed run")
+    expect(result.publication.analysisPromptVersion).toBe(CONCISE_VERSION)
+    expect(result.publication.analysisRunId).toBe("run-1")
+  })
+
+  it("S4. never lets two presets share a cache identity", async () => {
+    const identity = {
+      contentKey: CONTENT_KEY,
+      transcriptFingerprint: TRANSCRIPT_FINGERPRINT,
+      providerProfileId: "profile-1",
+      baseUrl: "https://api.example.com/v1",
+      model: "model-1",
+    }
+    const standard = await computeAnalysisCacheKey({
+      ...identity,
+      promptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+    })
+    const concise = await computeAnalysisCacheKey({ ...identity, promptVersion: CONCISE_VERSION })
+    const detailed = await computeAnalysisCacheKey({ ...identity, promptVersion: DETAILED_VERSION })
+
+    expect(new Set([standard, concise, detailed]).size).toBe(3)
+  })
+
+  it("S5. refuses a cache hit that belongs to another preset", async () => {
+    const harness = createHarness({
+      cached: cacheFixture({ analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION }),
+    })
+    const { request } = createRequest(harness.events, { taskSnapshot: conciseSnapshot() })
+
+    const result = await harness.controller.runExecutionTask(request)
+
+    expect(harness.calls.runAnalysis).toHaveLength(1)
+    if (result.kind !== "completed") throw new Error("expected a completed run")
+    expect(result.publication.analysisPromptVersion).toBe(CONCISE_VERSION)
+  })
+
+  it("S6. reuses an exact cache hit that matches the concise snapshot identity", async () => {
+    const harness = createHarness({
+      cached: cacheFixture({ analysisPromptVersion: CONCISE_VERSION }),
+    })
+    const { request } = createRequest(harness.events, { taskSnapshot: conciseSnapshot() })
+
+    const result = await harness.controller.runExecutionTask(request)
+
+    expect(result.kind).toBe("cached")
+    expect(harness.calls.runAnalysis).toHaveLength(0)
+  })
+})
+
+describe("analysis controller — standard cache compatibility", () => {
+  it("S7. still reuses a Standard cache row written before presets existed", async () => {
+    const harness = createHarness({
+      cached: cacheFixture({ analysisPromptVersion: "video-analysis-v2" }),
+    })
+    const { request } = createRequest(harness.events)
+
+    const result = await harness.controller.runExecutionTask(request)
+
+    expect(result.kind).toBe("cached")
+    expect(harness.calls.getAnalysisCache[0]).toBe(await expectedCacheKey())
+    expect(harness.calls.runAnalysis).toHaveLength(0)
+    expect(harness.calls.saveAnalysisRun).toHaveLength(0)
+    if (result.kind !== "cached") throw new Error("expected a cached run")
+    expect(result.publication.analysisPromptVersion).toBe(VIDEO_ANALYSIS_PROMPT_VERSION)
+  })
+
+  it("S8. keeps two tasks with different presets fully isolated", async () => {
+    const detailedHarness = createHarness()
+    const { request: detailedRequest } = createRequest(detailedHarness.events, {
+      taskSnapshot: snapshotFixture({
+        taskId: "task-2",
+        analysisPresetId: "detailed",
+        analysisPromptVersion: ANALYSIS_PRESET_STRATEGIES.detailed.promptVersion,
+      }),
+    })
+    const conciseHarness = createHarness()
+    const { request: conciseRequest } = createRequest(conciseHarness.events, {
+      taskSnapshot: snapshotFixture({
+        taskId: "task-1",
+        analysisPresetId: "concise",
+        analysisPromptVersion: ANALYSIS_PRESET_STRATEGIES.concise.promptVersion,
+      }),
+    })
+
+    const first = await conciseHarness.controller.runExecutionTask(conciseRequest)
+    const second = await detailedHarness.controller.runExecutionTask(detailedRequest)
+
+    expect(conciseHarness.calls.runAnalysis[0]?.preset?.id).toBe("concise")
+    expect(detailedHarness.calls.runAnalysis[0]?.preset?.id).toBe("detailed")
+    expect(conciseHarness.calls.getAnalysisCache[0]).not.toBe(
+      detailedHarness.calls.getAnalysisCache[0],
+    )
+    if (first.kind !== "completed" || second.kind !== "completed") {
+      throw new Error("expected completed runs")
+    }
+    expect(first.publication.analysisPromptVersion).not.toBe(second.publication.analysisPromptVersion)
   })
 })

@@ -14,7 +14,6 @@ import type {
 import { askVideo } from "@/features/analysis/lib/ask-video"
 import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
 import {
-  captureAnalysisCompletionTimes,
   getAnalysisTaskExecutionPolicy,
 } from "@/features/analysis/lib/analysis-task-lifecycle"
 import {
@@ -37,16 +36,12 @@ import {
   type DestructiveTaskSnapshot,
 } from "@/features/history/lib/destructive-operation-coordinator"
 import {
-  computeAnalysisCacheKey,
   isExactCurrentAnalysis,
 } from "@/lib/persistence/cache-identity"
 import {
   VIDEO_ANALYSIS_PROMPT_VERSION,
   VIDEO_ANALYSIS_SCHEMA_VERSION,
 } from "@/features/analysis/lib/analysis-schema"
-import {
-  persistIfSupportedPlatform,
-} from "@/features/platform/persistence-compat"
 import type {
   ActiveVideoContext,
   VideoIdentity,
@@ -61,6 +56,7 @@ import {
   useRuntimeBridge,
 } from "@/lib/providers/extension-providers"
 import { AskTab } from "@/sidepanel/components/ask-tab"
+import { createAnalysisController } from "@/sidepanel/analysis/analysis-controller"
 import { OverviewTab } from "@/sidepanel/components/overview-tab"
 import { SettingsTab } from "@/sidepanel/components/settings-tab"
 import { SidePanelShell } from "@/sidepanel/components/sidepanel-shell"
@@ -201,6 +197,20 @@ function SidepanelWorkspace() {
     })
   }
   const askController = askControllerRef.current
+  const analysisControllerRef = useRef<ReturnType<typeof createAnalysisController> | null>(null)
+  if (!analysisControllerRef.current) {
+    analysisControllerRef.current = createAnalysisController({
+      resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId),
+      saveTaskTranscriptCache: (input) => transcriptController.saveTaskCache(input),
+      getAnalysisCache: (cacheKey) => historyRepository.getAnalysisCache(cacheKey),
+      saveVideoRecord: (input) => historyRepository.saveVideoRecord(input),
+      saveTranscriptSnapshot: (input) => historyRepository.saveTranscriptSnapshot(input),
+      saveAnalysisRun: (input) => historyRepository.saveAnalysisRun(input),
+      saveAnalysisCache: (input) => historyRepository.saveAnalysisCache(input),
+      runAnalysis: (options) => runAnalysis(options),
+    })
+  }
+  const analysisController = analysisControllerRef.current
   const workspaceControllerRef = useRef<WorkspaceController | null>(null)
   if (!workspaceControllerRef.current) workspaceControllerRef.current = new WorkspaceController()
   const workspaceController = workspaceControllerRef.current
@@ -796,201 +806,47 @@ function SidepanelWorkspace() {
             },
           })
 
-          setPhase("analyzing")
-          const resolvedProvider = await settingsStorage.resolveProvider(requestedProvider.id)
-          ensureTaskCurrent()
-          const cacheKey = await computeAnalysisCacheKey({
-            contentKey: task.snapshot.contentKey,
-            transcriptFingerprint,
-            providerProfileId: task.snapshot.providerProfileId,
-            baseUrl: task.snapshot.providerBaseUrl,
-            model: task.snapshot.providerModel,
-          })
-          const transcriptCapturedAt = new Date().toISOString()
-          await transcriptController.saveTaskCache({
+          const execution = await analysisController.runExecutionTask({
+            taskSnapshot: task.snapshot,
             sourceVideo,
             transcript,
-            taskContentKey: task.snapshot.contentKey,
-            fingerprint: transcriptFingerprint,
-            now: transcriptCapturedAt,
+            transcriptFingerprint,
+            executionPolicy,
+            signal,
+            setPhase,
+            ensureTaskCurrent,
           })
 
-          if (!executionPolicy.bypassAnalysisCache) {
-            const cached = await historyRepository.getAnalysisCache(cacheKey)
-            if (cached?.analysis && isExactCurrentAnalysis({
-              contentKey: cached.contentKey,
-              transcriptFingerprint: cached.transcriptFingerprint,
-              providerProfileId: cached.providerProfileId,
-              baseUrl: cached.providerBaseUrl,
-              model: cached.providerModel,
-              analysisSchemaVersion: cached.analysisSchemaVersion,
-              analysisPromptVersion: cached.analysisPromptVersion,
-            }, {
-              contentKey: task.snapshot.contentKey,
-              transcriptFingerprint,
-              providerProfileId: task.snapshot.providerProfileId,
-              baseUrl: task.snapshot.providerBaseUrl,
-              model: task.snapshot.providerModel,
-              analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-              analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
-            })) {
-              ensureTaskCurrent()
-              await workspaceController.publishAnalysisResult({
-                workspaceEpoch: requestedWorkspaceEpoch,
-                taskContentKey: task.snapshot.contentKey,
-                currentContentKey: videoContextRef.current.contentKey,
-                effects: {
-                  publishAnalysis: () => {
-                    setAnalysisView({
-                      platform: sourceVideo.platform,
-                      videoId: sourceVideo.videoId,
-                      partId: sourceVideo.partId ?? null,
-                      contentKey: sourceVideo.contentKey,
-                      title: sourceVideo.title,
-                      analysis: cached.analysis,
-                      analysisRunId: cached.analysisRunId,
-                      transcriptFingerprint,
-                      providerProfileId: cached.providerProfileId ?? null,
-                      providerBaseUrl: cached.providerBaseUrl ?? null,
-                      providerModel: cached.providerModel ?? null,
-                      analysisSchemaVersion: cached.analysisSchemaVersion ?? null,
-                      analysisPromptVersion: cached.analysisPromptVersion ?? null,
-                      lastAnalyzedAt: cached.updatedAt,
-                      errorMessage: null,
-                    })
-                  },
-                  setAnalysisCompleted: () => {
-                    setAnalysisPhase("completed")
-                  },
-                  restoreQaConversation: async () => {
-                    await restoreQaConversation(sourceVideo.contentKey, cached.analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
-                  },
+          if (execution.kind === "cached") {
+            await workspaceController.publishAnalysisResult({
+              workspaceEpoch: requestedWorkspaceEpoch,
+              taskContentKey: task.snapshot.contentKey,
+              currentContentKey: videoContextRef.current.contentKey,
+              effects: {
+                publishAnalysis: () => {
+                  setAnalysisView({
+                    ...execution.publication,
+                    errorMessage: null,
+                  })
                 },
-              })
-              await refreshRecentAnalyses()
-              toast.success(t("toast.loadedCached", { title: sourceVideo.title }))
-              return
-            }
+                setAnalysisCompleted: () => {
+                  setAnalysisPhase("completed")
+                },
+                restoreQaConversation: async () => {
+                  await restoreQaConversation(
+                    execution.publication.contentKey,
+                    execution.publication.analysisRunId,
+                    loadWorkspaceGenerationRef.current,
+                    execution.publication.transcriptFingerprint,
+                  )
+                },
+              },
+            })
+            await refreshRecentAnalyses()
+            toast.success(t("toast.loadedCached", { title: sourceVideo.title }))
+            return
           }
 
-          const completed = await runAnalysis({
-            provider: {
-              baseUrl: task.snapshot.providerBaseUrl,
-              apiKey: resolvedProvider.apiKey,
-              model: task.snapshot.providerModel,
-              generationTimeoutSec: task.snapshot.generationTimeoutSec,
-            },
-            transcript: {
-              videoId: sourceVideo.videoId,
-              title: sourceVideo.title,
-              cues: transcript.segments,
-              durationSec: sourceVideo.durationSec,
-            },
-            signal,
-          })
-          ensureTaskCurrent()
-          setPhase("finalizing")
-          const { completedAt, taskStartedAt } = captureAnalysisCompletionTimes(task.snapshot.startedAt)
-
-          const analysisRunId = crypto.randomUUID()
-          const transcriptSnapshotId = crypto.randomUUID()
-          await persistIfSupportedPlatform(sourceVideo, async () => {
-            await historyRepository.saveVideoRecord({
-              contentKey: task.snapshot.contentKey,
-              platform: task.snapshot.platform,
-              videoId: task.snapshot.videoId,
-              partId: task.snapshot.partId,
-              title: sourceVideo.title,
-              channelTitle: sourceVideo.author,
-              thumbnailUrl: sourceVideo.thumbnailUrl ?? null,
-              canonicalUrl: sourceVideo.canonicalUrl || null,
-              durationSec: sourceVideo.durationSec ?? null,
-              openedAt: taskStartedAt,
-              updatedAt: completedAt,
-              analyzedAt: completedAt,
-            })
-            await historyRepository.saveTranscriptSnapshot({
-              id: transcriptSnapshotId,
-              videoId: task.snapshot.videoId,
-              platform: task.snapshot.platform,
-              contentKey: task.snapshot.contentKey,
-              partId: task.snapshot.partId,
-              language: transcript.language ?? null,
-              sourceUrl: transcript.raw?.sourceUrl ?? null,
-              rawVtt: transcript.raw?.text ?? null,
-              cues: transcript.segments,
-              createdAt: transcriptCapturedAt,
-              updatedAt: transcriptCapturedAt,
-            })
-            await historyRepository.saveAnalysisRun({
-              analysisRun: {
-                id: analysisRunId,
-                videoId: task.snapshot.videoId,
-                platform: task.snapshot.platform,
-                contentKey: task.snapshot.contentKey,
-                partId: task.snapshot.partId,
-                transcriptSnapshotId,
-                providerConfigId: task.snapshot.providerProfileId,
-                transcriptFingerprint,
-                analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-                analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
-                analysisCacheKey: cacheKey,
-                providerProfileId: task.snapshot.providerProfileId,
-                providerBaseUrl: task.snapshot.providerBaseUrl,
-                providerModel: task.snapshot.providerModel,
-                status: "completed",
-                summary: completed.analysis.summary,
-                keyPoints: completed.analysis.keyPoints,
-                topics: [],
-                errorMessage: null,
-                createdAt: taskStartedAt,
-                updatedAt: completedAt,
-                completedAt,
-              },
-              segments: completed.analysis.chapters.map((chapter) => ({
-                id: crypto.randomUUID(),
-                analysisRunId,
-                videoId: task.snapshot.videoId,
-                contentKey: task.snapshot.contentKey,
-                title: chapter.title,
-                summary: chapter.summary,
-                detail: chapter.detail,
-                startSec: chapter.startSec,
-                endSec: chapter.endSec,
-                createdAt: taskStartedAt,
-                updatedAt: completedAt,
-              })),
-              recentVideo: {
-                videoId: task.snapshot.videoId,
-                analysisRunId,
-                contentKey: task.snapshot.contentKey,
-                title: sourceVideo.title,
-                channelTitle: sourceVideo.author,
-                thumbnailUrl: sourceVideo.thumbnailUrl ?? null,
-                status: "completed",
-                openedAt: taskStartedAt,
-                analyzedAt: completedAt,
-                updatedAt: completedAt,
-              },
-            })
-            await historyRepository.saveAnalysisCache({
-              cacheKey,
-              contentKey: task.snapshot.contentKey,
-              platform: task.snapshot.platform,
-              videoId: task.snapshot.videoId,
-              partId: task.snapshot.partId,
-              transcriptFingerprint,
-              analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-              analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
-              providerProfileId: task.snapshot.providerProfileId,
-              providerBaseUrl: task.snapshot.providerBaseUrl,
-              providerModel: task.snapshot.providerModel,
-              analysisRunId,
-              analysis: completed.analysis,
-              createdAt: taskStartedAt,
-              updatedAt: completedAt,
-            })
-          })
           await refreshRecentAnalyses()
           await workspaceController.publishAnalysisResult({
             workspaceEpoch: requestedWorkspaceEpoch,
@@ -999,20 +855,7 @@ function SidepanelWorkspace() {
             effects: {
               publishAnalysis: () => {
                 setAnalysisView({
-                  platform: task.snapshot.platform,
-                  videoId: task.snapshot.videoId,
-                  partId: task.snapshot.partId,
-                  contentKey: task.snapshot.contentKey,
-                  title: sourceVideo.title,
-                  analysis: completed.analysis,
-                  analysisRunId,
-                  transcriptFingerprint,
-                  providerProfileId: task.snapshot.providerProfileId,
-                  providerBaseUrl: task.snapshot.providerBaseUrl,
-                  providerModel: task.snapshot.providerModel,
-                  analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-                  analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
-                  lastAnalyzedAt: completedAt,
+                  ...execution.publication,
                   errorMessage: null,
                 })
               },
@@ -1020,7 +863,12 @@ function SidepanelWorkspace() {
                 setAnalysisPhase("completed")
               },
               restoreQaConversation: async () => {
-                await restoreQaConversation(task.snapshot.contentKey, analysisRunId, loadWorkspaceGenerationRef.current, transcriptFingerprint)
+                await restoreQaConversation(
+                  execution.publication.contentKey,
+                  execution.publication.analysisRunId,
+                  loadWorkspaceGenerationRef.current,
+                  execution.publication.transcriptFingerprint,
+                )
               },
             },
           })
@@ -1075,7 +923,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()

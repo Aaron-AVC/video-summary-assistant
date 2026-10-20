@@ -104,6 +104,7 @@ import {
 } from "@/sidepanel/history/history-controller"
 import { createPendingHistoryOpenAdapter } from "@/sidepanel/history/pending-history-open-adapter"
 import { createAskController } from "@/sidepanel/ask/ask-controller"
+import { WorkspaceController } from "@/sidepanel/workspace/workspace-controller"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -197,6 +198,9 @@ function SidepanelWorkspace() {
     })
   }
   const askController = askControllerRef.current
+  const workspaceControllerRef = useRef<WorkspaceController | null>(null)
+  if (!workspaceControllerRef.current) workspaceControllerRef.current = new WorkspaceController()
+  const workspaceController = workspaceControllerRef.current
   const [transcriptSnapshot, setTranscriptSnapshot] = useState(
     transcriptController.getSnapshot(),
   )
@@ -582,6 +586,13 @@ function SidepanelWorkspace() {
   }, [historyController, loadSavedAnalysisForContext, videoContext.contentKey, videoContext.platform, videoContext.videoId, videoContext.title, videoContext.partId])
 
   useEffect(() => {
+    const transition = workspaceController.observeRuntimeContent({
+      videoContext,
+      activeTabId,
+    })
+
+    if (!transition.shouldReset) return
+
     loadWorkspaceGenerationRef.current += 1
     qaLoadGenerationRef.current += 1
     transcriptController.invalidateLoadEpoch()
@@ -595,7 +606,22 @@ function SidepanelWorkspace() {
     clearQaWorkspace()
     setAskError(null)
     setIsAnalysisFetching(false)
-  }, [clearQaWorkspace, resetTranscript, transcriptController, videoContext.contentKey])
+  }, [
+    activeTabId,
+    clearQaWorkspace,
+    resetTranscript,
+    transcriptController,
+    videoContext.author,
+    videoContext.canonicalUrl,
+    videoContext.contentKey,
+    videoContext.isReady,
+    videoContext.partId,
+    videoContext.platform,
+    videoContext.title,
+    videoContext.url,
+    videoContext.videoId,
+    workspaceController,
+  ])
 
   useEffect(() => {
     void loadWorkspace()

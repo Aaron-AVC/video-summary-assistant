@@ -11,7 +11,12 @@ import {
   resolveAnalysisPresetStrategy,
   resolveAnalysisPromptVersion,
 } from "@/features/analysis/lib/analysis-preset"
-import { VIDEO_ANALYSIS_PROMPT_VERSION } from "@/features/analysis/lib/analysis-schema"
+import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
+import {
+  VIDEO_ANALYSIS_PROMPT_VERSION,
+  VIDEO_ANALYSIS_SCHEMA_VERSION,
+} from "@/features/analysis/lib/analysis-schema"
+import { isExactCurrentAnalysis } from "@/lib/persistence/cache-identity"
 
 describe("analysis presets", () => {
   it("defaults to standard", () => {
@@ -89,5 +94,67 @@ describe("analysis presets", () => {
     expect(first.styleInstructions).toEqual(second.styleInstructions)
     expect(first.styleInstructions).not.toBe(second.styleInstructions)
     expect(first.styleInstructions).not.toBe(ANALYSIS_PRESET_STRATEGIES.concise.styleInstructions)
+  })
+})
+
+describe("analysis preset current-analysis identity", () => {
+  type Identity = Parameters<typeof isExactCurrentAnalysis>[0]
+
+  function displayedIdentity(promptVersion: string): Identity {
+    return {
+      contentKey: "youtube:video-a",
+      transcriptFingerprint: "fp-1",
+      providerProfileId: "profile-1",
+      baseUrl: "https://api.example.com",
+      model: "model-1",
+      analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+      analysisPromptVersion: promptVersion,
+    }
+  }
+
+  /** Mirrors the root: the expected identity follows the selected preset. */
+  function expectedIdentity(selectedPresetId: AnalysisPresetId): Identity {
+    return displayedIdentity(resolveAnalysisPromptVersion(selectedPresetId))
+  }
+
+  it("A. accepts a concise analysis while concise is selected", () => {
+    const displayed = displayedIdentity(resolveAnalysisPromptVersion("concise"))
+
+    expect(isExactCurrentAnalysis(displayed, expectedIdentity("concise"))).toBe(true)
+    expect(displayed.analysisPromptVersion).toBe(
+      `${VIDEO_ANALYSIS_PROMPT_VERSION}+preset-concise-v1`,
+    )
+  })
+
+  it("B. accepts a detailed analysis while detailed is selected", () => {
+    const displayed = displayedIdentity(resolveAnalysisPromptVersion("detailed"))
+
+    expect(isExactCurrentAnalysis(displayed, expectedIdentity("detailed"))).toBe(true)
+    expect(displayed.analysisPromptVersion).toBe(
+      `${VIDEO_ANALYSIS_PROMPT_VERSION}+preset-detailed-v1`,
+    )
+  })
+
+  it("C. rejects a standard analysis while concise is selected", () => {
+    const displayed = displayedIdentity(VIDEO_ANALYSIS_PROMPT_VERSION)
+
+    expect(isExactCurrentAnalysis(displayed, expectedIdentity("concise"))).toBe(false)
+  })
+
+  it("D. rejects a concise analysis while detailed is selected", () => {
+    const displayed = displayedIdentity(resolveAnalysisPromptVersion("concise"))
+
+    expect(isExactCurrentAnalysis(displayed, expectedIdentity("detailed"))).toBe(false)
+  })
+
+  it("keeps a standard analysis exact while standard is selected", () => {
+    const displayed = displayedIdentity(VIDEO_ANALYSIS_PROMPT_VERSION)
+
+    expect(isExactCurrentAnalysis(displayed, expectedIdentity("standard"))).toBe(true)
+  })
+
+  it("keeps the pre-preset standard cache identity intact", () => {
+    expect(resolveAnalysisPromptVersion("standard")).toBe(VIDEO_ANALYSIS_PROMPT_VERSION)
+    expect(resolveAnalysisPromptVersion(undefined)).toBe(VIDEO_ANALYSIS_PROMPT_VERSION)
   })
 })

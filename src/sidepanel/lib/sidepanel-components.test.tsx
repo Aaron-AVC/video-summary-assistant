@@ -401,4 +401,57 @@ describe("Analysis preset selector", () => {
     expect(markup).not.toContain("Regenerate")
     expect(markup).toContain("Not analyzed")
   })
+
+  it("E. disables the selector while a preset save is pending", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        {...baseOverview}
+        analysisPresetId="concise"
+        isAnalysisPresetSaving
+        onAnalysisPresetChange={noop}
+      />,
+    )
+
+    const selector = markup.slice(markup.indexOf('id="analysis-preset-label"'))
+    expect(selector).toContain('disabled=""')
+    expect(selector).toMatch(/disabled=""[^>]*>Standard</)
+  })
+
+  it("keeps the selector enabled when no save is pending", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        {...baseOverview}
+        analysisPresetId="concise"
+        isAnalysisPresetSaving={false}
+        onAnalysisPresetChange={noop}
+      />,
+    )
+
+    const selector = markup.slice(
+      markup.indexOf('id="analysis-preset-label"'),
+      markup.indexOf("Global default for every video"),
+    )
+    expect(selector).not.toContain('disabled=""')
+    expect(selector).toMatch(/data-state="on"[^>]*>Concise</)
+  })
+
+  it("keeps Analyze blocked while a preset save is pending", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewTab
+        {...baseOverview}
+        canAnalyze={false}
+        analysisPresetId="concise"
+        isAnalysisPresetSaving
+        onAnalysisPresetChange={noop}
+      />,
+    )
+
+    const analyzeIndex = markup.lastIndexOf("Generate")
+    const analyzeButton = markup.slice(
+      markup.lastIndexOf("<button", analyzeIndex),
+      markup.indexOf("</button>", analyzeIndex),
+    )
+    expect(analyzeButton).toContain('disabled=""')
+    expect(analyzeButton).toContain("Generate")
+  })
 })

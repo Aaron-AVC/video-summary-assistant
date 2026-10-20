@@ -28,6 +28,7 @@ type AnalysisToolbarProps = {
   lastAnalyzedAt: string | null
   analysisPresetId: AnalysisPresetId
   isAnalysisPresetLoading?: boolean
+  isAnalysisPresetSaving?: boolean
   onAnalysisPresetChange: (presetId: AnalysisPresetId) => void | Promise<void>
   onAnalyze: (options?: { force?: boolean }) => void | Promise<void>
   onCancel: () => void
@@ -42,6 +43,7 @@ export function AnalysisToolbar({
   lastAnalyzedAt,
   analysisPresetId,
   isAnalysisPresetLoading = false,
+  isAnalysisPresetSaving = false,
   onAnalysisPresetChange,
   onAnalyze,
   onCancel,
@@ -85,7 +87,7 @@ export function AnalysisToolbar({
               size="sm"
               aria-labelledby="analysis-preset-label"
               className="justify-start"
-              disabled={isAnalysisPresetLoading}
+              disabled={isAnalysisPresetLoading || isAnalysisPresetSaving}
               value={analysisPresetId}
               onValueChange={(value) => {
                 if (!value) return

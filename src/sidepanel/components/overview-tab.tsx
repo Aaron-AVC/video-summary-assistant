@@ -26,6 +26,7 @@ type OverviewTabProps = {
   lastAnalyzedAt: string | null
   analysisPresetId?: AnalysisPresetId
   isAnalysisPresetLoading?: boolean
+  isAnalysisPresetSaving?: boolean
   onAnalysisPresetChange?: (presetId: AnalysisPresetId) => void | Promise<void>
   recentItems: RecentAnalysisListItem[]
   isHistoryLoading: boolean
@@ -53,6 +54,7 @@ export function OverviewTab({
   lastAnalyzedAt,
   analysisPresetId = DEFAULT_ANALYSIS_PRESET_ID,
   isAnalysisPresetLoading = false,
+  isAnalysisPresetSaving = false,
   onAnalysisPresetChange,
   recentItems,
   isHistoryLoading,
@@ -84,6 +86,7 @@ export function OverviewTab({
         lastAnalyzedAt={lastAnalyzedAt}
         analysisPresetId={analysisPresetId}
         isAnalysisPresetLoading={isAnalysisPresetLoading}
+        isAnalysisPresetSaving={isAnalysisPresetSaving}
         onAnalysisPresetChange={onAnalysisPresetChange ?? (() => {})}
         onAnalyze={onAnalyze}
         onCancel={onCancel}

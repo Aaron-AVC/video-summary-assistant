@@ -15,6 +15,7 @@ import { askVideo } from "@/features/analysis/lib/ask-video"
 import {
   DEFAULT_ANALYSIS_PRESET_ID,
   createAnalysisPresetSnapshot,
+  resolveAnalysisPromptVersion,
   type AnalysisPresetId,
 } from "@/features/analysis/lib/analysis-preset"
 import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
@@ -43,10 +44,7 @@ import {
 import {
   isExactCurrentAnalysis,
 } from "@/lib/persistence/cache-identity"
-import {
-  VIDEO_ANALYSIS_PROMPT_VERSION,
-  VIDEO_ANALYSIS_SCHEMA_VERSION,
-} from "@/features/analysis/lib/analysis-schema"
+import { VIDEO_ANALYSIS_SCHEMA_VERSION } from "@/features/analysis/lib/analysis-schema"
 import type {
   ActiveVideoContext,
   VideoIdentity,
@@ -97,6 +95,7 @@ import {
 } from "@/sidepanel/lib/ask-transcript-identity"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import { applySidepanelDataMutation } from "@/sidepanel/lib/apply-data-mutation"
+import { createAnalysisPresetWriter } from "@/sidepanel/lib/analysis-preset-write"
 import { I18nProvider, useI18n } from "@/lib/i18n/i18n-provider"
 import {
   createHistoryController,
@@ -137,6 +136,7 @@ function SidepanelWorkspace() {
   const [activeTab, setActiveTab] = useState<SidePanelTab>(INITIAL_SIDE_PANEL_TAB)
   const [provider, setProvider] = useState<ProviderConfigRecord | null>(null)
   const [analysisPresetId, setAnalysisPresetId] = useState<AnalysisPresetId>(DEFAULT_ANALYSIS_PRESET_ID)
+  const [isAnalysisPresetSaving, setIsAnalysisPresetSaving] = useState(false)
   const [analysisView, setAnalysisView] = useState<AnalysisView | null>(null)
   const [recentItems, setRecentItems] = useState<RecentAnalysisListItem[]>([])
   const [askQuestion, setAskQuestion] = useState("")
@@ -220,6 +220,13 @@ function SidepanelWorkspace() {
   const workspaceControllerRef = useRef<WorkspaceController | null>(null)
   if (!workspaceControllerRef.current) workspaceControllerRef.current = new WorkspaceController()
   const workspaceController = workspaceControllerRef.current
+  const analysisPresetWriterRef = useRef<ReturnType<typeof createAnalysisPresetWriter> | null>(null)
+  if (!analysisPresetWriterRef.current) {
+    analysisPresetWriterRef.current = createAnalysisPresetWriter(
+      (presetId) => settingsStorage.setAnalysisPresetId(presetId),
+    )
+  }
+  const analysisPresetWriter = analysisPresetWriterRef.current
   const [transcriptSnapshot, setTranscriptSnapshot] = useState(
     transcriptController.getSnapshot(),
   )
@@ -413,7 +420,7 @@ function SidepanelWorkspace() {
           baseUrl: provider.baseUrl,
           model: provider.model,
           analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-          analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+          analysisPromptVersion: resolveAnalysisPromptVersion(analysisPresetId),
         }
       : null,
   )
@@ -726,6 +733,7 @@ function SidepanelWorkspace() {
   }, [analysisTaskController, rawVtt, transcriptCues, transcriptIdentity, transcriptController])
 
   const handleAnalyze = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (analysisPresetWriter.isPending()) return
     if (activeAnalysisTask) {
       toast.error(t("toast.anotherAnalysis"))
       return
@@ -934,7 +942,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()
@@ -1335,19 +1343,28 @@ function SidepanelWorkspace() {
   /**
    * Preset changes only move the global default, so the control stays usable
    * while a task runs: the running task keeps the strategy it captured at start.
+   *
+   * Writes are single-flight: the selector is disabled while a save settles, and
+   * the writer refuses an overlapping request, so a stale completion or rollback
+   * can never overwrite a newer selection.
    */
   const handleAnalysisPresetChange = useCallback(async (nextPresetId: AnalysisPresetId) => {
-    if (nextPresetId === analysisPresetId) return
+    if (analysisPresetWriter.isPending()) return
     const previousPresetId = analysisPresetId
+    if (nextPresetId === previousPresetId) return
+    setIsAnalysisPresetSaving(true)
     setAnalysisPresetId(nextPresetId)
     try {
-      const persistedPresetId = await settingsStorage.setAnalysisPresetId(nextPresetId)
-      setAnalysisPresetId(persistedPresetId)
-    } catch {
-      setAnalysisPresetId(previousPresetId)
-      toast.error(t("toast.analysisPresetSaveFailed"))
+      const result = await analysisPresetWriter.submit({
+        requestedPresetId: nextPresetId,
+        previousPresetId,
+      })
+      setAnalysisPresetId(result.kind === "ignored" ? previousPresetId : result.presetId)
+      if (result.kind === "failed") toast.error(t("toast.analysisPresetSaveFailed"))
+    } finally {
+      setIsAnalysisPresetSaving(false)
     }
-  }, [analysisPresetId, t])
+  }, [analysisPresetId, analysisPresetWriter, t])
 
   const visibleAnalysisError = analysisError
     ?? (activeAnalysisTask && activeAnalysisTask.snapshot.contentKey !== videoContext.contentKey
@@ -1408,13 +1425,15 @@ function SidepanelWorkspace() {
               && !activeAnalysisTask
               && !isAnalysisBusy
               && !isTranscriptLoading
-              && !isAnalysisFetching,
+              && !isAnalysisFetching
+              && !isAnalysisPresetSaving,
             )}
             lastAnalyzedAt={analysisView?.lastAnalyzedAt
               ? new Date(analysisView.lastAnalyzedAt).toLocaleString(locale)
               : null}
             analysisPresetId={analysisPresetId}
             isAnalysisPresetLoading={isBootstrapping}
+            isAnalysisPresetSaving={isAnalysisPresetSaving}
             onAnalysisPresetChange={handleAnalysisPresetChange}
             recentItems={recentItems}
             isHistoryLoading={isBootstrapping}

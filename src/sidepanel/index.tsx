@@ -13,7 +13,6 @@ import type {
 } from "@/features/analysis/lib/analysis-schema"
 import { askVideo } from "@/features/analysis/lib/ask-video"
 import {
-  boundQaConversationContext,
   computeBoundedConversationContextFingerprint,
 } from "@/features/analysis/lib/qa-conversation-context"
 import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
@@ -198,6 +197,7 @@ function SidepanelWorkspace() {
       deleteQaThread: (threadId) => qaConversationRepository.deleteQaThread(threadId),
       createQaThread: (input) => qaConversationRepository.createQaThread(input),
       resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId),
+      appendQaMessage: (input) => qaConversationRepository.appendQaMessage(input),
     })
   }
   const askController = askControllerRef.current
@@ -1201,15 +1201,9 @@ function SidepanelWorkspace() {
       const threadProviderBaseUrl = thread.providerBaseUrl
       const threadProviderModel = thread.providerModel
       const threadTranscriptFingerprint = thread.transcriptFingerprint
-      const previousMessages = await qaConversationRepository.listQaMessages(thread.id)
-      const conversationHistory = boundQaConversationContext(previousMessages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })))
-      const userMessage = await qaConversationRepository.appendQaMessage({
+      const { conversationHistory, userMessage } = await askController.prepareExecutionTurn({
         threadId: thread.id,
-        role: "user",
-        content: submittedQuestion,
+        question: submittedQuestion,
       })
       setAskQuestion("")
       if (isCurrentAsk()) {

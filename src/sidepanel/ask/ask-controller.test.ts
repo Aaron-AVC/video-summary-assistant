@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test"
 
+import {
+  MAX_QA_CONTEXT_MESSAGES,
+  boundQaConversationContext,
+} from "@/features/analysis/lib/qa-conversation-context"
 import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import {
@@ -8,6 +12,8 @@ import {
   projectAskAnswer,
   type AskControllerDependencies,
   type AskExecutionThreadRequest,
+  type AskExecutionTurnRequest,
+  type AskUserMessageInput,
   type CreateAskThreadInput,
 } from "@/sidepanel/ask/ask-controller"
 
@@ -53,6 +59,8 @@ type FakeCalls = {
   deleteQaThread: string[]
   createQaThread: CreateAskThreadInput[]
   resolveProvider: string[]
+  appendQaMessage: AskUserMessageInput[]
+  order: string[]
 }
 
 function createFakeDependencies(overrides: Partial<AskControllerDependencies> = {}) {
@@ -63,6 +71,8 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
     deleteQaThread: [],
     createQaThread: [],
     resolveProvider: [],
+    appendQaMessage: [],
+    order: [],
   }
 
   const dependencies: AskControllerDependencies = {
@@ -76,6 +86,7 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
     },
     listQaMessages: async (threadId) => {
       calls.listQaMessages.push(threadId)
+      calls.order.push("listQaMessages")
       return await (overrides.listQaMessages?.(threadId) ?? [])
     },
     deleteQaThread: async (threadId) => {
@@ -89,6 +100,16 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
     resolveProvider: async (providerId) => {
       calls.resolveProvider.push(providerId)
       return await (overrides.resolveProvider?.(providerId) ?? createResolvedProvider())
+    },
+    appendQaMessage: async (input) => {
+      calls.appendQaMessage.push(input)
+      calls.order.push("appendQaMessage")
+      return await (overrides.appendQaMessage?.(input) ?? createMessage({
+        id: "appended-message",
+        threadId: input.threadId,
+        role: input.role,
+        content: input.content,
+      }))
     },
   }
 
@@ -851,5 +872,158 @@ describe("AskController prepareExecutionThread errors", () => {
     await expect(
       controller.prepareExecutionThread(createExecutionRequest()),
     ).rejects.toBe(failure)
+  })
+})
+
+function createTurnRequest(
+  overrides: Partial<AskExecutionTurnRequest> = {},
+): AskExecutionTurnRequest {
+  return {
+    threadId: "thread-a",
+    question: "What happened?",
+    ...overrides,
+  }
+}
+
+describe("AskController prepareExecutionTurn", () => {
+  it("reads historical messages before appending the user message", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionTurn(createTurnRequest())
+
+    expect(calls.order).toEqual(["listQaMessages", "appendQaMessage"])
+  })
+
+  it("appends the exact narrow user payload", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionTurn(createTurnRequest({
+      threadId: "thread-a",
+      question: "What happened?",
+    }))
+
+    expect(calls.appendQaMessage).toEqual([{
+      threadId: "thread-a",
+      role: "user",
+      content: "What happened?",
+    }])
+    expect(Object.keys(calls.appendQaMessage[0]!).sort()).toEqual(["content", "role", "threadId"])
+  })
+
+  it("returns the persisted user message unchanged", async () => {
+    const persisted = createMessage({
+      id: "persisted-user-message",
+      threadId: "thread-a",
+      sequence: 4,
+      role: "user",
+      content: "What happened?",
+      createdAt: "2026-10-20T10:00:00.000Z",
+    })
+    const { dependencies } = createFakeDependencies({
+      appendQaMessage: async () => persisted,
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionTurn(createTurnRequest())
+
+    expect(result.userMessage).toBe(persisted)
+  })
+
+  it("excludes the current question from the returned conversation history", async () => {
+    const { dependencies } = createFakeDependencies({
+      listQaMessages: async () => [
+        createMessage({ id: "previous-user", role: "user", content: "previous user" }),
+        createMessage({ id: "previous-assistant", role: "assistant", content: "previous assistant" }),
+      ],
+      appendQaMessage: async (input) => createMessage({
+        id: "current-user",
+        threadId: input.threadId,
+        role: "user",
+        content: input.content,
+      }),
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionTurn(
+      createTurnRequest({ question: "new question" }),
+    )
+
+    expect(result.conversationHistory).toEqual([
+      { role: "user", content: "previous user" },
+      { role: "assistant", content: "previous assistant" },
+    ])
+    expect(result.conversationHistory.some((message) => message.content === "new question")).toBe(false)
+  })
+
+  it("applies the existing bounding policy to blank and oversized history", async () => {
+    const blankHeavy = [
+      createMessage({ id: "blank-1", role: "user", content: "   " }),
+      createMessage({ id: "blank-2", role: "assistant", content: "" }),
+      ...Array.from({ length: 8 }, (_, index) => createMessage({
+        id: `history-${index}`,
+        role: index % 2 === 0 ? "user" : "assistant",
+        content: `  history message ${index}  `,
+      })),
+    ]
+    const { dependencies } = createFakeDependencies({
+      listQaMessages: async () => blankHeavy,
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionTurn(createTurnRequest())
+
+    expect(result.conversationHistory).toEqual(boundQaConversationContext(
+      blankHeavy.map((message) => ({ role: message.role, content: message.content })),
+    ))
+    expect(result.conversationHistory).toHaveLength(MAX_QA_CONTEXT_MESSAGES)
+    expect(result.conversationHistory.some((message) => message.content.trim().length === 0)).toBe(false)
+  })
+
+  it("propagates a message read failure without appending", async () => {
+    const failure = new Error("history read failed")
+    const { dependencies, calls } = createFakeDependencies({
+      listQaMessages: async () => {
+        throw failure
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    await expect(
+      controller.prepareExecutionTurn(createTurnRequest()),
+    ).rejects.toBe(failure)
+    expect(calls.appendQaMessage).toEqual([])
+  })
+
+  it("propagates an append failure after reading history once", async () => {
+    const failure = new Error("append failed")
+    const { dependencies, calls } = createFakeDependencies({
+      appendQaMessage: async () => {
+        throw failure
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    await expect(
+      controller.prepareExecutionTurn(createTurnRequest()),
+    ).rejects.toBe(failure)
+    expect(calls.listQaMessages).toEqual(["thread-a"])
+    expect(calls.order).toEqual(["listQaMessages", "appendQaMessage"])
+  })
+
+  it("touches only the message list and append dependencies", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionTurn(createTurnRequest())
+
+    expect(calls.listQaMessages).toEqual(["thread-a"])
+    expect(calls.appendQaMessage).toHaveLength(1)
+    expect(calls.getQaThread).toEqual([])
+    expect(calls.listQaThreadsForVideo).toEqual([])
+    expect(calls.createQaThread).toEqual([])
+    expect(calls.deleteQaThread).toEqual([])
+    expect(calls.resolveProvider).toEqual([])
   })
 })

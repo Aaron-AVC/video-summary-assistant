@@ -1,4 +1,8 @@
 import type { AskVideoAnswer } from "@/features/analysis/lib/analysis-schema"
+import {
+  boundQaConversationContext,
+  type QaConversationContextMessage,
+} from "@/features/analysis/lib/qa-conversation-context"
 import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import {
@@ -21,6 +25,13 @@ export type CreateAskThreadInput = {
   providerModel: string
 }
 
+/** Narrow pre-task user message the Ask turn boundary persists. */
+export type AskUserMessageInput = {
+  threadId: string
+  role: "user"
+  content: string
+}
+
 /**
  * Narrow repository/settings surface the Ask conversation boundary needs.
  * The controller never imports the qaConversationRepository or settingsStorage
@@ -36,6 +47,7 @@ export type AskControllerDependencies = {
   deleteQaThread: (threadId: string) => Promise<void>
   createQaThread: (input: CreateAskThreadInput) => Promise<QaThreadEntity>
   resolveProvider: (providerId: string) => Promise<ResolvedProvider>
+  appendQaMessage: (input: AskUserMessageInput) => Promise<QaMessageEntity>
 }
 
 /** Read model restored for a workspace (history restore / analysis completion). */
@@ -127,6 +139,20 @@ export type AskExecutionThreadResult =
 export const ASK_THREAD_PROVIDER_UNAVAILABLE_MESSAGE =
   "The provider used by this conversation is no longer available. Start a new chat to use the current provider."
 
+export type AskExecutionTurnRequest = {
+  threadId: string
+  question: string
+}
+
+/**
+ * Bounded provider history built from messages persisted before the current
+ * question, plus the user message that was just appended.
+ */
+export type AskExecutionTurnResult = {
+  conversationHistory: QaConversationContextMessage[]
+  userMessage: QaMessageEntity
+}
+
 export type AskController = {
   restoreConversation: (
     request: AskRestoreConversationRequest,
@@ -136,6 +162,9 @@ export type AskController = {
   prepareExecutionThread: (
     request: AskExecutionThreadRequest,
   ) => Promise<AskExecutionThreadResult>
+  prepareExecutionTurn: (
+    request: AskExecutionTurnRequest,
+  ) => Promise<AskExecutionTurnResult>
 }
 
 /**
@@ -165,6 +194,7 @@ export function createAskController(dependencies: AskControllerDependencies): As
     deleteQaThread,
     createQaThread,
     resolveProvider,
+    appendQaMessage,
   } = dependencies
 
   function createEmptySnapshot(): AskConversationSnapshot {
@@ -287,5 +317,35 @@ export function createAskController(dependencies: AskControllerDependencies): As
     }
   }
 
-  return { restoreConversation, openThread, deleteThread, prepareExecutionThread }
+  /**
+   * Read the thread history that predates the current question, bound it with
+   * the authoritative policy, then persist the user message. The order is the
+   * contract: bounding must never see the current question, otherwise the
+   * provider payload and QA cache identity drift. No workspace currentness
+   * check happens here; the root owns the guard before this call.
+   */
+  async function prepareExecutionTurn(
+    request: AskExecutionTurnRequest,
+  ): Promise<AskExecutionTurnResult> {
+    const { threadId, question } = request
+    const previousMessages = await listQaMessages(threadId)
+    const conversationHistory = boundQaConversationContext(previousMessages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })))
+    const userMessage = await appendQaMessage({
+      threadId,
+      role: "user",
+      content: question,
+    })
+    return { conversationHistory, userMessage }
+  }
+
+  return {
+    restoreConversation,
+    openThread,
+    deleteThread,
+    prepareExecutionThread,
+    prepareExecutionTurn,
+  }
 }

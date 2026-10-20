@@ -33,10 +33,6 @@ import {
 } from "@/features/analysis/lib/ask-task-controller"
 import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
 import type { RecentAnalysisListItem } from "@/features/history/components/recent-analysis-list"
-import {
-  PENDING_HISTORY_OPEN_KEY,
-  isPendingHistoryOpenPayload,
-} from "@/features/history/lib/pending-history-open"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
   admitDestructiveTask,
@@ -121,6 +117,7 @@ import {
   createHistoryController,
   type HistoryContext,
 } from "@/sidepanel/history/history-controller"
+import { createPendingHistoryOpenAdapter } from "@/sidepanel/history/pending-history-open-adapter"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -1089,42 +1086,15 @@ function SidepanelWorkspace() {
   }, [applyMutation, hasActiveTaskForContent, historyController, t])
 
   useEffect(() => {
-    let isCurrent = true
-    const consumePayload = async (rawValue: unknown) => {
-      if (!isCurrent || !isPendingHistoryOpenPayload(rawValue)) return
-      try {
-          await handleOpenSavedAnalysis(rawValue.videoId, rawValue.contentKey, rawValue.analysisRunId)
-      } finally {
-        try {
-          await chrome.storage?.local?.remove(PENDING_HISTORY_OPEN_KEY)
-        } catch {
-          // Storage may not be writable in some sandboxes; ignore.
-        }
-      }
-    }
+    const adapter = createPendingHistoryOpenAdapter({
+      onOpen: async (payload) => {
+        await handleOpenSavedAnalysis(payload.videoId, payload.contentKey, payload.analysisRunId)
+      },
+    })
 
-    void (async () => {
-      try {
-        const stored = await chrome.storage?.local?.get(PENDING_HISTORY_OPEN_KEY)
-        await consumePayload(stored?.[PENDING_HISTORY_OPEN_KEY])
-      } catch {
-        // chrome.storage unavailable; nothing to drain.
-      }
-    })()
+    adapter.start()
 
-    const handleChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string,
-    ) => {
-      if (areaName !== "local") return
-      const change = changes[PENDING_HISTORY_OPEN_KEY]
-      if (change) void consumePayload(change.newValue)
-    }
-    chrome.storage?.onChanged?.addListener(handleChange)
-    return () => {
-      isCurrent = false
-      chrome.storage?.onChanged?.removeListener(handleChange)
-    }
+    return () => adapter.stop()
   }, [handleOpenSavedAnalysis])
 
   const handleAsk = useCallback(async () => {

@@ -227,6 +227,16 @@ export class WorkspaceController {
 
   private workspaceEpoch = 0
 
+  /**
+   * Async workspace bootstrap/restore transaction generation. Distinct from
+   * `workspaceEpoch`: the epoch tracks runtime content identity, while this
+   * token serializes one cross-feature workspace load domain (bootstrap,
+   * History restore, History publication, and the QA conversation restores it
+   * drives). It advances only when the root explicitly begins or invalidates a
+   * workspace load; runtime observation never advances it on its own.
+   */
+  private loadGeneration = 0
+
   private hasObserved = false
 
   private displaySelection: WorkspaceDisplaySelection = {
@@ -352,6 +362,29 @@ export class WorkspaceController {
 
   isEpochCurrent(epoch: number): boolean {
     return epoch === this.workspaceEpoch
+  }
+
+  /**
+   * Workspace load generation commands. `capture` never mutates; `begin` and
+   * `invalidate` each advance the counter exactly once and return the new value.
+   * These never read or advance the workspace epoch.
+   */
+  captureLoadGeneration(): number {
+    return this.loadGeneration
+  }
+
+  beginLoadGeneration(): number {
+    this.loadGeneration += 1
+    return this.loadGeneration
+  }
+
+  invalidateLoadGeneration(): number {
+    this.loadGeneration += 1
+    return this.loadGeneration
+  }
+
+  isLoadGenerationCurrent(generation: number): boolean {
+    return generation === this.loadGeneration
   }
 
   /**

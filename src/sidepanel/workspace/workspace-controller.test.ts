@@ -2101,3 +2101,169 @@ describe("WorkspaceController display selection", () => {
     })
   })
 })
+
+describe("WorkspaceController load generation", () => {
+  it("A. captureLoadGeneration is stable and non-mutating", () => {
+    const controller = new WorkspaceController()
+
+    const first = controller.captureLoadGeneration()
+    const second = controller.captureLoadGeneration()
+
+    expect(second).toBe(first)
+    expect(controller.isLoadGenerationCurrent(first)).toBe(true)
+  })
+
+  it("B. beginLoadGeneration advances exactly once", () => {
+    const controller = new WorkspaceController()
+
+    const before = controller.captureLoadGeneration()
+    const begun = controller.beginLoadGeneration()
+
+    expect(begun).toBe(before + 1)
+    expect(controller.captureLoadGeneration()).toBe(begun)
+    expect(controller.isLoadGenerationCurrent(begun)).toBe(true)
+    expect(controller.isLoadGenerationCurrent(before)).toBe(false)
+  })
+
+  it("C. beginning a newer load stales the older token", () => {
+    const controller = new WorkspaceController()
+
+    const first = controller.beginLoadGeneration()
+    const second = controller.beginLoadGeneration()
+
+    expect(second).toBe(first + 1)
+    expect(controller.isLoadGenerationCurrent(first)).toBe(false)
+    expect(controller.isLoadGenerationCurrent(second)).toBe(true)
+  })
+
+  it("D. invalidateLoadGeneration stales the current token", () => {
+    const controller = new WorkspaceController()
+
+    const current = controller.beginLoadGeneration()
+    const invalidated = controller.invalidateLoadGeneration()
+
+    expect(invalidated).toBe(current + 1)
+    expect(controller.isLoadGenerationCurrent(current)).toBe(false)
+    expect(controller.isLoadGenerationCurrent(invalidated)).toBe(true)
+  })
+
+  it("E. keeps repeated invalidation monotonic and currentness-safe", () => {
+    const controller = new WorkspaceController()
+
+    const tokens = [controller.beginLoadGeneration()]
+    tokens.push(controller.invalidateLoadGeneration())
+    tokens.push(controller.invalidateLoadGeneration())
+
+    for (let index = 1; index < tokens.length; index += 1) {
+      expect(tokens[index]).toBe(tokens[index - 1] + 1)
+    }
+    for (let index = 0; index < tokens.length - 1; index += 1) {
+      expect(controller.isLoadGenerationCurrent(tokens[index])).toBe(false)
+    }
+    expect(controller.isLoadGenerationCurrent(tokens[tokens.length - 1])).toBe(true)
+  })
+
+  it("F. never changes the workspace epoch when the load generation advances", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const epoch = controller.captureEpoch()
+
+    controller.beginLoadGeneration()
+    expect(controller.captureEpoch()).toBe(epoch)
+
+    controller.invalidateLoadGeneration()
+    expect(controller.captureEpoch()).toBe(epoch)
+  })
+
+  it("G. advances the epoch on an identity transition but not the load generation", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const epoch = controller.captureEpoch()
+    const loadGeneration = controller.beginLoadGeneration()
+
+    const transition = observe(controller, context({
+      videoId: "video-b",
+      contentKey: "youtube:video-b",
+      url: "https://www.youtube.com/watch?v=video-b",
+      canonicalUrl: "https://www.youtube.com/watch?v=video-b",
+      title: "Video B",
+    }))
+
+    expect(transition.kind).toBe("identity-changed")
+    expect(controller.captureEpoch()).toBe(epoch + 1)
+    expect(controller.captureLoadGeneration()).toBe(loadGeneration)
+    expect(controller.isLoadGenerationCurrent(loadGeneration)).toBe(true)
+  })
+
+  it("H. changes neither token on a same-content metadata refresh", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const epoch = controller.captureEpoch()
+    const loadGeneration = controller.beginLoadGeneration()
+
+    const transition = observe(controller, context({ title: "Video A renamed" }))
+
+    expect(transition.kind).toBe("same-content")
+    expect(controller.captureEpoch()).toBe(epoch)
+    expect(controller.captureLoadGeneration()).toBe(loadGeneration)
+    expect(controller.isLoadGenerationCurrent(loadGeneration)).toBe(true)
+  })
+
+  it("I. keeps the load token current across a display-selection sync", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const loadGeneration = controller.beginLoadGeneration()
+
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+
+    expect(controller.isLoadGenerationCurrent(loadGeneration)).toBe(true)
+  })
+
+  it("J. keeps the load token current across setSelectedQaThreadId", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const loadGeneration = controller.beginLoadGeneration()
+
+    controller.setSelectedQaThreadId("thread-2")
+    expect(controller.isLoadGenerationCurrent(loadGeneration)).toBe(true)
+
+    controller.setSelectedQaThreadId(null)
+    expect(controller.isLoadGenerationCurrent(loadGeneration)).toBe(true)
+  })
+
+  it("K. keeps the load token current across a workspace publication", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const loadGeneration = controller.beginLoadGeneration()
+    const workspaceEpoch = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch,
+      requested: askRequested(),
+      current: askCurrent(),
+      effects: recorder.effects,
+    })
+
+    expect(result.kind).toBe("published")
+    expect(recorder.publishAnswer).toBe(1)
+    expect(controller.isLoadGenerationCurrent(loadGeneration)).toBe(true)
+    expect(controller.captureEpoch()).toBe(workspaceEpoch)
+  })
+
+  it("L. isolates load generations between controller instances", () => {
+    const first = new WorkspaceController()
+    const second = new WorkspaceController()
+
+    expect(second.captureLoadGeneration()).toBe(first.captureLoadGeneration())
+
+    first.beginLoadGeneration()
+    first.invalidateLoadGeneration()
+
+    expect(first.isLoadGenerationCurrent(second.captureLoadGeneration())).toBe(false)
+    expect(second.isLoadGenerationCurrent(second.captureLoadGeneration())).toBe(true)
+  })
+})

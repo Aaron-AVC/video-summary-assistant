@@ -233,7 +233,6 @@ function SidepanelWorkspace() {
     askTaskController.getSnapshot(),
   )
   const askStartLockRef = useRef(false)
-  const loadWorkspaceGenerationRef = useRef(0)
   const currentTranscriptFingerprintRef = useRef<string | null>(null)
   const pendingAskOperationRef = useRef<DestructiveTaskSnapshot | null>(null)
   const destructiveWorkspaceRef = useRef({
@@ -290,7 +289,7 @@ function SidepanelWorkspace() {
     generation: number,
     transcriptFingerprint?: string | null,
   ) => {
-    const isCurrent = () => generation === loadWorkspaceGenerationRef.current
+    const isCurrent = () => workspaceController.isLoadGenerationCurrent(generation)
     const result = await askController.restoreConversation({
       contentKey,
       analysisRunId,
@@ -317,7 +316,7 @@ function SidepanelWorkspace() {
     workspaceEpoch: number
     generation: number
   }) => {
-    const isRequestCurrent = () => generation === loadWorkspaceGenerationRef.current
+    const isRequestCurrent = () => workspaceController.isLoadGenerationCurrent(generation)
     return workspaceController.publishHistoryRestore({
       mode,
       snapshot,
@@ -420,7 +419,7 @@ function SidepanelWorkspace() {
   const applyMutation = useCallback(async (mutation: Parameters<typeof applySidepanelDataMutation>[0]) => {
     await applySidepanelDataMutation(mutation, destructiveWorkspaceRef.current, {
       invalidateWorkspace: (clearTranscript) => {
-        loadWorkspaceGenerationRef.current += 1
+        workspaceController.invalidateLoadGeneration()
         askController.invalidateThreadLoadGeneration()
         askController.invalidateExecutionGeneration()
         if (clearTranscript) transcriptController.invalidateLoadEpoch()
@@ -447,7 +446,7 @@ function SidepanelWorkspace() {
         setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
       },
     })
-  }, [askController, clearQaWorkspace, refreshRecentAnalyses, resetTranscript, transcriptController])
+  }, [askController, clearQaWorkspace, refreshRecentAnalyses, resetTranscript, transcriptController, workspaceController])
 
   useEffect(() => {
     const getTasks = () => {
@@ -489,7 +488,7 @@ function SidepanelWorkspace() {
   const loadSavedAnalysis = useCallback(async (videoId: string, generation: number) => {
     const workspaceEpoch = workspaceController.captureEpoch()
     const isRestoreCurrent = () => (
-      generation === loadWorkspaceGenerationRef.current
+      workspaceController.isLoadGenerationCurrent(generation)
       && workspaceController.isEpochCurrent(workspaceEpoch)
     )
     setIsAnalysisFetching(true)
@@ -506,7 +505,7 @@ function SidepanelWorkspace() {
         generation,
       })
     } finally {
-      if (generation === loadWorkspaceGenerationRef.current) {
+      if (workspaceController.isLoadGenerationCurrent(generation)) {
         setIsAnalysisFetching(false)
       }
     }
@@ -519,7 +518,7 @@ function SidepanelWorkspace() {
     if (!context.contentKey || !context.videoId || !context.platform) return
     const workspaceEpoch = workspaceController.captureEpoch()
     const isRestoreCurrent = () => (
-      generation === loadWorkspaceGenerationRef.current
+      workspaceController.isLoadGenerationCurrent(generation)
       && workspaceController.isEpochCurrent(workspaceEpoch)
     )
     setIsAnalysisFetching(true)
@@ -543,14 +542,14 @@ function SidepanelWorkspace() {
         generation,
       })
     } finally {
-      if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
+      if (workspaceController.isLoadGenerationCurrent(generation)) setIsAnalysisFetching(false)
     }
   }, [historyController, publishHistoryRestore, workspaceController])
 
   const loadSavedAnalysisRun = useCallback(async (analysisRunId: string, generation: number) => {
     const workspaceEpoch = workspaceController.captureEpoch()
     const isRestoreCurrent = () => (
-      generation === loadWorkspaceGenerationRef.current
+      workspaceController.isLoadGenerationCurrent(generation)
       && workspaceController.isEpochCurrent(workspaceEpoch)
     )
     setIsAnalysisFetching(true)
@@ -567,19 +566,19 @@ function SidepanelWorkspace() {
         generation,
       })
     } finally {
-      if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
+      if (workspaceController.isLoadGenerationCurrent(generation)) setIsAnalysisFetching(false)
     }
   }, [historyController, publishHistoryRestore, workspaceController])
 
   const loadWorkspace = useCallback(async () => {
-    const generation = ++loadWorkspaceGenerationRef.current
+    const generation = workspaceController.beginLoadGeneration()
     setIsBootstrapping(true)
     try {
       const [providerConfigs, recent] = await Promise.all([
         settingsStorage.getProviderConfigs(),
         historyController.listRecentAnalyses(10),
       ])
-      if (generation !== loadWorkspaceGenerationRef.current) return
+      if (!workspaceController.isLoadGenerationCurrent(generation)) return
 
       setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
       setRecentItems(recent)
@@ -588,11 +587,11 @@ function SidepanelWorkspace() {
         await loadSavedAnalysisForContext(videoContext, generation)
       }
     } finally {
-      if (generation === loadWorkspaceGenerationRef.current) {
+      if (workspaceController.isLoadGenerationCurrent(generation)) {
         setIsBootstrapping(false)
       }
     }
-  }, [historyController, loadSavedAnalysisForContext, videoContext.contentKey, videoContext.platform, videoContext.videoId, videoContext.title, videoContext.partId])
+  }, [historyController, loadSavedAnalysisForContext, videoContext.contentKey, videoContext.platform, videoContext.videoId, videoContext.title, videoContext.partId, workspaceController])
 
   useEffect(() => {
     const transition = workspaceController.observeRuntimeContent({
@@ -602,7 +601,7 @@ function SidepanelWorkspace() {
 
     if (!transition.shouldReset) return
 
-    loadWorkspaceGenerationRef.current += 1
+    workspaceController.invalidateLoadGeneration()
     askController.invalidateThreadLoadGeneration()
     transcriptController.invalidateLoadEpoch()
     askController.invalidateExecutionGeneration()
@@ -837,7 +836,7 @@ function SidepanelWorkspace() {
                   await restoreQaConversation(
                     execution.publication.contentKey,
                     execution.publication.analysisRunId,
-                    loadWorkspaceGenerationRef.current,
+                    workspaceController.captureLoadGeneration(),
                     execution.publication.transcriptFingerprint,
                   )
                 },
@@ -867,7 +866,7 @@ function SidepanelWorkspace() {
                 await restoreQaConversation(
                   execution.publication.contentKey,
                   execution.publication.analysisRunId,
-                  loadWorkspaceGenerationRef.current,
+                  workspaceController.captureLoadGeneration(),
                   execution.publication.transcriptFingerprint,
                 )
               },
@@ -941,7 +940,7 @@ function SidepanelWorkspace() {
     setAskAnswer(null)
     setAskError(null)
     setAnalysisError(null)
-    const generation = ++loadWorkspaceGenerationRef.current
+    const generation = workspaceController.beginLoadGeneration()
     if (analysisRunId) {
       await loadSavedAnalysisRun(analysisRunId, generation)
     } else if (contentKey) {
@@ -957,7 +956,7 @@ function SidepanelWorkspace() {
       await loadSavedAnalysis(videoId, generation)
     }
     toast.success(t("toast.loadedHistory"))
-  }, [askController, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController])
+  }, [askController, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController, workspaceController])
 
   const hasActiveTaskForContent = useCallback((contentKey?: string) => {
     if (!contentKey) return false

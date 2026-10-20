@@ -30,12 +30,18 @@ import {
   type AskExecutionTaskInputRequest,
   type AskExecutionTaskRequest,
   type AskExecutionThreadRequest,
+  type AskExecutionTranscriptIdentityRequest,
   type AskExecutionTurnRequest,
+  type AskOpenThreadTranscriptRequest,
   type AskProviderRequest,
   type AskUserMessageInput,
   type AskVideoExecutionInput,
   type CreateAskThreadInput,
 } from "@/sidepanel/ask/ask-controller"
+import {
+  resolveAskTranscriptFingerprint,
+  resolveAskTranscriptRequestIdentity,
+} from "@/sidepanel/lib/ask-transcript-identity"
 
 const CONTENT_KEY = "youtube:video-a"
 const ANALYSIS_RUN_ID = "run-1"
@@ -1818,5 +1824,218 @@ describe("AskController runExecutionTask failure propagation", () => {
     expect(phases).toEqual([])
     expect(calls.saveQaAnswer).toHaveLength(0)
     expect(calls.appendAssistantMessage).toHaveLength(0)
+  })
+})
+
+function createTranscriptIdentityRequest(
+  overrides: Partial<AskExecutionTranscriptIdentityRequest> = {},
+): AskExecutionTranscriptIdentityRequest {
+  return {
+    analysisFingerprint: FINGERPRINT,
+    currentFingerprint: FINGERPRINT,
+    transcriptCues: createTranscriptCues(),
+    contentMatches: true,
+    ...overrides,
+  }
+}
+
+function createOpenThreadTranscriptRequest(
+  overrides: Partial<AskOpenThreadTranscriptRequest> = {},
+): AskOpenThreadTranscriptRequest {
+  return {
+    currentFingerprint: FINGERPRINT,
+    transcriptCues: createTranscriptCues(),
+    ...overrides,
+  }
+}
+
+describe("AskController prepareExecutionTranscriptIdentity", () => {
+  it("returns ok with the resolved fingerprint on an exact match", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const transcriptCues = createTranscriptCues()
+    const cueFingerprint = await resolveAskTranscriptFingerprint({
+      currentFingerprint: null,
+      transcriptCues,
+    })
+    const request = createTranscriptIdentityRequest({
+      analysisFingerprint: cueFingerprint,
+      currentFingerprint: cueFingerprint,
+      transcriptCues,
+    })
+
+    const result = await controller.prepareExecutionTranscriptIdentity(request)
+
+    expect(result).toEqual({ ok: true, transcriptFingerprint: cueFingerprint })
+  })
+
+  it("reports transcript-unavailable when there are no cues", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionTranscriptIdentity(
+      createTranscriptIdentityRequest({ transcriptCues: [] }),
+    )
+
+    expect(result).toEqual({ ok: false, reason: "transcript-unavailable" })
+  })
+
+  it("reports transcript-unavailable when the transcript content does not match", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const result = await controller.prepareExecutionTranscriptIdentity(
+      createTranscriptIdentityRequest({ contentMatches: false }),
+    )
+
+    expect(result).toEqual({ ok: false, reason: "transcript-unavailable" })
+  })
+
+  it("reports transcript-mismatch when the analysis fingerprint disagrees", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const request = createTranscriptIdentityRequest()
+
+    const resolved = await resolveAskTranscriptFingerprint({
+      currentFingerprint: request.currentFingerprint,
+      transcriptCues: request.transcriptCues,
+    })
+    const result = await controller.prepareExecutionTranscriptIdentity(
+      createTranscriptIdentityRequest({ analysisFingerprint: `${resolved}-other` }),
+    )
+
+    expect(result).toEqual({ ok: false, reason: "transcript-mismatch" })
+  })
+
+  it("computes the cue fingerprint when no fingerprint is persisted yet", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const request = createTranscriptIdentityRequest({
+      analysisFingerprint: null,
+      currentFingerprint: null,
+    })
+
+    const result = await controller.prepareExecutionTranscriptIdentity(request)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("expected ok")
+    expect(result.transcriptFingerprint).toBe(await resolveAskTranscriptFingerprint({
+      currentFingerprint: null,
+      transcriptCues: request.transcriptCues,
+    }))
+  })
+
+  it("matches the helper semantics for representative inputs", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const cues = createTranscriptCues()
+    const cueFingerprint = await resolveAskTranscriptFingerprint({
+      currentFingerprint: null,
+      transcriptCues: cues,
+    })
+    const requests: AskExecutionTranscriptIdentityRequest[] = [
+      createTranscriptIdentityRequest(),
+      createTranscriptIdentityRequest({ transcriptCues: [] }),
+      createTranscriptIdentityRequest({ contentMatches: false }),
+      createTranscriptIdentityRequest({ analysisFingerprint: "different-analysis" }),
+      createTranscriptIdentityRequest({ analysisFingerprint: null, currentFingerprint: null }),
+      createTranscriptIdentityRequest({ currentFingerprint: "stale", analysisFingerprint: cueFingerprint }),
+    ]
+
+    for (const request of requests) {
+      expect(await controller.prepareExecutionTranscriptIdentity(request))
+        .toEqual(await resolveAskTranscriptRequestIdentity(request))
+    }
+  })
+
+  it("touches no repository, provider, or cache dependency", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionTranscriptIdentity(createTranscriptIdentityRequest())
+
+    expect(calls.listQaMessages).toHaveLength(0)
+    expect(calls.getQaThread).toHaveLength(0)
+    expect(calls.appendQaMessage).toHaveLength(0)
+    expect(calls.getQaAnswer).toHaveLength(0)
+    expect(calls.runAskVideo).toHaveLength(0)
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.appendAssistantMessage).toHaveLength(0)
+  })
+})
+
+describe("AskController resolveOpenThreadTranscriptFingerprint", () => {
+  it("returns null when there are no cues", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const result = await controller.resolveOpenThreadTranscriptFingerprint(
+      createOpenThreadTranscriptRequest({ transcriptCues: [] }),
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it("keeps the current fingerprint when it already agrees with the cues", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const cues = createTranscriptCues()
+    const currentFingerprint = await resolveAskTranscriptFingerprint({
+      currentFingerprint: null,
+      transcriptCues: cues,
+    })
+
+    const result = await controller.resolveOpenThreadTranscriptFingerprint({
+      currentFingerprint,
+      transcriptCues: cues,
+    })
+
+    expect(result).toBe(currentFingerprint)
+  })
+
+  it("lets the computed cue fingerprint win over a stale persisted one", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const cues = createTranscriptCues()
+
+    const result = await controller.resolveOpenThreadTranscriptFingerprint({
+      currentFingerprint: "stale-fingerprint",
+      transcriptCues: cues,
+    })
+
+    expect(result).not.toBe("stale-fingerprint")
+    expect(result).toBe(await resolveAskTranscriptFingerprint({
+      currentFingerprint: "stale-fingerprint",
+      transcriptCues: cues,
+    }))
+  })
+
+  it("matches the helper semantics for representative inputs", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const cues = createTranscriptCues()
+    const requests: AskOpenThreadTranscriptRequest[] = [
+      createOpenThreadTranscriptRequest(),
+      createOpenThreadTranscriptRequest({ transcriptCues: [] }),
+      createOpenThreadTranscriptRequest({ currentFingerprint: null }),
+      createOpenThreadTranscriptRequest({ currentFingerprint: "stale" }),
+    ]
+
+    for (const request of requests) {
+      expect(await controller.resolveOpenThreadTranscriptFingerprint(request))
+        .toEqual(await resolveAskTranscriptFingerprint(request))
+    }
+  })
+
+  it("touches no repository or provider dependency", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.resolveOpenThreadTranscriptFingerprint(createOpenThreadTranscriptRequest())
+
+    expect(calls.getQaThread).toHaveLength(0)
+    expect(calls.listQaMessages).toHaveLength(0)
+    expect(calls.runAskVideo).toHaveLength(0)
+    expect(calls.getQaAnswer).toHaveLength(0)
   })
 })

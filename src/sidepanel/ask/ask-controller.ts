@@ -21,7 +21,11 @@ import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
 } from "@/sidepanel/lib/ask-conversation-identity"
-import { filterQaThreadsByTranscript } from "@/sidepanel/lib/ask-transcript-identity"
+import {
+  filterQaThreadsByTranscript,
+  resolveAskTranscriptFingerprint,
+  resolveAskTranscriptRequestIdentity,
+} from "@/sidepanel/lib/ask-transcript-identity"
 
 /** New-thread payload the Ask thread boundary persists. */
 export type CreateAskThreadInput = {
@@ -261,6 +265,33 @@ export type AskExecutionTaskResult = {
   assistantMessage: QaMessageEntity
 }
 
+/**
+ * Ask-specific transcript preflight inputs. The root captures every value; the
+ * controller owns only the domain resolution, never the load epoch, the
+ * generation, or the React state around it.
+ */
+export type AskExecutionTranscriptIdentityRequest = {
+  analysisFingerprint: string | null | undefined
+  currentFingerprint: string | null | undefined
+  transcriptCues: TranscriptSegment[]
+  contentMatches: boolean
+}
+
+/**
+ * Exact union the transcript-identity helper already produces. The controller
+ * re-exports it so the root keeps the same reason strings without importing the
+ * helper directly.
+ */
+export type AskExecutionTranscriptIdentityResult =
+  | { ok: true; transcriptFingerprint: string }
+  | { ok: false; reason: "transcript-unavailable" | "transcript-mismatch" }
+
+/** Inputs for resolving the fingerprint an open-thread request compares against. */
+export type AskOpenThreadTranscriptRequest = {
+  currentFingerprint: string | null | undefined
+  transcriptCues: TranscriptSegment[]
+}
+
 export type AskController = {
   restoreConversation: (
     request: AskRestoreConversationRequest,
@@ -279,6 +310,12 @@ export type AskController = {
   runExecutionTask: (
     request: AskExecutionTaskRequest,
   ) => Promise<AskExecutionTaskResult>
+  prepareExecutionTranscriptIdentity: (
+    request: AskExecutionTranscriptIdentityRequest,
+  ) => Promise<AskExecutionTranscriptIdentityResult>
+  resolveOpenThreadTranscriptFingerprint: (
+    request: AskOpenThreadTranscriptRequest,
+  ) => Promise<string | null>
 }
 
 /**
@@ -528,6 +565,34 @@ export function createAskController(dependencies: AskControllerDependencies): As
   }
 
   /**
+   * Ask-specific transcript preflight. It delegates to the existing helper so
+   * fingerprint computation and matching policy stay in one place; the root
+   * keeps the load-epoch, generation, and UI-mapping guards around this call.
+   */
+  async function prepareExecutionTranscriptIdentity(
+    request: AskExecutionTranscriptIdentityRequest,
+  ): Promise<AskExecutionTranscriptIdentityResult> {
+    const { analysisFingerprint, currentFingerprint, transcriptCues, contentMatches } = request
+    return resolveAskTranscriptRequestIdentity({
+      analysisFingerprint,
+      currentFingerprint,
+      transcriptCues,
+      contentMatches,
+    })
+  }
+
+  /**
+   * Fingerprint an open-thread request should be validated against. Delegates to
+   * the shared resolver so the cue fingerprint remains the authority.
+   */
+  async function resolveOpenThreadTranscriptFingerprint(
+    request: AskOpenThreadTranscriptRequest,
+  ): Promise<string | null> {
+    const { currentFingerprint, transcriptCues } = request
+    return resolveAskTranscriptFingerprint({ currentFingerprint, transcriptCues })
+  }
+
+  /**
    * Execute one Ask task: QA cache lookup, optional model call, cache write,
    * and assistant-message persistence.
    *
@@ -625,5 +690,7 @@ export function createAskController(dependencies: AskControllerDependencies): As
     prepareExecutionTurn,
     prepareExecutionTaskInput,
     runExecutionTask,
+    prepareExecutionTranscriptIdentity,
+    resolveOpenThreadTranscriptFingerprint,
   }
 }

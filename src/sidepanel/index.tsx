@@ -94,8 +94,6 @@ import {
 import {
   compareAskTranscriptIdentity,
   matchesAskRequestWorkspaceIdentity,
-  resolveAskTranscriptRequestIdentity,
-  resolveAskTranscriptFingerprint,
 } from "@/sidepanel/lib/ask-transcript-identity"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import { applySidepanelDataMutation } from "@/sidepanel/lib/apply-data-mutation"
@@ -1106,7 +1104,7 @@ function SidepanelWorkspace() {
       return
     }
     const requestedTranscriptLoadGeneration = transcriptController.captureLoadEpoch()
-    const requestIdentity = await resolveAskTranscriptRequestIdentity({
+    const requestIdentity = await askController.prepareExecutionTranscriptIdentity({
       analysisFingerprint: analysisView.transcriptFingerprint,
       currentFingerprint: currentTranscriptFingerprintRef.current,
       transcriptCues,
@@ -1291,7 +1289,7 @@ function SidepanelWorkspace() {
     if (isAsking || isTranscriptLoading || isAnalysisFetching || isAnalysisBusy) return
     const requestedContentKey = analysisView?.contentKey
     const requestedAnalysisRunId = analysisView?.analysisRunId ?? "legacy"
-    const requestedTranscriptFingerprint = await resolveAskTranscriptFingerprint({
+    const requestedTranscriptFingerprint = await askController.resolveOpenThreadTranscriptFingerprint({
       currentFingerprint: currentTranscriptFingerprintRef.current,
       transcriptCues,
     })

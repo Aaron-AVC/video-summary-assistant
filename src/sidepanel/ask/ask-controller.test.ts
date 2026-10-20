@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
-import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
+import type { AskVideoAnswer, VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
+import type { AskTaskSnapshot } from "@/features/analysis/lib/ask-task-controller"
 import {
   MAX_QA_CONTEXT_MESSAGES,
   boundQaConversationContext,
@@ -11,19 +12,28 @@ import type { TranscriptSegment } from "@/features/platform/types"
 import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
 import {
   computeQaCacheKey,
+  VIDEO_QA_PROMPT_VERSION,
+  VIDEO_QA_SCHEMA_VERSION,
   type QaCacheIdentityInput,
 } from "@/lib/persistence/cache-identity"
-import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
+import type {
+  QaAnswerEntity,
+  QaMessageEntity,
+  QaThreadEntity,
+} from "@/lib/schemas/persistence"
 import {
   ASK_THREAD_PROVIDER_UNAVAILABLE_MESSAGE,
   createAskController,
   projectAskAnswer,
+  type AskAssistantMessageInput,
   type AskControllerDependencies,
   type AskExecutionTaskInputRequest,
+  type AskExecutionTaskRequest,
   type AskExecutionThreadRequest,
   type AskExecutionTurnRequest,
   type AskProviderRequest,
   type AskUserMessageInput,
+  type AskVideoExecutionInput,
   type CreateAskThreadInput,
 } from "@/sidepanel/ask/ask-controller"
 
@@ -70,6 +80,10 @@ type FakeCalls = {
   createQaThread: CreateAskThreadInput[]
   resolveProvider: string[]
   appendQaMessage: AskUserMessageInput[]
+  getQaAnswer: string[]
+  saveQaAnswer: QaAnswerEntity[]
+  runAskVideo: AskVideoExecutionInput[]
+  appendAssistantMessage: AskAssistantMessageInput[]
   order: string[]
 }
 
@@ -82,6 +96,10 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
     createQaThread: [],
     resolveProvider: [],
     appendQaMessage: [],
+    getQaAnswer: [],
+    saveQaAnswer: [],
+    runAskVideo: [],
+    appendAssistantMessage: [],
     order: [],
   }
 
@@ -121,6 +139,35 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
         content: input.content,
       }))
     },
+    getQaAnswer: async (cacheKey) => {
+      calls.getQaAnswer.push(cacheKey)
+      calls.order.push("getQaAnswer")
+      return await (overrides.getQaAnswer?.(cacheKey) ?? null)
+    },
+    saveQaAnswer: async (input) => {
+      calls.saveQaAnswer.push(input)
+      calls.order.push("saveQaAnswer")
+      return await overrides.saveQaAnswer?.(input)
+    },
+    runAskVideo: async (input) => {
+      calls.runAskVideo.push(input)
+      calls.order.push("runAskVideo")
+      return await (overrides.runAskVideo?.(input) ?? { answer: createAskAnswer() })
+    },
+    appendAssistantMessage: async (input) => {
+      calls.appendAssistantMessage.push(input)
+      calls.order.push("appendAssistantMessage")
+      return await (overrides.appendAssistantMessage?.(input) ?? createMessage({
+        id: "assistant-message",
+        threadId: input.threadId,
+        role: "assistant",
+        content: input.content,
+        citations: input.citations,
+        suggestedJumps: input.suggestedJumps,
+        followUps: input.followUps,
+      }))
+    },
+    ...(overrides.now ? { now: overrides.now } : {}),
   }
 
   return { dependencies, calls }
@@ -1355,5 +1402,421 @@ describe("AskController prepareExecutionTaskInput frozen task inputs", () => {
     expect(calls.createQaThread).toEqual([])
     expect(calls.deleteQaThread).toEqual([])
     expect(calls.resolveProvider).toEqual([])
+  })
+})
+
+const FIXED_NOW = "2026-10-21T00:00:00.000Z"
+
+function createAskAnswer(overrides: Partial<AskVideoAnswer> = {}): AskVideoAnswer {
+  return {
+    answer: "The video starts with an introduction.",
+    citations: [{ startSec: 0, endSec: 5, text: "First cue." }],
+    suggestedJumps: [{ title: "Start", startSec: 0, endSec: 5 }],
+    followUps: ["What comes next?"],
+    ...overrides,
+  }
+}
+
+function createQaAnswerEntity(overrides: Partial<QaAnswerEntity> = {}): QaAnswerEntity {
+  return {
+    cacheKey: "cache-key-a",
+    contentKey: CONTENT_KEY,
+    transcriptFingerprint: FINGERPRINT,
+    analysisRunId: ANALYSIS_RUN_ID,
+    providerProfileId: "provider-a",
+    providerBaseUrl: "https://provider-a.example/v1",
+    providerModel: "model-a",
+    question: QUESTION,
+    schemaVersion: VIDEO_QA_SCHEMA_VERSION,
+    promptVersion: VIDEO_QA_PROMPT_VERSION,
+    answer: createAskAnswer(),
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+    ...overrides,
+  }
+}
+
+function createTaskSnapshot(
+  overrides: Partial<Omit<AskTaskSnapshot, "taskId" | "startedAt">> = {},
+): Omit<AskTaskSnapshot, "taskId" | "startedAt"> {
+  return {
+    contentKey: CONTENT_KEY,
+    analysisRunId: ANALYSIS_RUN_ID,
+    transcriptFingerprint: FINGERPRINT,
+    threadId: "thread-a",
+    platform: "youtube",
+    videoId: "video-a",
+    partId: null,
+    videoTitle: "Video A",
+    question: QUESTION,
+    providerProfileId: "provider-a",
+    providerBaseUrl: "https://provider-a.example/v1",
+    providerModel: "model-a",
+    generationTimeoutSec: 900,
+    ...overrides,
+  }
+}
+
+function createExecutionTaskRequest(
+  overrides: Partial<AskExecutionTaskRequest> = {},
+): AskExecutionTaskRequest {
+  return {
+    qaCacheKey: "cache-key-a",
+    taskSnapshot: createTaskSnapshot(),
+    providerRequest: createProviderRequest(),
+    taskAnalysis: createAnalysis(),
+    taskTranscriptCues: createTranscriptCues(),
+    taskConversationHistory: createConversationHistory(),
+    signal: new AbortController().signal,
+    isTaskCurrent: () => true,
+    setPhase: () => {},
+    ...overrides,
+  }
+}
+
+function createPhaseRecorder() {
+  const phases: ("repairing" | "finalizing")[] = []
+  return {
+    phases,
+    setPhase: (phase: "repairing" | "finalizing") => { phases.push(phase) },
+  }
+}
+
+describe("AskController runExecutionTask cache behaviour", () => {
+  it("serves a cache hit without calling the model or writing the cache", async () => {
+    const cachedAnswer = createQaAnswerEntity()
+    const { dependencies, calls } = createFakeDependencies({
+      getQaAnswer: async () => cachedAnswer,
+    })
+    const controller = createAskController(dependencies)
+    const { phases, setPhase } = createPhaseRecorder()
+
+    const result = await controller.runExecutionTask(createExecutionTaskRequest({ setPhase }))
+
+    expect(calls.getQaAnswer).toEqual(["cache-key-a"])
+    expect(calls.runAskVideo).toHaveLength(0)
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.appendAssistantMessage).toHaveLength(1)
+    expect(phases).toEqual(["finalizing"])
+    expect(result.answer).toBe(cachedAnswer.answer)
+  })
+
+  it("runs the model, writes the cache, then persists the assistant message on a cache miss", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const { phases, setPhase } = createPhaseRecorder()
+
+    await controller.runExecutionTask(createExecutionTaskRequest({ setPhase }))
+
+    expect(calls.order).toEqual([
+      "getQaAnswer",
+      "runAskVideo",
+      "saveQaAnswer",
+      "appendAssistantMessage",
+    ])
+    expect(phases).toEqual(["finalizing"])
+  })
+
+  it("never re-saves the cache for a cache hit", async () => {
+    const { dependencies, calls } = createFakeDependencies({
+      getQaAnswer: async () => createQaAnswerEntity(),
+    })
+    const controller = createAskController(dependencies)
+
+    await controller.runExecutionTask(createExecutionTaskRequest())
+
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.runAskVideo).toHaveLength(0)
+  })
+})
+
+describe("AskController runExecutionTask task guards", () => {
+  it("checks the task exactly three times on the success path", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    let guardCalls = 0
+
+    await controller.runExecutionTask(createExecutionTaskRequest({
+      isTaskCurrent: () => { guardCalls += 1; return true },
+    }))
+
+    expect(guardCalls).toBe(3)
+  })
+
+  it("throws the exact inactive error before touching the cache", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await expect(controller.runExecutionTask(createExecutionTaskRequest({
+      isTaskCurrent: () => false,
+    }))).rejects.toThrow("Ask Video task is no longer active.")
+
+    expect(calls.getQaAnswer).toHaveLength(0)
+    expect(calls.runAskVideo).toHaveLength(0)
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.appendAssistantMessage).toHaveLength(0)
+  })
+
+  it("checks task currentness before the abort flag", async () => {
+    const controllerInstance = new AbortController()
+    controllerInstance.abort()
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await expect(controller.runExecutionTask(createExecutionTaskRequest({
+      signal: controllerInstance.signal,
+      isTaskCurrent: () => false,
+    }))).rejects.toThrow("Ask Video task is no longer active.")
+  })
+
+  it("throws the exact AbortError when the signal is already aborted", async () => {
+    const abortController = new AbortController()
+    abortController.abort()
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const error = await controller.runExecutionTask(createExecutionTaskRequest({
+      signal: abortController.signal,
+    })).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(DOMException)
+    expect((error as DOMException).name).toBe("AbortError")
+    expect((error as DOMException).message).toBe("The Ask Video request was cancelled.")
+    expect(calls.getQaAnswer).toHaveLength(0)
+    expect(calls.runAskVideo).toHaveLength(0)
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.appendAssistantMessage).toHaveLength(0)
+  })
+
+  it("stops after the cache read when the task becomes stale", async () => {
+    let guardCalls = 0
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const { phases, setPhase } = createPhaseRecorder()
+
+    await expect(controller.runExecutionTask(createExecutionTaskRequest({
+      setPhase,
+      isTaskCurrent: () => { guardCalls += 1; return guardCalls === 1 },
+    }))).rejects.toThrow("Ask Video task is no longer active.")
+
+    expect(calls.getQaAnswer).toHaveLength(1)
+    expect(calls.runAskVideo).toHaveLength(0)
+    expect(phases).toEqual([])
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.appendAssistantMessage).toHaveLength(0)
+  })
+
+  it("stops after the model resolves when the signal aborts during the call", async () => {
+    const abortController = new AbortController()
+    const { dependencies, calls } = createFakeDependencies({
+      runAskVideo: async () => {
+        abortController.abort()
+        return { answer: createAskAnswer() }
+      },
+    })
+    const controller = createAskController(dependencies)
+    const { phases, setPhase } = createPhaseRecorder()
+
+    const error = await controller.runExecutionTask(createExecutionTaskRequest({
+      signal: abortController.signal,
+      setPhase,
+    })).catch((caught: unknown) => caught)
+
+    expect((error as DOMException).name).toBe("AbortError")
+    expect(phases).toEqual([])
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.appendAssistantMessage).toHaveLength(0)
+  })
+})
+
+describe("AskController runExecutionTask phases", () => {
+  it("reports repairing before finalizing when the model repairs", async () => {
+    const { dependencies } = createFakeDependencies({
+      runAskVideo: async (input) => {
+        input.onRepairStart()
+        return { answer: createAskAnswer() }
+      },
+    })
+    const controller = createAskController(dependencies)
+    const { phases, setPhase } = createPhaseRecorder()
+
+    await controller.runExecutionTask(createExecutionTaskRequest({ setPhase }))
+
+    expect(phases).toEqual(["repairing", "finalizing"])
+  })
+
+  it("never reports repairing for a cache hit", async () => {
+    const { dependencies } = createFakeDependencies({
+      getQaAnswer: async () => createQaAnswerEntity(),
+    })
+    const controller = createAskController(dependencies)
+    const { phases, setPhase } = createPhaseRecorder()
+
+    await controller.runExecutionTask(createExecutionTaskRequest({ setPhase }))
+
+    expect(phases).toEqual(["finalizing"])
+  })
+
+  it("stops guarding the task once finalizing starts", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    let guardCalls = 0
+    const { phases, setPhase } = createPhaseRecorder()
+
+    await controller.runExecutionTask(createExecutionTaskRequest({
+      setPhase,
+      isTaskCurrent: () => { guardCalls += 1; return true },
+    }))
+
+    expect(phases).toEqual(["finalizing"])
+    expect(guardCalls).toBe(3)
+    expect(calls.saveQaAnswer).toHaveLength(1)
+    expect(calls.appendAssistantMessage).toHaveLength(1)
+  })
+})
+
+describe("AskController runExecutionTask model input", () => {
+  it("passes the frozen task inputs to the model unchanged", async () => {
+    const request = createExecutionTaskRequest()
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.runExecutionTask(request)
+
+    const input = calls.runAskVideo[0]!
+    expect(input.provider).toEqual(request.providerRequest)
+    expect(input.provider).not.toBe(request.providerRequest)
+    expect(input.question).toBe(request.taskSnapshot.question)
+    expect(input.transcript.videoId).toBe(request.taskSnapshot.videoId)
+    expect(input.transcript.title).toBe(request.taskSnapshot.videoTitle)
+    expect(input.transcript.cues).toBe(request.taskTranscriptCues)
+    expect(input.analysis).toBe(request.taskAnalysis)
+    expect(input.conversationHistory).toBe(request.taskConversationHistory)
+    expect(input.signal).toBe(request.signal)
+  })
+})
+
+describe("AskController runExecutionTask persistence payloads", () => {
+  it("writes the exact QA cache row with a single timestamp", async () => {
+    const { dependencies, calls } = createFakeDependencies({ now: () => FIXED_NOW })
+    const controller = createAskController(dependencies)
+    const request = createExecutionTaskRequest()
+
+    await controller.runExecutionTask(request)
+
+    expect(calls.saveQaAnswer).toEqual([{
+      cacheKey: request.qaCacheKey,
+      contentKey: request.taskSnapshot.contentKey,
+      transcriptFingerprint: request.taskSnapshot.transcriptFingerprint,
+      analysisRunId: request.taskSnapshot.analysisRunId,
+      providerProfileId: request.taskSnapshot.providerProfileId,
+      providerBaseUrl: request.taskSnapshot.providerBaseUrl,
+      providerModel: request.taskSnapshot.providerModel,
+      question: request.taskSnapshot.question,
+      schemaVersion: VIDEO_QA_SCHEMA_VERSION,
+      promptVersion: VIDEO_QA_PROMPT_VERSION,
+      answer: createAskAnswer(),
+      createdAt: FIXED_NOW,
+      updatedAt: FIXED_NOW,
+    }])
+    const saved = calls.saveQaAnswer[0]!
+    expect(saved.createdAt).toBe(saved.updatedAt)
+  })
+
+  it("persists the requested analysis run rather than the cache identity run", async () => {
+    const { dependencies, calls } = createFakeDependencies({ now: () => FIXED_NOW })
+    const controller = createAskController(dependencies)
+
+    await controller.runExecutionTask(createExecutionTaskRequest({
+      qaCacheKey: "cache-key-from-persisted-run",
+      taskSnapshot: createTaskSnapshot({ analysisRunId: "requested-run" }),
+    }))
+
+    expect(calls.getQaAnswer).toEqual(["cache-key-from-persisted-run"])
+    expect(calls.saveQaAnswer[0]!.cacheKey).toBe("cache-key-from-persisted-run")
+    expect(calls.saveQaAnswer[0]!.analysisRunId).toBe("requested-run")
+  })
+
+  it("writes the exact assistant message input", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.runExecutionTask(createExecutionTaskRequest())
+
+    const assistant = calls.appendAssistantMessage[0]!
+    expect(assistant).toEqual({
+      threadId: "thread-a",
+      role: "assistant",
+      content: "The video starts with an introduction.",
+      citations: [{ startSec: 0, endSec: 5, text: "First cue." }],
+      suggestedJumps: [{ title: "Start", startSec: 0, endSec: 5 }],
+      followUps: ["What comes next?"],
+    })
+    expect(Object.keys(assistant).sort()).toEqual([
+      "citations",
+      "content",
+      "followUps",
+      "role",
+      "suggestedJumps",
+      "threadId",
+    ])
+  })
+
+  it("returns the assistant entity the dependency produced", async () => {
+    const persisted = createMessage({ id: "persisted-assistant", role: "assistant" })
+    const { dependencies } = createFakeDependencies({
+      appendAssistantMessage: async () => persisted,
+    })
+    const controller = createAskController(dependencies)
+
+    const result = await controller.runExecutionTask(createExecutionTaskRequest())
+
+    expect(result.assistantMessage).toBe(persisted)
+  })
+})
+
+describe("AskController runExecutionTask failure propagation", () => {
+  it("propagates a cache save failure without appending the assistant message", async () => {
+    const saveError = new Error("quota exceeded")
+    const { dependencies, calls } = createFakeDependencies({
+      saveQaAnswer: async () => { throw saveError },
+    })
+    const controller = createAskController(dependencies)
+
+    const error = await controller.runExecutionTask(createExecutionTaskRequest())
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBe(saveError)
+    expect(calls.appendAssistantMessage).toHaveLength(0)
+  })
+
+  it("propagates an assistant append failure unchanged", async () => {
+    const appendError = new Error("append failed")
+    const { dependencies } = createFakeDependencies({
+      appendAssistantMessage: async () => { throw appendError },
+    })
+    const controller = createAskController(dependencies)
+
+    const error = await controller.runExecutionTask(createExecutionTaskRequest())
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBe(appendError)
+  })
+
+  it("propagates a model failure without finalizing or persisting anything", async () => {
+    const modelError = new Error("provider down")
+    const { dependencies, calls } = createFakeDependencies({
+      runAskVideo: async () => { throw modelError },
+    })
+    const controller = createAskController(dependencies)
+    const { phases, setPhase } = createPhaseRecorder()
+
+    const error = await controller.runExecutionTask(createExecutionTaskRequest({ setPhase }))
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBe(modelError)
+    expect(phases).toEqual([])
+    expect(calls.saveQaAnswer).toHaveLength(0)
+    expect(calls.appendAssistantMessage).toHaveLength(0)
   })
 })

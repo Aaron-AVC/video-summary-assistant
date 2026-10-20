@@ -40,8 +40,6 @@ import {
 import {
   computeAnalysisCacheKey,
   isExactCurrentAnalysis,
-  VIDEO_QA_PROMPT_VERSION,
-  VIDEO_QA_SCHEMA_VERSION,
 } from "@/lib/persistence/cache-identity"
 import {
   VIDEO_ANALYSIS_PROMPT_VERSION,
@@ -194,6 +192,10 @@ function SidepanelWorkspace() {
       createQaThread: (input) => qaConversationRepository.createQaThread(input),
       resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId),
       appendQaMessage: (input) => qaConversationRepository.appendQaMessage(input),
+      getQaAnswer: (cacheKey) => historyRepository.getQaAnswer(cacheKey),
+      saveQaAnswer: (input) => historyRepository.saveQaAnswer(input),
+      runAskVideo: (input) => askVideo(input),
+      appendAssistantMessage: (input) => qaConversationRepository.appendQaMessage(input),
     })
   }
   const askController = askControllerRef.current
@@ -1224,59 +1226,16 @@ function SidepanelWorkspace() {
       })
       const taskPromise = askTaskController.start(taskSnapshot, async ({ taskId, signal, setPhase }) => {
         askSignal = signal
-        const ensureTaskActive = () => {
-          if (!askTaskController.isCurrent(taskId)) throw new Error("Ask Video task is no longer active.")
-          if (signal.aborted) throw new DOMException("The Ask Video request was cancelled.", "AbortError")
-        }
-        ensureTaskActive()
-        const cachedAnswer = await historyRepository.getQaAnswer(qaCacheKey)
-        ensureTaskActive()
-        let answer: AskVideoAnswer
-        if (cachedAnswer) {
-          answer = cachedAnswer.answer
-        } else {
-          const result = await askVideo({
-            provider: { ...taskProviderRequest },
-            question: taskSnapshot.question,
-            transcript: {
-              videoId: taskSnapshot.videoId,
-              title: taskSnapshot.videoTitle,
-              cues: taskTranscriptCues,
-            },
-            analysis: taskAnalysis,
-            conversationHistory: taskConversationHistory,
-            signal,
-            onRepairStart: () => setPhase("repairing"),
-          })
-          answer = result.answer
-        }
-        ensureTaskActive()
-        setPhase("finalizing")
-        if (!cachedAnswer) {
-          const now = new Date().toISOString()
-          await historyRepository.saveQaAnswer({
-            cacheKey: qaCacheKey,
-            contentKey: taskSnapshot.contentKey,
-            transcriptFingerprint: taskSnapshot.transcriptFingerprint,
-            analysisRunId: taskSnapshot.analysisRunId,
-            providerProfileId: taskSnapshot.providerProfileId,
-            providerBaseUrl: taskSnapshot.providerBaseUrl,
-            providerModel: taskSnapshot.providerModel,
-            question: taskSnapshot.question,
-            schemaVersion: VIDEO_QA_SCHEMA_VERSION,
-            promptVersion: VIDEO_QA_PROMPT_VERSION,
-            answer,
-            createdAt: now,
-            updatedAt: now,
-          })
-        }
-        const assistantMessage = await qaConversationRepository.appendQaMessage({
-          threadId: taskSnapshot.threadId,
-          role: "assistant",
-          content: answer.answer,
-          citations: answer.citations,
-          suggestedJumps: answer.suggestedJumps,
-          followUps: answer.followUps,
+        const { answer, assistantMessage } = await askController.runExecutionTask({
+          qaCacheKey,
+          taskSnapshot,
+          providerRequest: taskProviderRequest,
+          taskAnalysis,
+          taskTranscriptCues,
+          taskConversationHistory,
+          signal,
+          isTaskCurrent: () => askTaskController.isCurrent(taskId),
+          setPhase,
         })
         const isWorkspaceCurrent = matchesAskRequestWorkspaceIdentity({
           contentKey: taskSnapshot.contentKey,

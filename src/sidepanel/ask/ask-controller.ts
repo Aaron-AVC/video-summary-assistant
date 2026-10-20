@@ -7,8 +7,16 @@ import {
 } from "@/features/analysis/lib/qa-conversation-context"
 import type { TranscriptSegment } from "@/features/platform/types"
 import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
-import { computeQaCacheKey } from "@/lib/persistence/cache-identity"
-import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
+import {
+  computeQaCacheKey,
+  VIDEO_QA_PROMPT_VERSION,
+  VIDEO_QA_SCHEMA_VERSION,
+} from "@/lib/persistence/cache-identity"
+import type {
+  QaAnswerEntity,
+  QaMessageEntity,
+  QaThreadEntity,
+} from "@/lib/schemas/persistence"
 import {
   getFrozenQaProviderRequest,
   matchesQaThreadIdentity,
@@ -36,6 +44,34 @@ export type AskUserMessageInput = {
   content: string
 }
 
+/** Narrow assistant message the Ask execution boundary persists. */
+export type AskAssistantMessageInput = {
+  threadId: string
+  role: "assistant"
+  content: string
+  citations: AskVideoAnswer["citations"]
+  suggestedJumps: AskVideoAnswer["suggestedJumps"]
+  followUps: AskVideoAnswer["followUps"]
+}
+
+/**
+ * Exact provider call the Ask execution boundary needs. It mirrors the
+ * `askVideo` option surface without exposing the client injection hook.
+ */
+export type AskVideoExecutionInput = {
+  provider: AskProviderRequest
+  question: string
+  transcript: {
+    videoId: string
+    title: string | null
+    cues: TranscriptSegment[]
+  }
+  analysis: VideoAnalysis
+  conversationHistory: QaConversationContextMessage[]
+  signal: AbortSignal
+  onRepairStart: () => void
+}
+
 /**
  * Narrow repository/settings surface the Ask conversation boundary needs.
  * The controller never imports the qaConversationRepository or settingsStorage
@@ -52,6 +88,11 @@ export type AskControllerDependencies = {
   createQaThread: (input: CreateAskThreadInput) => Promise<QaThreadEntity>
   resolveProvider: (providerId: string) => Promise<ResolvedProvider>
   appendQaMessage: (input: AskUserMessageInput) => Promise<QaMessageEntity>
+  getQaAnswer: (cacheKey: string) => Promise<QaAnswerEntity | null>
+  saveQaAnswer: (input: QaAnswerEntity) => Promise<unknown>
+  runAskVideo: (input: AskVideoExecutionInput) => Promise<{ answer: AskVideoAnswer }>
+  appendAssistantMessage: (input: AskAssistantMessageInput) => Promise<QaMessageEntity>
+  now?: () => string
 }
 
 /** Read model restored for a workspace (history restore / analysis completion). */
@@ -197,6 +238,29 @@ export type AskExecutionTaskInputResult = {
   taskConversationHistory: QaConversationContextMessage[]
 }
 
+/**
+ * One Ask execution run, fed by the frozen inputs of the previous preparation
+ * step plus the task lifecycle capabilities the root still owns. The controller
+ * consumes these; it never starts, observes, or cancels the task.
+ */
+export type AskExecutionTaskRequest = {
+  qaCacheKey: string
+  taskSnapshot: Omit<AskTaskSnapshot, "taskId" | "startedAt">
+  providerRequest: AskProviderRequest
+  taskAnalysis: VideoAnalysis
+  taskTranscriptCues: TranscriptSegment[]
+  taskConversationHistory: QaConversationContextMessage[]
+  signal: AbortSignal
+  isTaskCurrent: () => boolean
+  setPhase: (phase: "repairing" | "finalizing") => void
+}
+
+/** Domain result of one Ask execution run. No UI intent, no toast text. */
+export type AskExecutionTaskResult = {
+  answer: AskVideoAnswer
+  assistantMessage: QaMessageEntity
+}
+
 export type AskController = {
   restoreConversation: (
     request: AskRestoreConversationRequest,
@@ -212,6 +276,9 @@ export type AskController = {
   prepareExecutionTaskInput: (
     request: AskExecutionTaskInputRequest,
   ) => Promise<AskExecutionTaskInputResult>
+  runExecutionTask: (
+    request: AskExecutionTaskRequest,
+  ) => Promise<AskExecutionTaskResult>
 }
 
 /**
@@ -242,7 +309,12 @@ export function createAskController(dependencies: AskControllerDependencies): As
     createQaThread,
     resolveProvider,
     appendQaMessage,
+    getQaAnswer,
+    saveQaAnswer,
+    runAskVideo,
+    appendAssistantMessage,
   } = dependencies
+  const now = dependencies.now ?? (() => new Date().toISOString())
 
   function createEmptySnapshot(): AskConversationSnapshot {
     return { threads: [], currentThreadId: null, messages: [], answer: null }
@@ -455,6 +527,96 @@ export function createAskController(dependencies: AskControllerDependencies): As
     }
   }
 
+  /**
+   * Execute one Ask task: QA cache lookup, optional model call, cache write,
+   * and assistant-message persistence.
+   *
+   * The three task-active guards and their order are the contract: one before
+   * the cache read, one after it and before the model call, one after the
+   * answer is resolved and before `finalizing`. Nothing after `finalizing` may
+   * re-check the task, because the task controller no longer allows cancelling
+   * from that phase.
+   */
+  async function runExecutionTask(
+    request: AskExecutionTaskRequest,
+  ): Promise<AskExecutionTaskResult> {
+    const {
+      qaCacheKey,
+      taskSnapshot,
+      providerRequest,
+      taskAnalysis,
+      taskTranscriptCues,
+      taskConversationHistory,
+      signal,
+      isTaskCurrent,
+      setPhase,
+    } = request
+
+    const ensureTaskActive = () => {
+      if (!isTaskCurrent()) throw new Error("Ask Video task is no longer active.")
+      if (signal.aborted) {
+        throw new DOMException("The Ask Video request was cancelled.", "AbortError")
+      }
+    }
+
+    ensureTaskActive()
+    const cachedAnswer = await getQaAnswer(qaCacheKey)
+    ensureTaskActive()
+
+    let answer: AskVideoAnswer
+    if (cachedAnswer) {
+      answer = cachedAnswer.answer
+    } else {
+      const result = await runAskVideo({
+        provider: { ...providerRequest },
+        question: taskSnapshot.question,
+        transcript: {
+          videoId: taskSnapshot.videoId,
+          title: taskSnapshot.videoTitle,
+          cues: taskTranscriptCues,
+        },
+        analysis: taskAnalysis,
+        conversationHistory: taskConversationHistory,
+        signal,
+        onRepairStart: () => setPhase("repairing"),
+      })
+      answer = result.answer
+    }
+
+    ensureTaskActive()
+    setPhase("finalizing")
+
+    if (!cachedAnswer) {
+      const timestamp = now()
+      await saveQaAnswer({
+        cacheKey: qaCacheKey,
+        contentKey: taskSnapshot.contentKey,
+        transcriptFingerprint: taskSnapshot.transcriptFingerprint,
+        analysisRunId: taskSnapshot.analysisRunId,
+        providerProfileId: taskSnapshot.providerProfileId,
+        providerBaseUrl: taskSnapshot.providerBaseUrl,
+        providerModel: taskSnapshot.providerModel,
+        question: taskSnapshot.question,
+        schemaVersion: VIDEO_QA_SCHEMA_VERSION,
+        promptVersion: VIDEO_QA_PROMPT_VERSION,
+        answer,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+    }
+
+    const assistantMessage = await appendAssistantMessage({
+      threadId: taskSnapshot.threadId,
+      role: "assistant",
+      content: answer.answer,
+      citations: answer.citations,
+      suggestedJumps: answer.suggestedJumps,
+      followUps: answer.followUps,
+    })
+
+    return { answer, assistantMessage }
+  }
+
   return {
     restoreConversation,
     openThread,
@@ -462,5 +624,6 @@ export function createAskController(dependencies: AskControllerDependencies): As
     prepareExecutionThread,
     prepareExecutionTurn,
     prepareExecutionTaskInput,
+    runExecutionTask,
   }
 }

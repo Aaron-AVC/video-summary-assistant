@@ -458,6 +458,11 @@ function SidepanelWorkspace() {
         const providerConfigs = await settingsStorage.getProviderConfigs()
         setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
       },
+      refreshAnalysisPreset: async () => {
+        // clear-all wipes Settings, so re-read the global default instead of
+        // assuming the previously selected preset survived.
+        setAnalysisPresetId(await settingsStorage.getAnalysisPresetId())
+      },
     })
   }, [askController, clearQaWorkspace, refreshRecentAnalyses, resetTranscript, transcriptController, workspaceController])
 

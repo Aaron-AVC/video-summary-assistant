@@ -18,6 +18,7 @@ export type SidepanelMutationEffects = {
   clearTranscriptWorkspace: () => void
   refreshRecentAnalyses: () => void | Promise<void>
   refreshProvider: () => void | Promise<void>
+  refreshAnalysisPreset: () => void | Promise<void>
 }
 
 export async function applySidepanelDataMutation(
@@ -73,7 +74,11 @@ export async function applySidepanelDataMutation(
     effects.setAnalysisIdle()
     effects.clearAskWorkspace()
     effects.clearTranscriptWorkspace()
-    await Promise.all([effects.refreshProvider(), effects.refreshRecentAnalyses()])
+    await Promise.all([
+      effects.refreshProvider(),
+      effects.refreshAnalysisPreset(),
+      effects.refreshRecentAnalyses(),
+    ])
     return
   }
 

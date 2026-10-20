@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test"
 
+import {
+  DEFAULT_ANALYSIS_PRESET_ID,
+  normalizeAnalysisPresetId,
+} from "@/features/analysis/lib/analysis-preset"
 import { applySidepanelDataMutation } from "@/sidepanel/lib/apply-data-mutation"
 
 function createWorkspace(overrides: Partial<Parameters<typeof applySidepanelDataMutation>[1]> = {}) {
@@ -25,6 +29,7 @@ function createEffects() {
       clearTranscriptWorkspace: () => calls.push("transcript"),
       refreshRecentAnalyses: () => { calls.push("recent") },
       refreshProvider: () => { calls.push("provider") },
+      refreshAnalysisPreset: () => { calls.push("preset") },
     },
   }
 }
@@ -78,6 +83,41 @@ describe("Side Panel destructive mutation handling", () => {
   it("clears full workspace and refreshes providers after clear all", async () => {
     const { calls, effects } = createEffects()
     await applySidepanelDataMutation({ type: "clear-all" }, createWorkspace(), effects)
-    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "provider", "recent"])
+    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "provider", "preset", "recent"])
+  })
+  it("refreshes the global analysis preset only for clear all", async () => {
+    const mutations = [
+      { type: "delete-analysis-run", analysisRunId: "run-current" },
+      { type: "delete-video-data", contentKey: "youtube:current" },
+      { type: "clear-conversations" },
+      { type: "clear-transcript-cache" },
+      { type: "clear-analysis-history" },
+      { type: "clear-diagnostics" },
+    ] as const
+
+    for (const mutation of mutations) {
+      const { calls, effects } = createEffects()
+      await applySidepanelDataMutation(mutation, createWorkspace(), effects)
+      expect(calls).not.toContain("preset")
+    }
+  })
+
+  it("publishes the normalized global preset after clear all wipes Settings", async () => {
+    const published: string[] = []
+    let storedPreset: string | undefined = "detailed"
+    const { calls, effects } = createEffects()
+
+    await applySidepanelDataMutation({ type: "clear-all" }, createWorkspace(), {
+      ...effects,
+      refreshAnalysisPreset: async () => {
+        calls.push("preset")
+        storedPreset = undefined
+        published.push(normalizeAnalysisPresetId(storedPreset))
+      },
+    })
+
+    expect(calls).toEqual(["invalidate:true", "analysis", "idle", "ask", "transcript", "provider", "preset", "recent"])
+    expect(published).toEqual([DEFAULT_ANALYSIS_PRESET_ID])
+    expect(published[0]).toBe("standard")
   })
 })

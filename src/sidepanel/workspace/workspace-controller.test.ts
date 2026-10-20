@@ -12,6 +12,9 @@ import type {
 } from "@/sidepanel/history/history-controller"
 import {
   WorkspaceController,
+  type WorkspaceAskCurrentIdentity,
+  type WorkspaceAskPublicationEffects,
+  type WorkspaceAskRequestedIdentity,
   type WorkspaceHistoryPublicationEffects,
   type WorkspaceHistoryTranscriptPublication,
   type WorkspaceRuntimeTransition,
@@ -934,5 +937,326 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
     expect(recorder.order).toEqual([])
     expect(recorder.publishTranscript).toEqual([])
     expect(recorder.restoreQaConversation).toEqual([])
+  })
+})
+// --- Task 6C: Ask result workspace publication -------------------------------
+
+type AskEffectsRecorder = {
+  effects: WorkspaceAskPublicationEffects
+  order: string[]
+  publishAssistantMessage: number
+  publishAnswer: number
+}
+
+function createAskEffectsRecorder(): AskEffectsRecorder {
+  const recorder: AskEffectsRecorder = {
+    effects: {
+      publishAssistantMessage: () => {
+        recorder.order.push("publishAssistantMessage")
+        recorder.publishAssistantMessage += 1
+      },
+      publishAnswer: () => {
+        recorder.order.push("publishAnswer")
+        recorder.publishAnswer += 1
+      },
+    },
+    order: [],
+    publishAssistantMessage: 0,
+    publishAnswer: 0,
+  }
+  return recorder
+}
+
+const ASK_REQUESTED: WorkspaceAskRequestedIdentity = {
+  contentKey: "youtube:video-a",
+  analysisRunId: "run-1",
+  threadId: "thread-1",
+  transcriptFingerprint: "fp-transcript",
+}
+
+function askRequested(
+  overrides: Partial<WorkspaceAskRequestedIdentity> = {},
+): WorkspaceAskRequestedIdentity {
+  return { ...ASK_REQUESTED, ...overrides }
+}
+
+function askCurrent(
+  overrides: Partial<WorkspaceAskCurrentIdentity> = {},
+): WorkspaceAskCurrentIdentity {
+  return { ...ASK_REQUESTED, ...overrides }
+}
+
+describe("WorkspaceController publishAskResult publication", () => {
+  it("publishes a matching identity in the assistant-message then answer order", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested(),
+      current: askCurrent(),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual(["publishAssistantMessage", "publishAnswer"])
+    expect(recorder.publishAssistantMessage).toBe(1)
+    expect(recorder.publishAnswer).toBe(1)
+  })
+
+  it("returns stale with zero effects when the captured workspace epoch is no longer current", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested(),
+      current: askCurrent(),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the Ask contentKey no longer matches", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested({ contentKey: "youtube:video-a" }),
+      current: askCurrent({ contentKey: "youtube:video-b" }),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the analysisRunId no longer matches", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested({ analysisRunId: "run-1" }),
+      current: askCurrent({ analysisRunId: "run-2" }),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the threadId no longer matches", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested({ threadId: "thread-1" }),
+      current: askCurrent({ threadId: "thread-2" }),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the threadId became null", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested({ threadId: "thread-1" }),
+      current: askCurrent({ threadId: null }),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the transcriptFingerprint no longer matches", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested({ transcriptFingerprint: "fp-transcript" }),
+      current: askCurrent({ transcriptFingerprint: "fp-other" }),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the transcriptFingerprint became null", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested({ transcriptFingerprint: "fp-transcript" }),
+      current: askCurrent({ transcriptFingerprint: null }),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+})
+
+describe("WorkspaceController publishAskResult workspace semantics", () => {
+  it("publishes into a historical display selection that differs from the runtime content", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const historical = {
+      contentKey: "bilibili:historical-video:p:2",
+      analysisRunId: "run-historical",
+      threadId: "thread-historical",
+      transcriptFingerprint: "fp-historical",
+    }
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: historical,
+      current: historical,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual(["publishAssistantMessage", "publishAnswer"])
+  })
+
+  it("returns stale when a runtime contentKey transition invalidates the captured epoch even though the Ask identity still matches", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({
+      platform: "bilibili",
+      videoId: "other-video",
+      partId: "2",
+      contentKey: "bilibili:other-video:p:2",
+      title: "Other video",
+    }))
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested(),
+      current: askCurrent(),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("keeps publishing across a same-content metadata refresh", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({
+      title: "Renamed video",
+      author: "Another author",
+      canonicalUrl: "https://www.youtube.com/watch?v=video-a&t=5",
+      isReady: false,
+    }))
+
+    const recorder = createAskEffectsRecorder()
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested(),
+      current: askCurrent(),
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual(["publishAssistantMessage", "publishAnswer"])
+  })
+
+  it("does not re-check the epoch or the identity once publication has started", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    const order: string[] = []
+    const result = controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested(),
+      current: askCurrent(),
+      effects: {
+        publishAssistantMessage: () => {
+          order.push("publishAssistantMessage")
+          observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+        },
+        publishAnswer: () => {
+          order.push("publishAnswer")
+        },
+      },
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(order).toEqual(["publishAssistantMessage", "publishAnswer"])
+    expect(controller.isEpochCurrent(captured)).toBe(false)
+  })
+
+  it("never mutates runtime content while publishing an Ask result", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+    const before = controller.getSnapshot()
+
+    controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested(),
+      current: askCurrent(),
+      effects: createAskEffectsRecorder().effects,
+    })
+
+    expect(controller.getSnapshot()).toEqual(before)
+  })
+
+  it("never mutates runtime content when the Ask result is stale", () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+    const before = controller.getSnapshot()
+
+    controller.publishAskResult({
+      workspaceEpoch: captured,
+      requested: askRequested({ contentKey: "bilibili:historical-video:p:2" }),
+      current: askCurrent({ contentKey: "bilibili:historical-video:p:2" }),
+      effects: createAskEffectsRecorder().effects,
+    })
+
+    expect(controller.getSnapshot()).toEqual(before)
   })
 })

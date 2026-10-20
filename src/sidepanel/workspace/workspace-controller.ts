@@ -7,6 +7,9 @@ import type {
   HistoryRestoreSnapshot,
 } from "@/sidepanel/history/history-controller"
 import {
+  matchesAskRequestWorkspaceIdentity,
+} from "@/sidepanel/lib/ask-transcript-identity"
+import {
   projectWorkspaceRuntimeContent,
   type WorkspaceRuntimeContent,
   type WorkspaceRuntimeContentInput,
@@ -101,13 +104,62 @@ export type WorkspaceHistoryPublicationResult =
     }
 
 /**
- * Owns the runtime-content projection and the workspace epoch.
+ * The Ask identity the completed task was prepared against.
+ */
+export type WorkspaceAskRequestedIdentity = {
+  contentKey: string
+  analysisRunId: string
+  threadId: string | null
+  transcriptFingerprint: string
+}
+
+/**
+ * The Ask identity the workspace currently displays. Historical display
+ * selection is valid, so `contentKey` may legitimately differ from the runtime
+ * content key.
+ */
+export type WorkspaceAskCurrentIdentity = {
+  contentKey: string | null
+  analysisRunId: string
+  threadId: string | null
+  transcriptFingerprint: string | null
+}
+
+/**
+ * The Ask result publication side effects, supplied by the root. The root
+ * closures capture the persisted assistant message and the projected answer so
+ * that no persistence row or React data type crosses this boundary.
+ */
+export type WorkspaceAskPublicationEffects = {
+  publishAssistantMessage: () => void
+  publishAnswer: () => void
+}
+
+export type WorkspaceAskPublicationRequest = {
+  /** Captured before thread/provider preparation; never recaptured after the await. */
+  workspaceEpoch: number
+
+  requested: WorkspaceAskRequestedIdentity
+
+  current: WorkspaceAskCurrentIdentity
+
+  effects: WorkspaceAskPublicationEffects
+}
+
+export type WorkspaceAskPublicationResult =
+  | { kind: "stale" }
+  | { kind: "published" }
+
+/**
+ * Owns the runtime-content projection, the workspace epoch, and the
+ * cross-feature workspace publication eligibility/sequencing decisions.
  *
  * The workspace epoch advances once for the initial observation and once for
  * every runtime `contentKey` change. It does not advance for same-content
- * metadata refreshes. This controller does not own feature state, publication,
- * task lifecycle, React state, repositories, or browser APIs; it only decides
- * whether a runtime-content transition is identity-changing.
+ * metadata refreshes. This controller still does not own React state,
+ * repositories, task lifecycle, feature state, or browser APIs; it only decides
+ * whether a runtime-content transition is identity-changing and whether a
+ * feature result may still be published into the current workspace.
  *
  * Task 6A intentionally has no `subscribe()`: the root does not render from the
  * workspace snapshot yet, so a React mirror would be redundant.
@@ -258,5 +310,37 @@ export class WorkspaceController {
     })
 
     return { kind: "published", analysisPublished: true }
+  }
+
+  /**
+   * Publishes a completed Ask result into the current workspace.
+   *
+   * This is the final successful-result publication guard only: preparation
+   * currentness, the transcript load epoch, and the task lifecycle stay in the
+   * root. The stale decision is made exactly once, before any effect, from the
+   * captured workspace epoch plus the existing Ask requested/current identity
+   * matcher. Once publication starts there is no second epoch check, no second
+   * identity match, and no rollback.
+   *
+   * The runtime content key is deliberately not compared against
+   * `requested.contentKey`: publishing into a historical display selection is
+   * valid. `runtimeContent` is never mutated here.
+   */
+  publishAskResult(
+    request: WorkspaceAskPublicationRequest,
+  ): WorkspaceAskPublicationResult {
+    const { workspaceEpoch, requested, current, effects } = request
+
+    if (
+      !this.isEpochCurrent(workspaceEpoch)
+      || !matchesAskRequestWorkspaceIdentity(requested, current)
+    ) {
+      return { kind: "stale" }
+    }
+
+    effects.publishAssistantMessage()
+    effects.publishAnswer()
+
+    return { kind: "published" }
   }
 }

@@ -1156,6 +1156,7 @@ function SidepanelWorkspace() {
     const requestedContentKey = analysisView.contentKey
     const requestedAnalysisRunId = analysisView.analysisRunId ?? "legacy"
     const requestedTranscriptFingerprint = actualTranscriptFingerprint
+    const requestedWorkspaceEpoch = workspaceController.captureEpoch()
     if (askStartLockRef.current || activeAskTask) {
       toast.message(t("toast.anotherAsk"))
       return
@@ -1261,21 +1262,29 @@ function SidepanelWorkspace() {
           isTaskCurrent: () => askTaskController.isCurrent(taskId),
           setPhase,
         })
-        const isWorkspaceCurrent = matchesAskRequestWorkspaceIdentity({
-          contentKey: taskSnapshot.contentKey,
-          analysisRunId: taskSnapshot.analysisRunId,
-          threadId: taskSnapshot.threadId,
-          transcriptFingerprint: taskSnapshot.transcriptFingerprint,
-        }, {
-          contentKey: activeAnalysisContentKeyRef.current,
-          analysisRunId: activeAnalysisRunIdRef.current,
-          threadId: activeQaThreadIdRef.current,
-          transcriptFingerprint: currentTranscriptFingerprintRef.current,
+        workspaceController.publishAskResult({
+          workspaceEpoch: requestedWorkspaceEpoch,
+          requested: {
+            contentKey: taskSnapshot.contentKey,
+            analysisRunId: taskSnapshot.analysisRunId,
+            threadId: taskSnapshot.threadId,
+            transcriptFingerprint: taskSnapshot.transcriptFingerprint,
+          },
+          current: {
+            contentKey: activeAnalysisContentKeyRef.current,
+            analysisRunId: activeAnalysisRunIdRef.current,
+            threadId: activeQaThreadIdRef.current,
+            transcriptFingerprint: currentTranscriptFingerprintRef.current,
+          },
+          effects: {
+            publishAssistantMessage: () => {
+              setQaMessages((current) => [...current, assistantMessage])
+            },
+            publishAnswer: () => {
+              setAskAnswer(answer)
+            },
+          },
         })
-        if (isWorkspaceCurrent) {
-          setQaMessages((current) => [...current, assistantMessage])
-          setAskAnswer(answer)
-        }
         toast.success(t("toast.askReady", { title: taskSnapshot.videoTitle }))
       }, { taskId: admission.taskId })
       await taskPromise
@@ -1293,7 +1302,7 @@ function SidepanelWorkspace() {
       pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }
-  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptController, transcriptCues, transcriptIdentity])
+  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptController, transcriptCues, transcriptIdentity, workspaceController])
 
   const handleCancelAsk = useCallback(() => {
     askTaskController.cancel()

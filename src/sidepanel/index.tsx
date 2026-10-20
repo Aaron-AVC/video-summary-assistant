@@ -101,10 +101,14 @@ import { I18nProvider, useI18n } from "@/lib/i18n/i18n-provider"
 import {
   createHistoryController,
   type HistoryContext,
+  type HistoryRestoreSnapshot,
 } from "@/sidepanel/history/history-controller"
 import { createPendingHistoryOpenAdapter } from "@/sidepanel/history/pending-history-open-adapter"
 import { createAskController } from "@/sidepanel/ask/ask-controller"
-import { WorkspaceController } from "@/sidepanel/workspace/workspace-controller"
+import {
+  WorkspaceController,
+  type WorkspaceHistoryRestoreMode,
+} from "@/sidepanel/workspace/workspace-controller"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -292,6 +296,41 @@ function SidepanelWorkspace() {
     setAskAnswer(answer)
   }, [askController])
 
+  const publishHistoryRestore = useCallback(async ({
+    mode,
+    snapshot,
+    workspaceEpoch,
+    generation,
+  }: {
+    mode: WorkspaceHistoryRestoreMode
+    snapshot: HistoryRestoreSnapshot
+    workspaceEpoch: number
+    generation: number
+  }) => {
+    const isRequestCurrent = () => generation === loadWorkspaceGenerationRef.current
+    return workspaceController.publishHistoryRestore({
+      mode,
+      snapshot,
+      workspaceEpoch,
+      isRequestCurrent,
+      effects: {
+        publishTranscript: (publication) => publishTranscript(publication),
+        clearTranscriptError: () => transcriptController.setError(null),
+        clearAnalysis: () => setAnalysisView(null),
+        setAnalysisIdle: () => setAnalysisPhase("idle"),
+        publishAnalysis: (analysis) => setAnalysisView({ ...analysis }),
+        setAnalysisCompleted: () => setAnalysisPhase("completed"),
+        clearAskWorkspace: () => clearQaWorkspace(),
+        restoreQaConversation: (input) => restoreQaConversation(
+          input.contentKey,
+          input.analysisRunId,
+          generation,
+          input.transcriptFingerprint,
+        ),
+      },
+    })
+  }, [clearQaWorkspace, publishTranscript, restoreQaConversation, transcriptController, workspaceController])
+
   useEffect(() => analysisTaskController.subscribe(() => {
     setActiveAnalysisTask(analysisTaskController.getSnapshot())
   }), [analysisTaskController])
@@ -439,52 +478,41 @@ function SidepanelWorkspace() {
   }, [analysisTaskController, askTaskController, applyMutation])
 
   const loadSavedAnalysis = useCallback(async (videoId: string, generation: number) => {
+    const workspaceEpoch = workspaceController.captureEpoch()
+    const isRestoreCurrent = () => (
+      generation === loadWorkspaceGenerationRef.current
+      && workspaceController.isEpochCurrent(workspaceEpoch)
+    )
     setIsAnalysisFetching(true)
     try {
       const result = await historyController.loadLegacyVideoRestore({
         videoId,
-        isCurrent: () => generation === loadWorkspaceGenerationRef.current,
+        isCurrent: isRestoreCurrent,
       })
-      if (result.kind === "stale" || generation !== loadWorkspaceGenerationRef.current) return
-      const { snapshot } = result
-      publishTranscript({
-        cues: snapshot.transcript.cues,
-        identity: snapshot.transcript.identity,
-        title: snapshot.transcript.title,
-        fingerprint: snapshot.transcript.fingerprint,
-        rawVtt: snapshot.transcript.rawVtt,
-      })
-      transcriptController.setError(null)
-
-      if (!snapshot.analysis) {
-        setAnalysisView(null)
-        setAnalysisPhase("idle")
-        clearQaWorkspace()
-        return
-      }
-
-      setAnalysisView({
-        ...snapshot.analysis,
-      })
-      setAnalysisPhase("completed")
-      await restoreQaConversation(
-        snapshot.analysis.contentKey,
-        snapshot.analysis.analysisRunId,
+      if (result.kind !== "ready") return
+      await publishHistoryRestore({
+        mode: "legacy-video",
+        snapshot: result.snapshot,
+        workspaceEpoch,
         generation,
-        snapshot.transcript.fingerprint,
-      )
+      })
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) {
         setIsAnalysisFetching(false)
       }
     }
-  }, [clearQaWorkspace, historyController, publishTranscript, restoreQaConversation, transcriptController])
+  }, [historyController, publishHistoryRestore, workspaceController])
 
   const loadSavedAnalysisForContext = useCallback(async (
     context: ActiveVideoContext,
     generation: number,
   ) => {
     if (!context.contentKey || !context.videoId || !context.platform) return
+    const workspaceEpoch = workspaceController.captureEpoch()
+    const isRestoreCurrent = () => (
+      generation === loadWorkspaceGenerationRef.current
+      && workspaceController.isEpochCurrent(workspaceEpoch)
+    )
     setIsAnalysisFetching(true)
     try {
       const historyContext: HistoryContext = {
@@ -496,71 +524,43 @@ function SidepanelWorkspace() {
       }
       const result = await historyController.loadCurrentContextRestore({
         context: historyContext,
-        isCurrent: () => generation === loadWorkspaceGenerationRef.current,
+        isCurrent: isRestoreCurrent,
       })
-      if (result.kind === "stale" || generation !== loadWorkspaceGenerationRef.current) return
-      const { snapshot } = result
-      publishTranscript({
-        cues: snapshot.transcript.cues,
-        identity: snapshot.transcript.identity,
-        title: snapshot.transcript.title,
-        fingerprint: snapshot.transcript.fingerprint,
-        rawVtt: snapshot.transcript.rawVtt,
-      })
-      if (!snapshot.analysis) {
-        setAnalysisView(null)
-        setAnalysisPhase("idle")
-        clearQaWorkspace()
-        return
-      }
-      setAnalysisView({
-        ...snapshot.analysis,
-      })
-      setAnalysisPhase("completed")
-      await restoreQaConversation(
-        snapshot.analysis.contentKey,
-        snapshot.analysis.analysisRunId,
+      if (result.kind !== "ready") return
+      await publishHistoryRestore({
+        mode: "current-context",
+        snapshot: result.snapshot,
+        workspaceEpoch,
         generation,
-        snapshot.transcript.fingerprint,
-      )
+      })
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [clearQaWorkspace, historyController, publishTranscript, restoreQaConversation])
+  }, [historyController, publishHistoryRestore, workspaceController])
 
   const loadSavedAnalysisRun = useCallback(async (analysisRunId: string, generation: number) => {
+    const workspaceEpoch = workspaceController.captureEpoch()
+    const isRestoreCurrent = () => (
+      generation === loadWorkspaceGenerationRef.current
+      && workspaceController.isEpochCurrent(workspaceEpoch)
+    )
     setIsAnalysisFetching(true)
     try {
       const result = await historyController.loadSavedRunRestore({
         analysisRunId,
-        isCurrent: () => generation === loadWorkspaceGenerationRef.current,
+        isCurrent: isRestoreCurrent,
       })
-      if (result.kind === "stale" || generation !== loadWorkspaceGenerationRef.current) return
-      const { snapshot } = result
-
-      publishTranscript({
-        cues: snapshot.transcript.cues,
-        identity: snapshot.transcript.identity,
-        title: snapshot.transcript.title,
-        fingerprint: snapshot.transcript.fingerprint,
-        rawVtt: snapshot.transcript.rawVtt,
-      })
-      transcriptController.setError(null)
-
-      setAnalysisView({
-        ...snapshot.analysis!,
-      })
-      setAnalysisPhase("completed")
-      await restoreQaConversation(
-        snapshot.analysis!.contentKey,
-        snapshot.analysis!.analysisRunId,
+      if (result.kind !== "ready") return
+      await publishHistoryRestore({
+        mode: "saved-run",
+        snapshot: result.snapshot,
+        workspaceEpoch,
         generation,
-        snapshot.transcript.fingerprint,
-      )
+      })
     } finally {
       if (generation === loadWorkspaceGenerationRef.current) setIsAnalysisFetching(false)
     }
-  }, [historyController, publishTranscript, restoreQaConversation, transcriptController])
+  }, [historyController, publishHistoryRestore, workspaceController])
 
   const loadWorkspace = useCallback(async () => {
     const generation = ++loadWorkspaceGenerationRef.current

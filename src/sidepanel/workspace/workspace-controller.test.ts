@@ -5,8 +5,15 @@ import {
   projectWorkspaceRuntimeContent,
   type WorkspaceRuntimeContent,
 } from "@/sidepanel/workspace/workspace-state"
+import type {
+  HistoryAnalysisSnapshot,
+  HistoryRestoreSnapshot,
+  HistoryTranscriptSnapshot,
+} from "@/sidepanel/history/history-controller"
 import {
   WorkspaceController,
+  type WorkspaceHistoryPublicationEffects,
+  type WorkspaceHistoryTranscriptPublication,
   type WorkspaceRuntimeTransition,
 } from "@/sidepanel/workspace/workspace-controller"
 
@@ -356,5 +363,576 @@ describe("WorkspaceController snapshot isolation", () => {
     const controller = new WorkspaceController()
 
     expect("subscribe" in controller).toBe(false)
+  })
+})
+
+type QaRestoreInput = {
+  contentKey: string
+  analysisRunId: string | null
+  transcriptFingerprint: string | null
+}
+
+type EffectsRecorder = {
+  effects: WorkspaceHistoryPublicationEffects
+  order: string[]
+  publishTranscript: WorkspaceHistoryTranscriptPublication[]
+  clearTranscriptError: number
+  clearAnalysis: number
+  setAnalysisIdle: number
+  publishAnalysis: HistoryAnalysisSnapshot[]
+  setAnalysisCompleted: number
+  clearAskWorkspace: number
+  restoreQaConversation: QaRestoreInput[]
+}
+
+function createEffectsRecorder(): EffectsRecorder {
+  const recorder: EffectsRecorder = {
+    effects: {
+      publishTranscript: (publication) => {
+        recorder.order.push("publishTranscript")
+        recorder.publishTranscript.push(publication)
+      },
+      clearTranscriptError: () => {
+        recorder.order.push("clearTranscriptError")
+        recorder.clearTranscriptError += 1
+      },
+      clearAnalysis: () => {
+        recorder.order.push("clearAnalysis")
+        recorder.clearAnalysis += 1
+      },
+      setAnalysisIdle: () => {
+        recorder.order.push("setAnalysisIdle")
+        recorder.setAnalysisIdle += 1
+      },
+      publishAnalysis: (analysis) => {
+        recorder.order.push("publishAnalysis")
+        recorder.publishAnalysis.push(analysis)
+      },
+      setAnalysisCompleted: () => {
+        recorder.order.push("setAnalysisCompleted")
+        recorder.setAnalysisCompleted += 1
+      },
+      clearAskWorkspace: () => {
+        recorder.order.push("clearAskWorkspace")
+        recorder.clearAskWorkspace += 1
+      },
+      restoreQaConversation: async (input) => {
+        recorder.order.push("restoreQaConversation")
+        recorder.restoreQaConversation.push(input)
+      },
+    },
+    order: [],
+    publishTranscript: [],
+    clearTranscriptError: 0,
+    clearAnalysis: 0,
+    setAnalysisIdle: 0,
+    publishAnalysis: [],
+    setAnalysisCompleted: 0,
+    clearAskWorkspace: 0,
+    restoreQaConversation: [],
+  }
+  return recorder
+}
+
+function transcriptSnapshot(
+  overrides: Partial<HistoryTranscriptSnapshot> = {},
+): HistoryTranscriptSnapshot {
+  return {
+    exists: true,
+    cues: [
+      { startSec: 0, endSec: 12, text: "intro" },
+      { startSec: 12, endSec: 30, text: "body" },
+    ],
+    identity: {
+      platform: "youtube",
+      videoId: "video-a",
+      partId: undefined,
+      contentKey: "youtube:video-a",
+    },
+    title: "Historical title",
+    fingerprint: "fp-transcript",
+    rawVtt: "WEBVTT\n",
+    ...overrides,
+  }
+}
+
+function analysisSnapshot(
+  overrides: Partial<HistoryAnalysisSnapshot> = {},
+): HistoryAnalysisSnapshot {
+  return {
+    platform: "youtube",
+    videoId: "video-a",
+    partId: null,
+    contentKey: "youtube:video-a",
+    title: "Historical title",
+    analysis: {
+      summary: "Summary",
+      keyPoints: [{ text: "point" }],
+      chapters: [{
+        title: "Chapter",
+        startSec: 0,
+        endSec: 30,
+        summary: "Chapter summary",
+        detail: "Chapter detail",
+      }],
+    },
+    analysisRunId: "run-1",
+    transcriptFingerprint: "fp-analysis",
+    providerProfileId: "profile-1",
+    providerBaseUrl: "https://api.example.com/v1",
+    providerModel: "model-1",
+    analysisSchemaVersion: 1,
+    analysisPromptVersion: "video-analysis-v1",
+    lastAnalyzedAt: "2026-10-20T00:00:00.000Z",
+    errorMessage: null,
+    ...overrides,
+  }
+}
+
+function restoreSnapshot({
+  analysis = null,
+  transcript = transcriptSnapshot(),
+}: {
+  analysis?: HistoryAnalysisSnapshot | null
+  transcript?: HistoryTranscriptSnapshot
+} = {}): HistoryRestoreSnapshot {
+  return {
+    sourceIdentity: {
+      platform: "youtube",
+      videoId: "video-a",
+      partId: undefined,
+      contentKey: "youtube:video-a",
+    },
+    transcript,
+    analysis,
+  }
+}
+
+describe("WorkspaceController publishHistoryRestore stale decisions", () => {
+  it("returns stale with zero effects when the captured workspace epoch is no longer current", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const staleEpoch = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+    expect(controller.isEpochCurrent(staleEpoch)).toBe(false)
+
+    const recorder = createEffectsRecorder()
+    const result = await controller.publishHistoryRestore({
+      mode: "legacy-video",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: staleEpoch,
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when the request generation is no longer current", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    const result = await controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => false,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("does not treat a historical contentKey that differs from runtime content as stale", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    const historical = restoreSnapshot({
+      analysis: analysisSnapshot({ contentKey: "bilibili:other-video", analysisRunId: "run-9" }),
+      transcript: transcriptSnapshot({ fingerprint: "fp-other" }),
+    })
+
+    const result = await controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: historical,
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(recorder.restoreQaConversation).toEqual([{
+      contentKey: "bilibili:other-video",
+      analysisRunId: "run-9",
+      transcriptFingerprint: "fp-other",
+    }])
+    expect(runtimeContentOf(controller).contentKey).toBe("youtube:video-a")
+  })
+
+  it("never mutates runtime content while publishing a historical restore", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const before = runtimeContentOf(controller)
+
+    const recorder = createEffectsRecorder()
+    await controller.publishHistoryRestore({
+      mode: "current-context",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(runtimeContentOf(controller)).toEqual(before)
+  })
+})
+
+describe("WorkspaceController publishHistoryRestore no-analysis publication", () => {
+  it("publishes the legacy-video no-analysis reset sequence in order", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    const result = await controller.publishHistoryRestore({
+      mode: "legacy-video",
+      snapshot: restoreSnapshot({ analysis: null }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: false })
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "clearTranscriptError",
+      "clearAnalysis",
+      "setAnalysisIdle",
+      "clearAskWorkspace",
+    ])
+    expect(recorder.publishAnalysis).toEqual([])
+    expect(recorder.setAnalysisCompleted).toBe(0)
+    expect(recorder.restoreQaConversation).toEqual([])
+  })
+
+  it("publishes the current-context no-analysis reset sequence without clearing the transcript error", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    const result = await controller.publishHistoryRestore({
+      mode: "current-context",
+      snapshot: restoreSnapshot({ analysis: null }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: false })
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "clearAnalysis",
+      "setAnalysisIdle",
+      "clearAskWorkspace",
+    ])
+    expect(recorder.clearTranscriptError).toBe(0)
+  })
+})
+
+describe("WorkspaceController publishHistoryRestore analysis publication", () => {
+  it("publishes the legacy-video analysis sequence in order", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    const result = await controller.publishHistoryRestore({
+      mode: "legacy-video",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "clearTranscriptError",
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+
+  it("publishes the current-context analysis sequence without clearing the transcript error", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    const result = await controller.publishHistoryRestore({
+      mode: "current-context",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+    expect(recorder.clearTranscriptError).toBe(0)
+  })
+
+  it("publishes the saved-run analysis sequence in order", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    const result = await controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "clearTranscriptError",
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+})
+
+describe("WorkspaceController publishHistoryRestore publication payloads", () => {
+  it("projects the transcript publication payload without normalization", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+    const transcript = transcriptSnapshot({
+      cues: [
+        { startSec: 30, endSec: 40, text: "  second  " },
+        { startSec: 0, endSec: 5, text: "first" },
+      ],
+      title: "  Raw title  ",
+      fingerprint: null,
+      rawVtt: null,
+      identity: null,
+    })
+
+    await controller.publishHistoryRestore({
+      mode: "legacy-video",
+      snapshot: restoreSnapshot({ transcript }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    const publication = recorder.publishTranscript[0]!
+    expect(publication.cues).toBe(transcript.cues)
+    expect(publication.identity).toBeNull()
+    expect(publication.title).toBe("  Raw title  ")
+    expect(publication.fingerprint).toBeNull()
+    expect(publication.rawVtt).toBeNull()
+  })
+
+  it("uses the analysis identity and transcript fingerprint for the QA restore", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+
+    await controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot({
+        analysis: analysisSnapshot({
+          contentKey: "youtube:analysis-content-key",
+          analysisRunId: "run-analysis",
+        }),
+        transcript: transcriptSnapshot({ fingerprint: "fp-transcript-authoritative" }),
+      }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(recorder.restoreQaConversation).toEqual([{
+      contentKey: "youtube:analysis-content-key",
+      analysisRunId: "run-analysis",
+      transcriptFingerprint: "fp-transcript-authoritative",
+    }])
+  })
+
+  it("passes the HistoryController analysis object through without cloning or transforming", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+    const analysis = analysisSnapshot()
+
+    await controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot({ analysis }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(recorder.publishAnalysis).toHaveLength(1)
+    expect(recorder.publishAnalysis[0]).toBe(analysis)
+    expect(recorder.publishAnalysis[0]!.analysis).toBe(analysis.analysis)
+  })
+})
+
+describe("WorkspaceController publishHistoryRestore failure and timing semantics", () => {
+  it("propagates a restoreQaConversation rejection after the prior effects ran", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+    const failure = new Error("QA restore failed")
+    const failingEffects: WorkspaceHistoryPublicationEffects = {
+      ...recorder.effects,
+      restoreQaConversation: async (input) => {
+        recorder.order.push("restoreQaConversation")
+        recorder.restoreQaConversation.push(input)
+        throw failure
+      },
+    }
+
+    await expect(controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => true,
+      effects: failingEffects,
+    })).rejects.toBe(failure)
+
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "clearTranscriptError",
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+
+  it("checks the request currentness predicate exactly once at the publication boundary", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+    let requestChecks = 0
+
+    await controller.publishHistoryRestore({
+      mode: "legacy-video",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => {
+        requestChecks += 1
+        return true
+      },
+      effects: recorder.effects,
+    })
+
+    expect(requestChecks).toBe(1)
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "clearTranscriptError",
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+
+  it("does not re-check stale conditions once publication has started", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const recorder = createEffectsRecorder()
+    let requestChecks = 0
+    const effects: WorkspaceHistoryPublicationEffects = {
+      ...recorder.effects,
+      publishTranscript: (publication) => {
+        recorder.order.push("publishTranscript")
+        recorder.publishTranscript.push(publication)
+        // Invalidate both guards from inside the first publication effect.
+        observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+      },
+    }
+
+    const result = await controller.publishHistoryRestore({
+      mode: "legacy-video",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => {
+        requestChecks += 1
+        return true
+      },
+      effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(requestChecks).toBe(1)
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "clearTranscriptError",
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+
+  it("keeps a captured epoch current across a same-content metadata refresh", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ title: "Renamed video" }))
+    expect(controller.isEpochCurrent(captured)).toBe(true)
+
+    const recorder = createEffectsRecorder()
+    const result = await controller.publishHistoryRestore({
+      mode: "current-context",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: captured,
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(recorder.order).toEqual([
+      "publishTranscript",
+      "publishAnalysis",
+      "setAnalysisCompleted",
+      "restoreQaConversation",
+    ])
+  })
+
+  it("blocks every publication effect once a runtime contentKey transition makes the captured epoch stale", async () => {
+    const controller = new WorkspaceController()
+    observe(controller, context())
+    const captured = controller.captureEpoch()
+
+    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+
+    const recorder = createEffectsRecorder()
+    const result = await controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
+      workspaceEpoch: captured,
+      isRequestCurrent: () => true,
+      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+    expect(recorder.publishTranscript).toEqual([])
+    expect(recorder.restoreQaConversation).toEqual([])
   })
 })

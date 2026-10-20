@@ -105,7 +105,6 @@ import {
 } from "@/sidepanel/lib/ask-conversation-identity"
 import {
   compareAskTranscriptIdentity,
-  filterQaThreadsByTranscript,
   matchesAskRequestWorkspaceIdentity,
   resolveAskTranscriptRequestIdentity,
   resolveAskTranscriptFingerprint,
@@ -118,6 +117,7 @@ import {
   type HistoryContext,
 } from "@/sidepanel/history/history-controller"
 import { createPendingHistoryOpenAdapter } from "@/sidepanel/history/pending-history-open-adapter"
+import { createAskController } from "@/sidepanel/ask/ask-controller"
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -192,6 +192,18 @@ function SidepanelWorkspace() {
     })
   }
   const historyController = historyControllerRef.current
+  const askControllerRef = useRef<ReturnType<typeof createAskController> | null>(null)
+  if (!askControllerRef.current) {
+    askControllerRef.current = createAskController({
+      listQaThreadsForVideo: (contentKey, analysisRunId) => (
+        qaConversationRepository.listQaThreadsForVideo(contentKey, analysisRunId)
+      ),
+      getQaThread: (threadId) => qaConversationRepository.getQaThread(threadId),
+      listQaMessages: (threadId) => qaConversationRepository.listQaMessages(threadId),
+      deleteQaThread: (threadId) => qaConversationRepository.deleteQaThread(threadId),
+    })
+  }
+  const askController = askControllerRef.current
   const [transcriptSnapshot, setTranscriptSnapshot] = useState(
     transcriptController.getSnapshot(),
   )
@@ -267,33 +279,21 @@ function SidepanelWorkspace() {
     generation: number,
     transcriptFingerprint?: string | null,
   ) => {
-    if (!analysisRunId) {
-      if (generation === loadWorkspaceGenerationRef.current) clearQaWorkspace()
-      return
-    }
-    const threads = filterQaThreadsByTranscript(
-      await qaConversationRepository.listQaThreadsForVideo(contentKey, analysisRunId),
-      transcriptFingerprint ?? null,
-    )
-    const current = threads[0] ?? null
-    const messages = current ? await qaConversationRepository.listQaMessages(current.id) : []
-    if (generation !== loadWorkspaceGenerationRef.current) return
+    const isCurrent = () => generation === loadWorkspaceGenerationRef.current
+    const result = await askController.restoreConversation({
+      contentKey,
+      analysisRunId,
+      transcriptFingerprint: transcriptFingerprint ?? null,
+      isCurrent,
+    })
+    if (result.kind === "stale" || !isCurrent()) return
+    const { threads, currentThreadId, messages, answer } = result.snapshot
     setQaThreads(threads)
-    activeQaThreadIdRef.current = current?.id ?? null
-    setQaThreadId(current?.id ?? null)
+    activeQaThreadIdRef.current = currentThreadId
+    setQaThreadId(currentThreadId)
     setQaMessages(messages)
-    const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant")
-    setAskAnswer(latestAssistant?.citations ? {
-      answer: latestAssistant.content,
-      citations: latestAssistant.citations.map((citation) => ({
-        text: citation.text,
-        startSec: citation.startSec,
-        endSec: citation.endSec ?? citation.startSec,
-      })),
-      followUps: latestAssistant.followUps ?? [],
-      suggestedJumps: latestAssistant.suggestedJumps ?? [],
-    } : null)
-  }, [clearQaWorkspace])
+    setAskAnswer(answer)
+  }, [askController])
 
   useEffect(() => analysisTaskController.subscribe(() => {
     setActiveAnalysisTask(analysisTaskController.getSnapshot())
@@ -1383,41 +1383,34 @@ function SidepanelWorkspace() {
     const requestedTranscriptLoadGeneration = transcriptController.captureLoadEpoch()
     askGenerationRef.current += 1
     const generation = ++qaLoadGenerationRef.current
-    const thread = await qaConversationRepository.getQaThread(threadId)
-    if (
-      !thread
-      || thread.contentKey !== requestedContentKey
-      || thread.analysisRunId !== requestedAnalysisRunId
-      || !requestedTranscriptFingerprint
-      || thread.transcriptFingerprint !== requestedTranscriptFingerprint
-    ) return
-    const messages = await qaConversationRepository.listQaMessages(threadId)
-    if (
-      qaLoadGenerationRef.current !== generation
-      || !transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
-      || activeAnalysisContentKeyRef.current !== requestedContentKey
-      || activeAnalysisRunIdRef.current !== requestedAnalysisRunId
-      || currentTranscriptFingerprintRef.current !== requestedTranscriptFingerprint
-    ) return
+    const isCurrent = () => (
+      qaLoadGenerationRef.current === generation
+      && transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
+      && activeAnalysisContentKeyRef.current === requestedContentKey
+      && activeAnalysisRunIdRef.current === requestedAnalysisRunId
+      && currentTranscriptFingerprintRef.current === requestedTranscriptFingerprint
+    )
+    const result = await askController.openThread({
+      threadId,
+      contentKey: requestedContentKey,
+      analysisRunId: requestedAnalysisRunId,
+      transcriptFingerprint: requestedTranscriptFingerprint,
+      isCurrent,
+    })
+    if (result.kind !== "ready" || !isCurrent()) return
     activeQaThreadIdRef.current = threadId
     setQaThreadId(threadId)
-    setQaMessages(messages)
+    setQaMessages(result.thread.messages)
     setAskQuestion("")
-    const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant")
-    setAskAnswer(latestAssistant?.citations ? {
-      answer: latestAssistant.content,
-      citations: latestAssistant.citations.map((citation) => ({ text: citation.text, startSec: citation.startSec, endSec: citation.endSec ?? citation.startSec })),
-      suggestedJumps: latestAssistant.suggestedJumps ?? [],
-      followUps: latestAssistant.followUps ?? [],
-    } : null)
-  }, [analysisView, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, transcriptController, transcriptCues])
+    setAskAnswer(result.thread.answer)
+  }, [analysisView, askController, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, transcriptController, transcriptCues])
 
   const handleDeleteQaThread = useCallback(async (threadId: string) => {
     if (isAsking) return
-    await qaConversationRepository.deleteQaThread(threadId)
+    await askController.deleteThread({ threadId })
     setQaThreads((current) => current.filter((thread) => thread.id !== threadId))
     if (qaThreadId === threadId || activeQaThreadIdRef.current === threadId) handleNewQaChat()
-  }, [handleNewQaChat, isAsking, qaThreadId])
+  }, [askController, handleNewQaChat, isAsking, qaThreadId])
 
   const jumpWithIdentity = useCallback(async (
     identity: VideoIdentity | null,

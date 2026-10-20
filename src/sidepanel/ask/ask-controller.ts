@@ -316,6 +316,21 @@ export type AskController = {
   resolveOpenThreadTranscriptFingerprint: (
     request: AskOpenThreadTranscriptRequest,
   ) => Promise<string | null>
+  /**
+   * Ask request-local execution generation. Invalidates Ask transcript-preflight
+   * and Ask execution currentness. Independent from the thread-load generation.
+   */
+  captureExecutionGeneration: () => number
+  beginExecutionGeneration: () => number
+  invalidateExecutionGeneration: () => number
+  isExecutionGenerationCurrent: (generation: number) => boolean
+  /**
+   * Ask request-local thread-load generation. Serializes competing open-thread
+   * requests. Independent from the execution generation.
+   */
+  beginThreadLoadGeneration: () => number
+  invalidateThreadLoadGeneration: () => number
+  isThreadLoadGenerationCurrent: (generation: number) => boolean
 }
 
 /**
@@ -352,6 +367,12 @@ export function createAskController(dependencies: AskControllerDependencies): As
     appendAssistantMessage,
   } = dependencies
   const now = dependencies.now ?? (() => new Date().toISOString())
+
+  // Request-local control-plane tokens. They are never persisted, never part of
+  // any published snapshot, and never derive from the workspace epoch, runtime
+  // content, display selection, or the transcript load epoch.
+  let executionGeneration = 0
+  let threadLoadGeneration = 0
 
   function createEmptySnapshot(): AskConversationSnapshot {
     return { threads: [], currentThreadId: null, messages: [], answer: null }
@@ -682,6 +703,42 @@ export function createAskController(dependencies: AskControllerDependencies): As
     return { answer, assistantMessage }
   }
 
+  /**
+   * Execution generation commands. `capture` never mutates; `begin` and
+   * `invalidate` each advance the counter exactly once and return the new value.
+   */
+  function captureExecutionGeneration(): number {
+    return executionGeneration
+  }
+
+  function beginExecutionGeneration(): number {
+    executionGeneration += 1
+    return executionGeneration
+  }
+
+  function invalidateExecutionGeneration(): number {
+    executionGeneration += 1
+    return executionGeneration
+  }
+
+  function isExecutionGenerationCurrent(generation: number): boolean {
+    return executionGeneration === generation
+  }
+
+  function beginThreadLoadGeneration(): number {
+    threadLoadGeneration += 1
+    return threadLoadGeneration
+  }
+
+  function invalidateThreadLoadGeneration(): number {
+    threadLoadGeneration += 1
+    return threadLoadGeneration
+  }
+
+  function isThreadLoadGenerationCurrent(generation: number): boolean {
+    return threadLoadGeneration === generation
+  }
+
   return {
     restoreConversation,
     openThread,
@@ -692,5 +749,12 @@ export function createAskController(dependencies: AskControllerDependencies): As
     runExecutionTask,
     prepareExecutionTranscriptIdentity,
     resolveOpenThreadTranscriptFingerprint,
+    captureExecutionGeneration,
+    beginExecutionGeneration,
+    invalidateExecutionGeneration,
+    isExecutionGenerationCurrent,
+    beginThreadLoadGeneration,
+    invalidateThreadLoadGeneration,
+    isThreadLoadGenerationCurrent,
   }
 }

@@ -232,10 +232,8 @@ function SidepanelWorkspace() {
   const [activeAskTask, setActiveAskTask] = useState<ActiveAskTask | null>(
     askTaskController.getSnapshot(),
   )
-  const askGenerationRef = useRef(0)
   const askStartLockRef = useRef(false)
   const loadWorkspaceGenerationRef = useRef(0)
-  const qaLoadGenerationRef = useRef(0)
   const currentTranscriptFingerprintRef = useRef<string | null>(null)
   const pendingAskOperationRef = useRef<DestructiveTaskSnapshot | null>(null)
   const destructiveWorkspaceRef = useRef({
@@ -423,8 +421,8 @@ function SidepanelWorkspace() {
     await applySidepanelDataMutation(mutation, destructiveWorkspaceRef.current, {
       invalidateWorkspace: (clearTranscript) => {
         loadWorkspaceGenerationRef.current += 1
-        qaLoadGenerationRef.current += 1
-        askGenerationRef.current += 1
+        askController.invalidateThreadLoadGeneration()
+        askController.invalidateExecutionGeneration()
         if (clearTranscript) transcriptController.invalidateLoadEpoch()
       },
       clearAnalysis: () => {
@@ -434,8 +432,8 @@ function SidepanelWorkspace() {
       },
       setAnalysisIdle: () => setAnalysisPhase("idle"),
       clearAskWorkspace: () => {
-        qaLoadGenerationRef.current += 1
-        askGenerationRef.current += 1
+        askController.invalidateThreadLoadGeneration()
+        askController.invalidateExecutionGeneration()
         clearQaWorkspace()
         setAskQuestion("")
         setAskError(null)
@@ -449,7 +447,7 @@ function SidepanelWorkspace() {
         setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
       },
     })
-  }, [clearQaWorkspace, refreshRecentAnalyses, resetTranscript, transcriptController])
+  }, [askController, clearQaWorkspace, refreshRecentAnalyses, resetTranscript, transcriptController])
 
   useEffect(() => {
     const getTasks = () => {
@@ -605,9 +603,9 @@ function SidepanelWorkspace() {
     if (!transition.shouldReset) return
 
     loadWorkspaceGenerationRef.current += 1
-    qaLoadGenerationRef.current += 1
+    askController.invalidateThreadLoadGeneration()
     transcriptController.invalidateLoadEpoch()
-    askGenerationRef.current += 1
+    askController.invalidateExecutionGeneration()
 
     setAnalysisView(null)
     setAnalysisError(null)
@@ -619,6 +617,7 @@ function SidepanelWorkspace() {
     setIsAnalysisFetching(false)
   }, [
     activeTabId,
+    askController,
     clearQaWorkspace,
     resetTranscript,
     transcriptController,
@@ -660,7 +659,7 @@ function SidepanelWorkspace() {
       forceReload,
       isTargetCurrent: () => videoContextRef.current.contentKey === request.video.contentKey,
       onFingerprintChanged: () => {
-        askGenerationRef.current += 1
+        askController.invalidateExecutionGeneration()
         clearQaWorkspace()
         setAskQuestion("")
         setAskAnswer(null)
@@ -670,7 +669,7 @@ function SidepanelWorkspace() {
         currentTranscriptFingerprintRef.current = snapshot.fingerprint
       },
     })
-  }, [clearQaWorkspace, transcriptController])
+  }, [askController, clearQaWorkspace, transcriptController])
 
   const handleLoadTranscript = useCallback(async () => {
     try {
@@ -733,8 +732,8 @@ function SidepanelWorkspace() {
       return
     }
 
-    askGenerationRef.current += 1
-    qaLoadGenerationRef.current += 1
+    askController.invalidateExecutionGeneration()
+    askController.invalidateThreadLoadGeneration()
     clearQaWorkspace()
     const requestedProvider = provider
     const executionPolicy = getAnalysisTaskExecutionPolicy(force)
@@ -925,7 +924,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisController, analysisTaskController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()
@@ -936,7 +935,7 @@ function SidepanelWorkspace() {
     contentKey?: string,
     analysisRunId?: string,
   ) => {
-    askGenerationRef.current += 1
+    askController.invalidateExecutionGeneration()
     transcriptController.invalidateLoadEpoch()
     setAskQuestion("")
     setAskAnswer(null)
@@ -958,7 +957,7 @@ function SidepanelWorkspace() {
       await loadSavedAnalysis(videoId, generation)
     }
     toast.success(t("toast.loadedHistory"))
-  }, [loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController])
+  }, [askController, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController])
 
   const hasActiveTaskForContent = useCallback((contentKey?: string) => {
     if (!contentKey) return false
@@ -1020,7 +1019,7 @@ function SidepanelWorkspace() {
       return
     }
     if (!analysisView || !provider) return
-    const preflightAskGeneration = askGenerationRef.current
+    const preflightAskGeneration = askController.captureExecutionGeneration()
     if (isTranscriptLoading || isAnalysisFetching || isAnalysisBusy) {
       const message = t("toast.transcriptStillLoading")
       setAskError(message)
@@ -1040,7 +1039,7 @@ function SidepanelWorkspace() {
       toast.error(message)
       return
     }
-    if (askGenerationRef.current !== preflightAskGeneration) return
+    if (!askController.isExecutionGenerationCurrent(preflightAskGeneration)) return
     if (!requestIdentity.ok) {
       const message = "reason" in requestIdentity && requestIdentity.reason === "transcript-mismatch"
         ? "Transcript changed since this analysis. Regenerate the analysis before continuing Ask Video."
@@ -1067,13 +1066,13 @@ function SidepanelWorkspace() {
     }
     const requestedThreadId = qaThreadId
       ?? workspaceController.getDisplaySelection().qaThreadId
-    const generation = ++askGenerationRef.current
+    const generation = askController.beginExecutionGeneration()
     let requestThreadId = requestedThreadId
     const isCurrentAsk = () => {
       const currentSelection = workspaceController.getDisplaySelection()
 
       return (
-        askGenerationRef.current === generation
+        askController.isExecutionGenerationCurrent(generation)
         && matchesAskRequestWorkspaceIdentity({
           contentKey: requestedContentKey,
           analysisRunId: requestedAnalysisRunId,
@@ -1206,7 +1205,7 @@ function SidepanelWorkspace() {
       pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }
-  }, [activeAskTask, analysisView, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptController, transcriptCues, transcriptIdentity, workspaceController])
+  }, [activeAskTask, analysisView, askController, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptController, transcriptCues, transcriptIdentity, workspaceController])
 
   const handleCancelAsk = useCallback(() => {
     askTaskController.cancel()
@@ -1214,15 +1213,15 @@ function SidepanelWorkspace() {
 
   const handleNewQaChat = useCallback(() => {
     if (isAsking) return
-    askGenerationRef.current += 1
-    qaLoadGenerationRef.current += 1
+    askController.invalidateExecutionGeneration()
+    askController.invalidateThreadLoadGeneration()
     workspaceController.setSelectedQaThreadId(null)
     setQaThreadId(null)
     setQaMessages([])
     setAskAnswer(null)
     setAskQuestion("")
     setAskError(null)
-  }, [isAsking, workspaceController])
+  }, [askController, isAsking, workspaceController])
 
   const handleOpenQaThread = useCallback(async (threadId: string) => {
     if (isAsking || isTranscriptLoading || isAnalysisFetching || isAnalysisBusy) return
@@ -1233,13 +1232,13 @@ function SidepanelWorkspace() {
       transcriptCues,
     })
     const requestedTranscriptLoadGeneration = transcriptController.captureLoadEpoch()
-    askGenerationRef.current += 1
-    const generation = ++qaLoadGenerationRef.current
+    askController.invalidateExecutionGeneration()
+    const generation = askController.beginThreadLoadGeneration()
     const isCurrent = () => {
       const currentSelection = workspaceController.getDisplaySelection()
 
       return (
-        qaLoadGenerationRef.current === generation
+        askController.isThreadLoadGenerationCurrent(generation)
         && transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)
         && (currentSelection.analysis?.contentKey ?? null) === requestedContentKey
         && (currentSelection.analysis?.analysisRunId ?? "legacy") === requestedAnalysisRunId

@@ -2039,3 +2039,206 @@ describe("AskController resolveOpenThreadTranscriptFingerprint", () => {
     expect(calls.getQaAnswer).toHaveLength(0)
   })
 })
+
+describe("AskController execution generation", () => {
+  it("returns a stable token from capture without mutating the counter", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const first = controller.captureExecutionGeneration()
+    const second = controller.captureExecutionGeneration()
+
+    expect(second).toBe(first)
+    expect(controller.isExecutionGenerationCurrent(first)).toBe(true)
+  })
+
+  it("advances the execution generation exactly once per begin", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const before = controller.captureExecutionGeneration()
+    const begun = controller.beginExecutionGeneration()
+
+    expect(begun).toBe(before + 1)
+    expect(controller.captureExecutionGeneration()).toBe(begun)
+    expect(controller.isExecutionGenerationCurrent(begun)).toBe(true)
+    expect(controller.isExecutionGenerationCurrent(before)).toBe(false)
+  })
+
+  it("stales the current execution token when invalidated", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const captured = controller.captureExecutionGeneration()
+    const invalidated = controller.invalidateExecutionGeneration()
+
+    expect(invalidated).toBe(captured + 1)
+    expect(controller.isExecutionGenerationCurrent(captured)).toBe(false)
+    expect(controller.isExecutionGenerationCurrent(invalidated)).toBe(true)
+  })
+
+  it("keeps repeated execution invalidation monotonic and currentness-safe", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const tokens = [controller.captureExecutionGeneration()]
+    tokens.push(controller.invalidateExecutionGeneration())
+    tokens.push(controller.invalidateExecutionGeneration())
+    tokens.push(controller.invalidateExecutionGeneration())
+
+    for (let index = 1; index < tokens.length; index += 1) {
+      expect(tokens[index]).toBe(tokens[index - 1] + 1)
+    }
+    for (let index = 0; index < tokens.length - 1; index += 1) {
+      expect(controller.isExecutionGenerationCurrent(tokens[index])).toBe(false)
+    }
+    expect(controller.isExecutionGenerationCurrent(tokens[tokens.length - 1])).toBe(true)
+  })
+})
+
+describe("AskController thread-load generation", () => {
+  it("returns a current token and stales the previous one on the next load", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const first = controller.beginThreadLoadGeneration()
+    expect(controller.isThreadLoadGenerationCurrent(first)).toBe(true)
+
+    const second = controller.beginThreadLoadGeneration()
+
+    expect(second).toBe(first + 1)
+    expect(controller.isThreadLoadGenerationCurrent(first)).toBe(false)
+    expect(controller.isThreadLoadGenerationCurrent(second)).toBe(true)
+  })
+
+  it("stales the current thread-load token when invalidated", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const generation = controller.beginThreadLoadGeneration()
+    const invalidated = controller.invalidateThreadLoadGeneration()
+
+    expect(invalidated).toBe(generation + 1)
+    expect(controller.isThreadLoadGenerationCurrent(generation)).toBe(false)
+    expect(controller.isThreadLoadGenerationCurrent(invalidated)).toBe(true)
+  })
+
+  it("keeps repeated thread-load invalidation monotonic", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const start = controller.beginThreadLoadGeneration()
+    const second = controller.invalidateThreadLoadGeneration()
+    const third = controller.invalidateThreadLoadGeneration()
+
+    expect(second).toBe(start + 1)
+    expect(third).toBe(second + 1)
+    expect(controller.isThreadLoadGenerationCurrent(start)).toBe(false)
+    expect(controller.isThreadLoadGenerationCurrent(second)).toBe(false)
+    expect(controller.isThreadLoadGenerationCurrent(third)).toBe(true)
+  })
+})
+
+describe("AskController generation independence", () => {
+  it("keeps a thread-load token current when the execution generation is invalidated", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const threadLoad = controller.beginThreadLoadGeneration()
+    controller.invalidateExecutionGeneration()
+
+    expect(controller.isThreadLoadGenerationCurrent(threadLoad)).toBe(true)
+  })
+
+  it("keeps an execution token current when the thread-load generation is invalidated", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const execution = controller.beginExecutionGeneration()
+    controller.invalidateThreadLoadGeneration()
+
+    expect(controller.isExecutionGenerationCurrent(execution)).toBe(true)
+  })
+
+  it("keeps a thread-load token current when an execution begins", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const threadLoad = controller.beginThreadLoadGeneration()
+    controller.beginExecutionGeneration()
+
+    expect(controller.isThreadLoadGenerationCurrent(threadLoad)).toBe(true)
+  })
+
+  it("keeps an execution token current when a thread load begins", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const execution = controller.beginExecutionGeneration()
+    controller.beginThreadLoadGeneration()
+
+    expect(controller.isExecutionGenerationCurrent(execution)).toBe(true)
+  })
+
+  it("keeps both counters independent across interleaved commands", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    const execution = controller.beginExecutionGeneration()
+    const threadLoad = controller.beginThreadLoadGeneration()
+    controller.invalidateExecutionGeneration()
+    controller.invalidateThreadLoadGeneration()
+
+    expect(controller.isExecutionGenerationCurrent(execution)).toBe(false)
+    expect(controller.isThreadLoadGenerationCurrent(threadLoad)).toBe(false)
+    expect(controller.captureExecutionGeneration()).toBe(execution + 1)
+  })
+})
+
+describe("AskController generation lifetime and isolation", () => {
+  it("starts both counters at zero for a fresh controller instance", () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    expect(controller.captureExecutionGeneration()).toBe(0)
+    expect(controller.isThreadLoadGenerationCurrent(0)).toBe(true)
+    expect(controller.isExecutionGenerationCurrent(1)).toBe(false)
+  })
+
+  it("gives each controller instance its own counters", () => {
+    const first = createAskController(createFakeDependencies().dependencies)
+    const second = createAskController(createFakeDependencies().dependencies)
+
+    first.beginExecutionGeneration()
+    first.beginThreadLoadGeneration()
+
+    expect(second.captureExecutionGeneration()).toBe(0)
+    expect(second.isThreadLoadGenerationCurrent(0)).toBe(true)
+  })
+
+  it("touches no repository, provider, cache, or model dependency", () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    controller.captureExecutionGeneration()
+    controller.beginExecutionGeneration()
+    controller.invalidateExecutionGeneration()
+    controller.isExecutionGenerationCurrent(0)
+    controller.beginThreadLoadGeneration()
+    controller.invalidateThreadLoadGeneration()
+    controller.isThreadLoadGenerationCurrent(0)
+
+    expect(calls.listQaThreadsForVideo).toEqual([])
+    expect(calls.getQaThread).toEqual([])
+    expect(calls.listQaMessages).toEqual([])
+    expect(calls.deleteQaThread).toEqual([])
+    expect(calls.createQaThread).toEqual([])
+    expect(calls.resolveProvider).toEqual([])
+    expect(calls.appendQaMessage).toEqual([])
+    expect(calls.getQaAnswer).toEqual([])
+    expect(calls.saveQaAnswer).toEqual([])
+    expect(calls.runAskVideo).toEqual([])
+    expect(calls.appendAssistantMessage).toEqual([])
+    expect(calls.order).toEqual([])
+  })
+})

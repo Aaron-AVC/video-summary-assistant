@@ -21,6 +21,7 @@ import {
   type WorkspaceAskRequestedIdentity,
   type WorkspaceHistoryPublicationEffects,
   type WorkspaceHistoryTranscriptPublication,
+  type WorkspaceRuntimeResetEffects,
   type WorkspaceRuntimeTransition,
 } from "@/sidepanel/workspace/workspace-controller"
 
@@ -2265,5 +2266,218 @@ describe("WorkspaceController load generation", () => {
 
     expect(first.isLoadGenerationCurrent(second.captureLoadGeneration())).toBe(false)
     expect(second.isLoadGenerationCurrent(second.captureLoadGeneration())).toBe(true)
+  })
+})
+
+describe("WorkspaceController applyRuntimeReset", () => {
+  function recordEffects(events: string[]): WorkspaceRuntimeResetEffects {
+    return {
+      invalidateAskThreadLoadGeneration: () => {
+        events.push("invalidate-ask-thread-load")
+      },
+      invalidateTranscriptLoadEpoch: () => {
+        events.push("invalidate-transcript-load")
+      },
+      invalidateAskExecutionGeneration: () => {
+        events.push("invalidate-ask-execution")
+      },
+      clearAnalysis: () => {
+        events.push("clear-analysis")
+      },
+      clearAnalysisError: () => {
+        events.push("clear-analysis-error")
+      },
+      setAnalysisIdle: () => {
+        events.push("analysis-idle")
+      },
+      resetTranscript: () => {
+        events.push("reset-transcript")
+      },
+      clearAskQuestion: () => {
+        events.push("clear-ask-question")
+      },
+      clearAskWorkspace: () => {
+        events.push("clear-ask-workspace")
+      },
+      clearAskError: () => {
+        events.push("clear-ask-error")
+      },
+      clearAnalysisFetching: () => {
+        events.push("clear-analysis-fetching")
+      },
+    }
+  }
+
+  it("A. runs the twelve reset steps in the documented order", () => {
+    const controller = new WorkspaceController()
+    const token = controller.beginLoadGeneration()
+    const events: string[] = []
+    const effects = recordEffects(events)
+
+    controller.applyRuntimeReset({
+      ...effects,
+      invalidateAskThreadLoadGeneration: () => {
+        events.push(
+          controller.isLoadGenerationCurrent(token)
+            ? "invalidate-load-still-current"
+            : "invalidate-load",
+        )
+        effects.invalidateAskThreadLoadGeneration()
+      },
+    })
+
+    expect(events).toEqual([
+      "invalidate-load",
+      "invalidate-ask-thread-load",
+      "invalidate-transcript-load",
+      "invalidate-ask-execution",
+      "clear-analysis",
+      "clear-analysis-error",
+      "analysis-idle",
+      "reset-transcript",
+      "clear-ask-question",
+      "clear-ask-workspace",
+      "clear-ask-error",
+      "clear-analysis-fetching",
+    ])
+  })
+
+  it("B. advances the load generation exactly once", () => {
+    const controller = new WorkspaceController()
+    const generation = controller.captureLoadGeneration()
+    const events: string[] = []
+
+    controller.applyRuntimeReset(recordEffects(events))
+
+    expect(controller.isLoadGenerationCurrent(generation)).toBe(false)
+    expect(controller.captureLoadGeneration()).toBe(generation + 1)
+  })
+
+  it("C. never advances the workspace epoch", () => {
+    const controller = new WorkspaceController()
+
+    observe(controller, context())
+    const epoch = controller.captureEpoch()
+
+    controller.applyRuntimeReset(recordEffects([]))
+
+    expect(controller.captureEpoch()).toBe(epoch)
+    expect(controller.isEpochCurrent(epoch)).toBe(true)
+  })
+
+  it("D. never mutates runtime content", () => {
+    const controller = new WorkspaceController()
+
+    observe(controller, context())
+    const before = runtimeContentOf(controller)
+
+    controller.applyRuntimeReset(recordEffects([]))
+
+    expect(runtimeContentOf(controller)).toEqual(before)
+  })
+
+  it("E. leaves controller-owned display selection unchanged", () => {
+    const controller = new WorkspaceController()
+
+    observe(controller, context())
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:history-video", analysisRunId: "run-1" },
+      qaThreadId: "thread-1",
+    })
+    const before = controller.getDisplaySelection()
+
+    controller.applyRuntimeReset(recordEffects([]))
+
+    expect(controller.getDisplaySelection()).toEqual(before)
+  })
+
+  it("F. keeps the transition and the explicit reset as two separate steps", () => {
+    const controller = new WorkspaceController()
+
+    observe(controller, context())
+    const token = controller.beginLoadGeneration()
+    const epoch = controller.captureEpoch()
+    const events: string[] = []
+
+    const transition = observe(
+      controller,
+      context({
+        videoId: "video-b",
+        contentKey: "youtube:video-b",
+        url: "https://www.youtube.com/watch?v=video-b",
+        canonicalUrl: "https://www.youtube.com/watch?v=video-b",
+        title: "Video B",
+      }),
+    )
+
+    expect(transition.kind).toBe("identity-changed")
+    expect(transition.shouldReset).toBe(true)
+    expect(controller.captureEpoch()).toBe(epoch + 1)
+    expect(controller.isLoadGenerationCurrent(token)).toBe(true)
+    expect(events).toEqual([])
+
+    controller.applyRuntimeReset(recordEffects(events))
+
+    expect(controller.isLoadGenerationCurrent(token)).toBe(false)
+    expect(events).toEqual([
+      "invalidate-ask-thread-load",
+      "invalidate-transcript-load",
+      "invalidate-ask-execution",
+      "clear-analysis",
+      "clear-analysis-error",
+      "analysis-idle",
+      "reset-transcript",
+      "clear-ask-question",
+      "clear-ask-workspace",
+      "clear-ask-error",
+      "clear-analysis-fetching",
+    ])
+  })
+
+  it("G. never resets automatically on a same-content observation", () => {
+    const controller = new WorkspaceController()
+
+    observe(controller, context())
+    const token = controller.beginLoadGeneration()
+    const epoch = controller.captureEpoch()
+
+    const transition = observe(controller, context({ title: "Video A updated" }))
+
+    expect(transition.kind).toBe("same-content")
+    expect(transition.shouldReset).toBe(false)
+    expect(controller.captureEpoch()).toBe(epoch)
+    expect(controller.isLoadGenerationCurrent(token)).toBe(true)
+  })
+
+  it("H. propagates a throwing effect unchanged and skips later effects", () => {
+    const controller = new WorkspaceController()
+    const events: string[] = []
+    const effects = recordEffects(events)
+    const failure = new Error("reset failed")
+    const generation = controller.beginLoadGeneration()
+
+    let thrown: unknown = null
+
+    try {
+      controller.applyRuntimeReset({
+        ...effects,
+        clearAnalysisError: () => {
+          events.push("clear-analysis-error")
+          throw failure
+        },
+      })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBe(failure)
+    expect(events).toEqual([
+      "invalidate-ask-thread-load",
+      "invalidate-transcript-load",
+      "invalidate-ask-execution",
+      "clear-analysis",
+      "clear-analysis-error",
+    ])
+    expect(controller.isLoadGenerationCurrent(generation)).toBe(false)
   })
 })

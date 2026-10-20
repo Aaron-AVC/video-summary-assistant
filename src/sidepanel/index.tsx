@@ -601,19 +601,19 @@ function SidepanelWorkspace() {
 
     if (!transition.shouldReset) return
 
-    workspaceController.invalidateLoadGeneration()
-    askController.invalidateThreadLoadGeneration()
-    transcriptController.invalidateLoadEpoch()
-    askController.invalidateExecutionGeneration()
-
-    setAnalysisView(null)
-    setAnalysisError(null)
-    setAnalysisPhase("idle")
-    resetTranscript()
-    setAskQuestion("")
-    clearQaWorkspace()
-    setAskError(null)
-    setIsAnalysisFetching(false)
+    workspaceController.applyRuntimeReset({
+      invalidateAskThreadLoadGeneration: () => askController.invalidateThreadLoadGeneration(),
+      invalidateTranscriptLoadEpoch: () => transcriptController.invalidateLoadEpoch(),
+      invalidateAskExecutionGeneration: () => askController.invalidateExecutionGeneration(),
+      clearAnalysis: () => setAnalysisView(null),
+      clearAnalysisError: () => setAnalysisError(null),
+      setAnalysisIdle: () => setAnalysisPhase("idle"),
+      resetTranscript,
+      clearAskQuestion: () => setAskQuestion(""),
+      clearAskWorkspace: () => clearQaWorkspace(),
+      clearAskError: () => setAskError(null),
+      clearAnalysisFetching: () => setIsAnalysisFetching(false),
+    })
   }, [
     activeTabId,
     askController,

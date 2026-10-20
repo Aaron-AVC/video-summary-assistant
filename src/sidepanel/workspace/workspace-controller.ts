@@ -197,6 +197,26 @@ export type WorkspaceAnalysisPublicationResult =
   | { kind: "published" }
 
 /**
+ * Narrow command closures the root provides for an identity-changing runtime
+ * transition reset. Only synchronous commands are accepted: the reset policy is
+ * plain sequential invocation, so ordering is observable and exception
+ * behaviour is the ordinary synchronous one.
+ */
+export type WorkspaceRuntimeResetEffects = {
+  invalidateAskThreadLoadGeneration: () => void
+  invalidateTranscriptLoadEpoch: () => void
+  invalidateAskExecutionGeneration: () => void
+  clearAnalysis: () => void
+  clearAnalysisError: () => void
+  setAnalysisIdle: () => void
+  resetTranscript: () => void
+  clearAskQuestion: () => void
+  clearAskWorkspace: () => void
+  clearAskError: () => void
+  clearAnalysisFetching: () => void
+}
+
+/**
  * Owns the runtime-content projection, the workspace epoch, and the
  * cross-feature workspace publication eligibility/sequencing decisions.
  *
@@ -385,6 +405,37 @@ export class WorkspaceController {
 
   isLoadGenerationCurrent(generation: number): boolean {
     return generation === this.loadGeneration
+  }
+
+  /**
+   * Cross-feature reset policy for an identity-changing runtime transition.
+   *
+   * The caller has already decided a reset is required: `observeRuntimeContent`
+   * returned `shouldReset`, which also advanced the workspace epoch. This
+   * command therefore does not observe runtime content, does not read
+   * `runtimeContent`/`displaySelection`/`workspaceEpoch`, and does not advance
+   * `workspaceEpoch` again.
+   *
+   * It owns effect ordering only: load generation is invalidated here exactly
+   * once, then the provided feature commands run in the documented order. Root
+   * feature controllers keep owning their own generation counters and React
+   * state; this controller never imports or holds them. No branching, no
+   * awaits, no retries, no second checks, and no error handling: a throwing
+   * effect propagates unchanged and later effects do not run.
+   */
+  applyRuntimeReset(effects: WorkspaceRuntimeResetEffects): void {
+    this.invalidateLoadGeneration()
+    effects.invalidateAskThreadLoadGeneration()
+    effects.invalidateTranscriptLoadEpoch()
+    effects.invalidateAskExecutionGeneration()
+    effects.clearAnalysis()
+    effects.clearAnalysisError()
+    effects.setAnalysisIdle()
+    effects.resetTranscript()
+    effects.clearAskQuestion()
+    effects.clearAskWorkspace()
+    effects.clearAskError()
+    effects.clearAnalysisFetching()
   }
 
   /**

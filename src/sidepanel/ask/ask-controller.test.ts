@@ -1,18 +1,28 @@
 import { describe, expect, it } from "bun:test"
 
+import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
 import {
   MAX_QA_CONTEXT_MESSAGES,
   boundQaConversationContext,
+  computeBoundedConversationContextFingerprint,
+  type QaConversationContextMessage,
 } from "@/features/analysis/lib/qa-conversation-context"
+import type { TranscriptSegment } from "@/features/platform/types"
 import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
+import {
+  computeQaCacheKey,
+  type QaCacheIdentityInput,
+} from "@/lib/persistence/cache-identity"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import {
   ASK_THREAD_PROVIDER_UNAVAILABLE_MESSAGE,
   createAskController,
   projectAskAnswer,
   type AskControllerDependencies,
+  type AskExecutionTaskInputRequest,
   type AskExecutionThreadRequest,
   type AskExecutionTurnRequest,
+  type AskProviderRequest,
   type AskUserMessageInput,
   type CreateAskThreadInput,
 } from "@/sidepanel/ask/ask-controller"
@@ -119,12 +129,49 @@ function createFakeDependencies(overrides: Partial<AskControllerDependencies> = 
 function alwaysCurrent() {
   return () => true
 }
-
 function alwaysStale() {
   return () => false
 }
 
 const QUESTION = "What happens at the start of this video?"
+
+function createProviderRequest(overrides: Partial<AskProviderRequest> = {}): AskProviderRequest {
+  return {
+    baseUrl: "https://provider-a.example/v1",
+    apiKey: "secret-a",
+    model: "model-a",
+    generationTimeoutSec: 900,
+    ...overrides,
+  }
+}
+
+function createAnalysis(): VideoAnalysis {
+  return {
+    summary: "A short summary.",
+    keyPoints: [{ text: "A key point.", startSec: 0, endSec: 5 }],
+    chapters: [{
+      title: "Chapter one",
+      startSec: 0,
+      endSec: 10,
+      summary: "Chapter summary.",
+      detail: "Chapter detail.",
+    }],
+  }
+}
+
+function createTranscriptCues(): TranscriptSegment[] {
+  return [
+    { startSec: 0, endSec: 5, text: "First cue." },
+    { startSec: 5, endSec: 10, text: "Second cue." },
+  ]
+}
+
+function createConversationHistory(): QaConversationContextMessage[] {
+  return [
+    { role: "user", content: "previous user" },
+    { role: "assistant", content: "previous assistant" },
+  ]
+}
 
 function createResolvedProvider(overrides: Partial<ResolvedProvider> = {}): ResolvedProvider {
   return {
@@ -1020,6 +1067,289 @@ describe("AskController prepareExecutionTurn", () => {
 
     expect(calls.listQaMessages).toEqual(["thread-a"])
     expect(calls.appendQaMessage).toHaveLength(1)
+    expect(calls.getQaThread).toEqual([])
+    expect(calls.listQaThreadsForVideo).toEqual([])
+    expect(calls.createQaThread).toEqual([])
+    expect(calls.deleteQaThread).toEqual([])
+    expect(calls.resolveProvider).toEqual([])
+  })
+})
+
+function createTaskInputRequest(
+  overrides: Partial<AskExecutionTaskInputRequest> = {},
+): AskExecutionTaskInputRequest {
+  return {
+    thread: createThread(),
+    requestedContentKey: CONTENT_KEY,
+    requestedAnalysisRunId: ANALYSIS_RUN_ID,
+    question: QUESTION,
+    providerRequest: createProviderRequest(),
+    platform: "youtube",
+    videoId: "video-a",
+    partId: null,
+    videoTitle: "Video A",
+    analysis: createAnalysis(),
+    transcriptCues: createTranscriptCues(),
+    conversationHistory: createConversationHistory(),
+    ...overrides,
+  }
+}
+
+async function expectCacheKey(
+  overrides: Partial<AskExecutionTaskInputRequest>,
+  expected: QaCacheIdentityInput,
+) {
+  const controller = createAskController(createFakeDependencies().dependencies)
+  const result = await controller.prepareExecutionTaskInput(createTaskInputRequest(overrides))
+
+  expect(result.qaCacheKey).toBe(await computeQaCacheKey(expected))
+  return result
+}
+
+describe("AskController prepareExecutionTaskInput cache identity", () => {
+  it("derives the cache key from the existing QA cache identity helper", async () => {
+    const request = createTaskInputRequest()
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const result = await controller.prepareExecutionTaskInput(request)
+
+    expect(result.qaCacheKey).toBe(await computeQaCacheKey({
+      contentKey: request.requestedContentKey,
+      transcriptFingerprint: request.thread.transcriptFingerprint,
+      analysisRunId: request.thread.analysisRunId,
+      providerProfileId: request.thread.providerProfileId,
+      baseUrl: request.thread.providerBaseUrl,
+      model: request.thread.providerModel,
+      question: request.question,
+      conversationContextFingerprint:
+        await computeBoundedConversationContextFingerprint(request.conversationHistory),
+    }))
+  })
+
+  it("keeps the persisted thread analysisRunId in the cache key while the task snapshot uses the requested run", async () => {
+    const result = await expectCacheKey(
+      {
+        requestedAnalysisRunId: "requested-run",
+        thread: createThread({ analysisRunId: "persisted-thread-run" }),
+      },
+      {
+        contentKey: CONTENT_KEY,
+        transcriptFingerprint: FINGERPRINT,
+        analysisRunId: "persisted-thread-run",
+        providerProfileId: "provider-a",
+        baseUrl: "https://provider-a.example/v1",
+        model: "model-a",
+        question: QUESTION,
+        conversationContextFingerprint:
+          await computeBoundedConversationContextFingerprint(createConversationHistory()),
+      },
+    )
+
+    expect(result.taskSnapshot.analysisRunId).toBe("requested-run")
+  })
+
+  it("takes cache provider identity from the thread, not the provider request", async () => {
+    const result = await expectCacheKey(
+      {
+        providerRequest: {
+          baseUrl: "https://request-base.example/v9",
+          apiKey: "secret-a",
+          model: "request-model",
+          generationTimeoutSec: 900,
+        },
+      },
+      {
+        contentKey: CONTENT_KEY,
+        transcriptFingerprint: FINGERPRINT,
+        analysisRunId: ANALYSIS_RUN_ID,
+        providerProfileId: "provider-a",
+        baseUrl: "https://provider-a.example/v1",
+        model: "model-a",
+        question: QUESTION,
+        conversationContextFingerprint:
+          await computeBoundedConversationContextFingerprint(createConversationHistory()),
+      },
+    )
+
+    expect(result.taskSnapshot.providerBaseUrl).toBe("https://provider-a.example/v1")
+    expect(result.taskSnapshot.providerModel).toBe("model-a")
+    expect(result.taskSnapshot.providerProfileId).toBe("provider-a")
+  })
+
+  it("keeps the conversation context inside the cache identity", async () => {
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const withHistory = await controller.prepareExecutionTaskInput(createTaskInputRequest())
+    const withoutHistory = await controller.prepareExecutionTaskInput(createTaskInputRequest({
+      conversationHistory: [],
+    }))
+
+    expect(withHistory.qaCacheKey).not.toBe(withoutHistory.qaCacheKey)
+  })
+
+  it("matches the helper semantics for an empty conversation history", async () => {
+    const result = await expectCacheKey(
+      { conversationHistory: [] },
+      {
+        contentKey: CONTENT_KEY,
+        transcriptFingerprint: FINGERPRINT,
+        analysisRunId: ANALYSIS_RUN_ID,
+        providerProfileId: "provider-a",
+        baseUrl: "https://provider-a.example/v1",
+        model: "model-a",
+        question: QUESTION,
+        conversationContextFingerprint: null,
+      },
+    )
+
+    expect(await computeBoundedConversationContextFingerprint([])).toBeNull()
+    expect(result.taskSnapshot).toBeDefined()
+  })
+})
+
+describe("AskController prepareExecutionTaskInput frozen task inputs", () => {
+  it("builds the exact task snapshot from the captured sources", async () => {
+    const request = createTaskInputRequest()
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const { taskSnapshot } = await controller.prepareExecutionTaskInput(request)
+
+    expect(taskSnapshot).toEqual({
+      contentKey: CONTENT_KEY,
+      analysisRunId: ANALYSIS_RUN_ID,
+      transcriptFingerprint: FINGERPRINT,
+      threadId: "thread-a",
+      platform: "youtube",
+      videoId: "video-a",
+      partId: null,
+      videoTitle: "Video A",
+      question: QUESTION,
+      providerProfileId: "provider-a",
+      providerBaseUrl: "https://provider-a.example/v1",
+      providerModel: "model-a",
+      generationTimeoutSec: 900,
+    })
+    expect(Object.keys(taskSnapshot).sort()).toEqual([
+      "analysisRunId",
+      "contentKey",
+      "generationTimeoutSec",
+      "partId",
+      "platform",
+      "providerBaseUrl",
+      "providerModel",
+      "providerProfileId",
+      "question",
+      "threadId",
+      "transcriptFingerprint",
+      "videoId",
+      "videoTitle",
+    ])
+  })
+
+  it("takes source metadata from the captured analysis view, not the thread", async () => {
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const { taskSnapshot } = await controller.prepareExecutionTaskInput(createTaskInputRequest({
+      thread: createThread({
+        platform: "bilibili",
+        videoId: "thread-video",
+        partId: "thread-part",
+        title: "Thread title",
+      }),
+      platform: "youtube",
+      videoId: "view-video",
+      partId: "view-part",
+      videoTitle: "View title",
+    }))
+
+    expect(taskSnapshot.platform).toBe("youtube")
+    expect(taskSnapshot.videoId).toBe("view-video")
+    expect(taskSnapshot.partId).toBe("view-part")
+    expect(taskSnapshot.videoTitle).toBe("View title")
+  })
+
+  it("falls back to the 600 second default when the provider request omits the timeout", async () => {
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const { taskSnapshot } = await controller.prepareExecutionTaskInput(createTaskInputRequest({
+      providerRequest: {
+        baseUrl: "https://provider-a.example/v1",
+        apiKey: "secret-a",
+        model: "model-a",
+        generationTimeoutSec: undefined as unknown as number,
+      },
+    }))
+
+    expect(taskSnapshot.generationTimeoutSec).toBe(600)
+  })
+
+  it("never lets the API key reach the task snapshot", async () => {
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const result = await controller.prepareExecutionTaskInput(createTaskInputRequest({
+      providerRequest: {
+        baseUrl: "https://provider-a.example/v1",
+        apiKey: "super-secret",
+        model: "model-a",
+        generationTimeoutSec: 900,
+      },
+    }))
+
+    expect("apiKey" in result.taskSnapshot).toBe(false)
+    expect(JSON.stringify(result.taskSnapshot)).not.toContain("super-secret")
+    expect(result.providerRequest.apiKey).toBe("super-secret")
+    expect(result.qaCacheKey).not.toContain("super-secret")
+  })
+
+  it("returns the provider request as an execution capability copy", async () => {
+    const request = createTaskInputRequest()
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const { providerRequest } = await controller.prepareExecutionTaskInput(request)
+
+    expect(providerRequest).toEqual(request.providerRequest)
+    expect(providerRequest).not.toBe(request.providerRequest)
+  })
+
+  it("freezes the transcript cues with a shallow copy", async () => {
+    const request = createTaskInputRequest()
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const { taskTranscriptCues } = await controller.prepareExecutionTaskInput(request)
+
+    expect(taskTranscriptCues).not.toBe(request.transcriptCues)
+    expect(taskTranscriptCues).toEqual(request.transcriptCues)
+    expect(taskTranscriptCues[0]).toBe(request.transcriptCues[0])
+  })
+
+  it("freezes the conversation history with a shallow copy", async () => {
+    const request = createTaskInputRequest()
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const { taskConversationHistory } = await controller.prepareExecutionTaskInput(request)
+
+    expect(taskConversationHistory).not.toBe(request.conversationHistory)
+    expect(taskConversationHistory).toEqual(request.conversationHistory)
+    expect(taskConversationHistory[0]).toBe(request.conversationHistory[0])
+  })
+
+  it("returns the captured analysis payload unchanged", async () => {
+    const request = createTaskInputRequest()
+    const controller = createAskController(createFakeDependencies().dependencies)
+
+    const { taskAnalysis } = await controller.prepareExecutionTaskInput(request)
+
+    expect(taskAnalysis).toBe(request.analysis)
+  })
+
+  it("touches no repository or provider dependency", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+
+    await controller.prepareExecutionTaskInput(createTaskInputRequest())
+
+    expect(calls.listQaMessages).toEqual([])
+    expect(calls.appendQaMessage).toEqual([])
     expect(calls.getQaThread).toEqual([])
     expect(calls.listQaThreadsForVideo).toEqual([])
     expect(calls.createQaThread).toEqual([])

@@ -12,9 +12,6 @@ import type {
   VideoAnalysis,
 } from "@/features/analysis/lib/analysis-schema"
 import { askVideo } from "@/features/analysis/lib/ask-video"
-import {
-  computeBoundedConversationContextFingerprint,
-} from "@/features/analysis/lib/qa-conversation-context"
 import { qaConversationRepository } from "@/features/analysis/lib/qa-conversation-repository"
 import {
   captureAnalysisCompletionTimes,
@@ -42,7 +39,6 @@ import {
 } from "@/features/history/lib/destructive-operation-coordinator"
 import {
   computeAnalysisCacheKey,
-  computeQaCacheKey,
   isExactCurrentAnalysis,
   VIDEO_QA_PROMPT_VERSION,
   VIDEO_QA_SCHEMA_VERSION,
@@ -1197,10 +1193,6 @@ function SidepanelWorkspace() {
       }
       if (!isCurrentAsk()) return
 
-      const threadProviderProfileId = thread.providerProfileId
-      const threadProviderBaseUrl = thread.providerBaseUrl
-      const threadProviderModel = thread.providerModel
-      const threadTranscriptFingerprint = thread.transcriptFingerprint
       const { conversationHistory, userMessage } = await askController.prepareExecutionTurn({
         threadId: thread.id,
         question: submittedQuestion,
@@ -1209,36 +1201,27 @@ function SidepanelWorkspace() {
       if (isCurrentAsk()) {
         setQaMessages((current) => [...current.filter((message) => message.id !== userMessage.id), userMessage])
       }
-      const conversationContextFingerprint = await computeBoundedConversationContextFingerprint(conversationHistory)
-      const qaCacheKey = await computeQaCacheKey({
-        contentKey: requestedContentKey,
-        transcriptFingerprint: threadTranscriptFingerprint,
-        analysisRunId: thread.analysisRunId,
-        providerProfileId: threadProviderProfileId,
-        baseUrl: threadProviderBaseUrl,
-        model: threadProviderModel,
+      const {
+        qaCacheKey,
+        taskSnapshot,
+        providerRequest: taskProviderRequest,
+        taskAnalysis,
+        taskTranscriptCues,
+        taskConversationHistory,
+      } = await askController.prepareExecutionTaskInput({
+        thread,
+        requestedContentKey,
+        requestedAnalysisRunId,
         question: submittedQuestion,
-        conversationContextFingerprint,
+        providerRequest: frozenProviderRequest,
+        platform: analysisView.platform,
+        videoId: analysisView.videoId,
+        partId: analysisView.partId,
+        videoTitle: analysisView.title,
+        analysis: analysisView.analysis,
+        transcriptCues,
+        conversationHistory,
       })
-      const taskThread = thread
-      const taskAnalysis = analysisView
-      const taskTranscriptCues = [...transcriptCues]
-      const taskConversationHistory = [...conversationHistory]
-      const taskSnapshot = {
-        contentKey: requestedContentKey,
-        analysisRunId: requestedAnalysisRunId,
-        transcriptFingerprint: threadTranscriptFingerprint,
-        threadId: taskThread.id,
-        platform: taskAnalysis.platform,
-        videoId: taskAnalysis.videoId,
-        partId: taskAnalysis.partId,
-        videoTitle: taskAnalysis.title,
-        question: submittedQuestion,
-        providerProfileId: threadProviderProfileId,
-        providerBaseUrl: threadProviderBaseUrl,
-        providerModel: threadProviderModel,
-        generationTimeoutSec: frozenProviderRequest.generationTimeoutSec ?? 600,
-      }
       const taskPromise = askTaskController.start(taskSnapshot, async ({ taskId, signal, setPhase }) => {
         askSignal = signal
         const ensureTaskActive = () => {
@@ -1253,14 +1236,14 @@ function SidepanelWorkspace() {
           answer = cachedAnswer.answer
         } else {
           const result = await askVideo({
-            provider: { ...frozenProviderRequest },
+            provider: { ...taskProviderRequest },
             question: taskSnapshot.question,
             transcript: {
               videoId: taskSnapshot.videoId,
               title: taskSnapshot.videoTitle,
               cues: taskTranscriptCues,
             },
-            analysis: taskAnalysis.analysis,
+            analysis: taskAnalysis,
             conversationHistory: taskConversationHistory,
             signal,
             onRepairStart: () => setPhase("repairing"),

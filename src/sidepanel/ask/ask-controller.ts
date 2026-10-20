@@ -1,9 +1,13 @@
-import type { AskVideoAnswer } from "@/features/analysis/lib/analysis-schema"
+import type { AskVideoAnswer, VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
+import type { AskTaskSnapshot } from "@/features/analysis/lib/ask-task-controller"
 import {
   boundQaConversationContext,
+  computeBoundedConversationContextFingerprint,
   type QaConversationContextMessage,
 } from "@/features/analysis/lib/qa-conversation-context"
+import type { TranscriptSegment } from "@/features/platform/types"
 import type { ResolvedProvider } from "@/features/settings/lib/settings-storage"
+import { computeQaCacheKey } from "@/lib/persistence/cache-identity"
 import type { QaMessageEntity, QaThreadEntity } from "@/lib/schemas/persistence"
 import {
   getFrozenQaProviderRequest,
@@ -153,6 +157,46 @@ export type AskExecutionTurnResult = {
   userMessage: QaMessageEntity
 }
 
+/**
+ * Everything the root already captured for one Ask request, before the task
+ * starts. The controller derives cache identity and the frozen task inputs from
+ * this snapshot; it never starts, observes, or cancels the task itself.
+ */
+export type AskExecutionTaskInputRequest = {
+  thread: QaThreadEntity
+
+  requestedContentKey: string
+  requestedAnalysisRunId: string
+
+  question: string
+
+  /** Transient execution capability; never persisted or published. */
+  providerRequest: AskProviderRequest
+
+  platform: "youtube" | "bilibili"
+  videoId: string
+  partId: string | null
+  videoTitle: string
+  analysis: VideoAnalysis
+
+  transcriptCues: TranscriptSegment[]
+  conversationHistory: QaConversationContextMessage[]
+}
+
+/**
+ * Frozen task inputs plus the QA cache identity they belong to. `taskSnapshot`
+ * is the exact value the root passes to `AskTaskController.start`, minus the
+ * task id and start time that the controller owns.
+ */
+export type AskExecutionTaskInputResult = {
+  qaCacheKey: string
+  taskSnapshot: Omit<AskTaskSnapshot, "taskId" | "startedAt">
+  providerRequest: AskProviderRequest
+  taskAnalysis: VideoAnalysis
+  taskTranscriptCues: TranscriptSegment[]
+  taskConversationHistory: QaConversationContextMessage[]
+}
+
 export type AskController = {
   restoreConversation: (
     request: AskRestoreConversationRequest,
@@ -165,6 +209,9 @@ export type AskController = {
   prepareExecutionTurn: (
     request: AskExecutionTurnRequest,
   ) => Promise<AskExecutionTurnResult>
+  prepareExecutionTaskInput: (
+    request: AskExecutionTaskInputRequest,
+  ) => Promise<AskExecutionTaskInputResult>
 }
 
 /**
@@ -341,11 +388,79 @@ export function createAskController(dependencies: AskControllerDependencies): As
     return { conversationHistory, userMessage }
   }
 
+  /**
+   * Derive the QA cache identity and freeze the task inputs the runner reads.
+   *
+   * Cache identity is authoritative over the persisted thread for provider
+   * identity and analysis run, while the task snapshot keeps the requested
+   * analysis run and the captured analysis view for source metadata. The
+   * transient provider request only travels as execution capability: it never
+   * reaches the snapshot, the cache key, React state, or persistence.
+   */
+  async function prepareExecutionTaskInput(
+    request: AskExecutionTaskInputRequest,
+  ): Promise<AskExecutionTaskInputResult> {
+    const {
+      thread,
+      requestedContentKey,
+      requestedAnalysisRunId,
+      question,
+      providerRequest,
+      platform,
+      videoId,
+      partId,
+      videoTitle,
+      analysis,
+      transcriptCues,
+      conversationHistory,
+    } = request
+
+    const conversationContextFingerprint =
+      await computeBoundedConversationContextFingerprint(conversationHistory)
+
+    const qaCacheKey = await computeQaCacheKey({
+      contentKey: requestedContentKey,
+      transcriptFingerprint: thread.transcriptFingerprint,
+      analysisRunId: thread.analysisRunId,
+      providerProfileId: thread.providerProfileId,
+      baseUrl: thread.providerBaseUrl,
+      model: thread.providerModel,
+      question,
+      conversationContextFingerprint,
+    })
+
+    const taskSnapshot: Omit<AskTaskSnapshot, "taskId" | "startedAt"> = {
+      contentKey: requestedContentKey,
+      analysisRunId: requestedAnalysisRunId,
+      transcriptFingerprint: thread.transcriptFingerprint,
+      threadId: thread.id,
+      platform,
+      videoId,
+      partId,
+      videoTitle,
+      question,
+      providerProfileId: thread.providerProfileId,
+      providerBaseUrl: thread.providerBaseUrl,
+      providerModel: thread.providerModel,
+      generationTimeoutSec: providerRequest.generationTimeoutSec ?? 600,
+    }
+
+    return {
+      qaCacheKey,
+      taskSnapshot,
+      providerRequest: { ...providerRequest },
+      taskAnalysis: analysis,
+      taskTranscriptCues: [...transcriptCues],
+      taskConversationHistory: [...conversationHistory],
+    }
+  }
+
   return {
     restoreConversation,
     openThread,
     deleteThread,
     prepareExecutionThread,
     prepareExecutionTurn,
+    prepareExecutionTaskInput,
   }
 }

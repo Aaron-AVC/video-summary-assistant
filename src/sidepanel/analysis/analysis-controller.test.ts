@@ -389,6 +389,39 @@ describe("analysis controller — analysis cache", () => {
     expect(lastGuardIndex).toBeGreaterThan(harness.events.indexOf("getAnalysisCache"))
   })
 
+  it("E3. preserves a nullable analysis run identity on a genuine exact cache hit", async () => {
+    const harness = createHarness({ cached: cacheFixture({ analysisRunId: null }) })
+    const { request, extras } = createRequest(harness.events)
+
+    const result = await harness.controller.runExecutionTask(request)
+
+    expect(result.kind).toBe("cached")
+    expect(result.publication.analysisRunId).toBeNull()
+    expect(result.publication).toEqual({
+      platform: "youtube",
+      videoId: "video-1",
+      partId: null,
+      contentKey: CONTENT_KEY,
+      title: "Video Title",
+      analysis: analysisFixture(),
+      analysisRunId: null,
+      transcriptFingerprint: TRANSCRIPT_FINGERPRINT,
+      providerProfileId: "profile-1",
+      providerBaseUrl: "https://api.example.com/v1",
+      providerModel: "model-1",
+      analysisSchemaVersion: 1,
+      analysisPromptVersion: "video-analysis-v2",
+      lastAnalyzedAt: CACHED_AT,
+    })
+    expect(harness.calls.runAnalysis).toHaveLength(0)
+    expect(harness.calls.saveVideoRecord).toHaveLength(0)
+    expect(harness.calls.saveTranscriptSnapshot).toHaveLength(0)
+    expect(harness.calls.saveAnalysisRun).toHaveLength(0)
+    expect(harness.calls.saveAnalysisCache).toHaveLength(0)
+    expect(extras.phases).toEqual(["analyzing"])
+    expect(harness.events).not.toContain("phase:finalizing")
+  })
+
   it("F. skips the cache lookup entirely when the execution policy bypasses it", async () => {
     const harness = createHarness({ cached: cacheFixture() })
     const { request } = createRequest(harness.events, {

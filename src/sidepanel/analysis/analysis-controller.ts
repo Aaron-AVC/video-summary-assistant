@@ -40,6 +40,10 @@ export type AnalysisExecutionRequest = {
 /**
  * Everything root needs to build the AnalysisView and the QA restore identity.
  * Never carries `errorMessage` or any provider secret.
+ *
+ * `analysisRunId` mirrors the persistence schema: a freshly completed run always
+ * carries a generated id, while an exact cache hit preserves the cache row,
+ * whose `analysisRunId` is nullable.
  */
 export type AnalysisExecutionPublication = {
   platform: VideoPlatform
@@ -48,7 +52,7 @@ export type AnalysisExecutionPublication = {
   contentKey: string
   title: string
   analysis: VideoAnalysis
-  analysisRunId: string
+  analysisRunId: string | null
   transcriptFingerprint: string
   providerProfileId: string | null
   providerBaseUrl: string | null

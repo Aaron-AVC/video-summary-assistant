@@ -304,7 +304,7 @@ describe("Side Panel V1 components", () => {
     expect(markup).toContain("Test connection")
   })
 
-  it("keeps all four accessible tabs usable at narrow widths", () => {
+  it("keeps all five accessible tabs usable at narrow widths", () => {
     const markup = renderToStaticMarkup(
       <SidePanelShell
         activeTab="overview"
@@ -313,15 +313,17 @@ describe("Side Panel V1 components", () => {
         overview={<div>Overview content</div>}
         transcript={<div>Transcript content</div>}
         ask={<div>Ask content</div>}
+        search={<div>Search content</div>}
         settings={<div>Settings content</div>}
       />,
     )
     expect(markup).toContain("Overview")
     expect(markup).toContain("Transcript")
     expect(markup).toContain("Ask")
+    expect(markup).toContain("Search")
     expect(markup).toContain("Settings")
-    expect(markup).toContain("grid-cols-2")
-    expect(markup).toContain("min-[420px]:grid-cols-4")
+    expect(markup).toContain("grid-cols-3")
+    expect(markup).toContain("min-[420px]:grid-cols-5")
   })
 })
 

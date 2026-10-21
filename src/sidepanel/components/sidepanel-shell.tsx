@@ -15,6 +15,7 @@ type SidePanelShellProps = {
   overview: ReactNode
   transcript: ReactNode
   ask: ReactNode
+  search: ReactNode
   settings: ReactNode
 }
 
@@ -26,6 +27,7 @@ export function SidePanelShell({
   overview,
   transcript,
   ask,
+  search,
   settings,
 }: SidePanelShellProps) {
   const { t } = useI18n()
@@ -33,6 +35,7 @@ export function SidePanelShell({
     { value: "overview", label: t("side.overview") },
     { value: "transcript", label: t("side.transcript") },
     { value: "ask", label: t("side.ask") },
+    { value: "search", label: t("side.search") },
     { value: "settings", label: t("side.settings") },
   ]
   return (
@@ -45,7 +48,7 @@ export function SidePanelShell({
         className="min-w-0">
         <TabsList
           aria-label={t("side.sections")}
-          className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 rounded-lg p-1 min-[420px]:grid-cols-4">
+          className="grid h-auto w-full min-w-0 grid-cols-3 gap-1 rounded-lg p-1 min-[420px]:grid-cols-5">
           {tabLabels.map((tab) => (
             <TabsTrigger
               key={tab.value}
@@ -63,6 +66,9 @@ export function SidePanelShell({
         </TabsContent>
         <TabsContent forceMount value="ask" className="mt-3 data-[state=inactive]:hidden">
           {ask}
+        </TabsContent>
+        <TabsContent forceMount value="search" className="mt-3 data-[state=inactive]:hidden">
+          {search}
         </TabsContent>
         <TabsContent forceMount value="settings" className="mt-3 data-[state=inactive]:hidden">
           {settings}

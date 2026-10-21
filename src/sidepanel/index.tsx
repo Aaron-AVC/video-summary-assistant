@@ -121,6 +121,13 @@ import { downloadMarkdownFile } from "@/sidepanel/lib/markdown-download"
 import { createAskController } from "@/sidepanel/ask/ask-controller"
 import { createKnowledgeController } from "@/sidepanel/knowledge/knowledge-controller"
 import {
+  createSearchController,
+  type SearchResult,
+  type SearchRuntimeProjection,
+} from "@/sidepanel/search/search-controller"
+import { searchRepository } from "@/features/search/lib/search-repository"
+import { SearchTab } from "@/sidepanel/components/search-tab"
+import {
   WorkspaceController,
   type WorkspaceHistoryRestoreMode,
 } from "@/sidepanel/workspace/workspace-controller"
@@ -256,10 +263,23 @@ function SidepanelWorkspace() {
     })
   }
   const knowledgeController = knowledgeControllerRef.current
+  const searchControllerRef = useRef<ReturnType<typeof createSearchController> | null>(null)
+  if (!searchControllerRef.current) {
+    searchControllerRef.current = createSearchController({
+      repository: {
+        loadCandidates: () => searchRepository.loadCandidates(),
+      },
+    })
+  }
+  const searchController = searchControllerRef.current
   const [transcriptSnapshot, setTranscriptSnapshot] = useState(
     transcriptController.getSnapshot(),
   )
   const [knowledgeSnapshot, setKnowledgeSnapshot] = useState(knowledgeController.getSnapshot())
+  const [searchSnapshot, setSearchSnapshot] = useState(searchController.getSnapshot())
+  useEffect(() => searchController.subscribe(() => {
+    setSearchSnapshot(searchController.getSnapshot())
+  }), [searchController])
   const [markdownExportSections, setMarkdownExportSections] = useState<MarkdownExportSections>(
     DEFAULT_MARKDOWN_EXPORT_SECTIONS,
   )
@@ -1381,6 +1401,127 @@ function SidepanelWorkspace() {
     }
   }, [jumpToTimestamp, t])
 
+  const pendingSearchIntentRef = useRef<
+    | { kind: "knowledge"; contentKey: string; timestampSeconds: number | null }
+    | {
+        kind: "qa"
+        contentKey: string
+        videoId: string
+        analysisRunId: string
+        threadId: string
+        transcriptFingerprint: string | null
+      }
+    | null
+  >(null)
+
+  const handleSearchQueryChange = useCallback((query: string) => {
+    searchController.setQuery(query)
+  }, [searchController])
+
+  const handleSearchSubmit = useCallback(async () => {
+    await searchController.search({
+      query: searchSnapshot.query,
+      runtime: searchRuntimeRef.current,
+    })
+  }, [searchController, searchSnapshot.query])
+
+  const openSearchQaThread = useCallback(async (intent: {
+    threadId: string
+    videoId: string
+    contentKey: string
+    analysisRunId: string
+    transcriptFingerprint: string | null
+  }) => {
+    await handleOpenSavedAnalysis(intent.videoId, intent.contentKey, intent.analysisRunId)
+    const generation = workspaceController.captureLoadGeneration()
+    const isCurrent = () => (
+      workspaceController.isLoadGenerationCurrent(generation)
+      && videoContextRef.current.contentKey === intent.contentKey
+    )
+    askController.invalidateExecutionGeneration()
+    const result = await askController.openThread({
+      threadId: intent.threadId,
+      contentKey: intent.contentKey,
+      analysisRunId: intent.analysisRunId,
+      transcriptFingerprint: intent.transcriptFingerprint,
+      isCurrent,
+    })
+    if (result.kind !== "ready" || !isCurrent()) return
+    workspaceController.setSelectedQaThreadId(intent.threadId)
+    setQaThreadId(intent.threadId)
+    setQaMessages(result.thread.messages)
+    setAskQuestion("")
+    setAskAnswer(result.thread.answer)
+    setActiveTab("ask")
+  }, [askController, handleOpenSavedAnalysis, workspaceController])
+
+  const handleOpenSearchResult = useCallback(async (result: SearchResult) => {
+    if (result.kind === "knowledge") {
+      if (videoContextRef.current.contentKey === result.contentKey) {
+        setActiveTab("overview")
+        if (result.timestampSeconds !== null) {
+          await jumpWithIdentity(
+            identityFromContext(videoContextRef.current),
+            result.timestampSeconds,
+          )
+        }
+        return
+      }
+      pendingSearchIntentRef.current = {
+        kind: "knowledge",
+        contentKey: result.contentKey,
+        timestampSeconds: result.timestampSeconds,
+      }
+      await jumpWithIdentity(result.identity, result.timestampSeconds ?? 0)
+      return
+    }
+    if (result.kind === "qa-thread") {
+      if (!result.threadId || !result.analysisRunId) return
+      const intent = {
+        kind: "qa" as const,
+        videoId: result.videoId,
+        contentKey: result.contentKey,
+        analysisRunId: result.analysisRunId,
+        threadId: result.threadId,
+        transcriptFingerprint: result.transcriptFingerprint,
+      }
+      if (videoContextRef.current.contentKey === result.contentKey) {
+        await openSearchQaThread(intent)
+        return
+      }
+      pendingSearchIntentRef.current = intent
+      await jumpWithIdentity(result.identity, 0)
+      return
+    }
+    if (result.analysisRunId) {
+      await handleOpenSavedAnalysis(result.videoId, result.contentKey, result.analysisRunId)
+    }
+    setActiveTab("overview")
+  }, [handleOpenSavedAnalysis, jumpWithIdentity, openSearchQaThread])
+
+  useEffect(() => {
+    const pending = pendingSearchIntentRef.current
+    if (!pending) return
+    if (videoContext.contentKey !== pending.contentKey) return
+    pendingSearchIntentRef.current = null
+    if (pending.kind === "knowledge") {
+      setActiveTab("overview")
+      if (pending.timestampSeconds !== null) {
+        void jumpWithIdentity(
+          identityFromContext(videoContextRef.current),
+          pending.timestampSeconds,
+        )
+      }
+      return
+    }
+    void openSearchQaThread(pending)
+  }, [jumpWithIdentity, openSearchQaThread, videoContext.contentKey])
+
+  useEffect(() => {
+    if (activeTab !== "search") return
+    void searchController.refresh(searchRuntimeRef.current)
+  }, [activeTab, searchController])
+
   const handleAnalysisJump = useCallback((timestampSeconds: number) => {
     const identity = analysisView
       ? identityFromAnalysis(analysisView)
@@ -1518,6 +1659,35 @@ function SidepanelWorkspace() {
         ...markdownExportSources,
       })
     : { analysis: false, transcript: false, knowledge: false }
+
+  /**
+   * Authoritative runtime projection handed to the Search controller. Only
+   * sources whose canonical contentKey matches the runtime identity are
+   * exposed, so foreign analysis or transcript data can never be searched.
+   */
+  const searchRuntime = (() => {
+    const identity = identityFromContext(videoContext)
+    if (!identity) return null
+    const analysisMatches = analysisView !== null && analysisView.contentKey === identity.contentKey
+    const transcriptMatches = transcriptIdentity?.contentKey === identity.contentKey
+    return {
+      identity,
+      title: videoContext.title ?? identity.videoId,
+      analysis: analysisMatches && analysisView
+        ? {
+            analysisRunId: analysisView.analysisRunId,
+            transcriptFingerprint: analysisView.transcriptFingerprint,
+            analysis: analysisView.analysis,
+          }
+        : null,
+      transcript: {
+        contentKey: transcriptMatches ? identity.contentKey : null,
+        cues: transcriptMatches ? transcriptCues : [],
+      },
+    } satisfies SearchRuntimeProjection
+  })()
+  const searchRuntimeRef = useRef<SearchRuntimeProjection | null>(null)
+  searchRuntimeRef.current = searchRuntime
 
   const buildMarkdownExportPayload = useCallback(() => {
     if (!markdownExportIdentity) return null
@@ -1657,6 +1827,18 @@ function SidepanelWorkspace() {
               <ActiveAskTaskBanner task={activeAskTask} onCancel={handleCancelAsk} />
             ) : null}
           </>
+        )}
+        search={(
+          <SearchTab
+            query={searchSnapshot.query}
+            onQueryChange={handleSearchQueryChange}
+            onSubmit={handleSearchSubmit}
+            results={searchSnapshot.results}
+            isSearching={searchSnapshot.isSearching}
+            errorMessage={searchSnapshot.error}
+            onOpen={handleOpenSearchResult}
+            formatTimestamp={formatTimestamp}
+          />
         )}
         overview={(
           <OverviewTab

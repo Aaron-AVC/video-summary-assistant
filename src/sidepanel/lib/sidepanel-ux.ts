@@ -1,4 +1,4 @@
-export const SIDE_PANEL_TABS = ["overview", "transcript", "ask", "settings"] as const
+export const SIDE_PANEL_TABS = ["overview", "transcript", "ask", "search", "settings"] as const
 
 export type SidePanelTab = (typeof SIDE_PANEL_TABS)[number]
 

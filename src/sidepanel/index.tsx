@@ -63,7 +63,7 @@ import {
   useRuntimeBridge,
 } from "@/lib/providers/extension-providers"
 import { AskTab } from "@/sidepanel/components/ask-tab"
-import { createAnalysisController } from "@/sidepanel/analysis/analysis-controller"
+import { createAnalysisController, type AnalysisExecutionPublication } from "@/sidepanel/analysis/analysis-controller"
 import { OverviewTab } from "@/sidepanel/components/overview-tab"
 import { SettingsTab } from "@/sidepanel/components/settings-tab"
 import { SidePanelShell } from "@/sidepanel/components/sidepanel-shell"
@@ -132,6 +132,7 @@ import {
   type SearchOpener,
   type SearchOpenerEffects,
 } from "@/sidepanel/search/search-opening"
+import { publishCompletedAnalysis } from "@/sidepanel/workspace/analysis-publication"
 import { commitRestoredDisplaySelection } from "@/sidepanel/workspace/restored-display-selection"
 import {
   WorkspaceController,
@@ -833,6 +834,21 @@ function SidepanelWorkspace() {
     return result
   }, [analysisTaskController, rawVtt, transcriptCues, transcriptIdentity, transcriptController])
 
+  // Publishing a completed analysis replaces the displayed analysis without
+  // starting a workspace load. Recording the selection synchronously keeps an
+  // in-flight History restore from committing a stale analysis identity. Both
+  // the cached and the fresh completion paths must go through this helper so
+  // they cannot drift apart again.
+  const publishCompleted = useCallback((publication: AnalysisExecutionPublication) => {
+    publishCompletedAnalysis(publication, {
+      publishAnalysisView: setAnalysisView,
+      readSelectedQaThreadId: () => workspaceController.getDisplaySelection().qaThreadId,
+      syncDisplaySelection: (selection) => {
+        workspaceController.syncDisplaySelection(selection)
+      },
+    })
+  }, [workspaceController])
+
   const handleAnalyze = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     if (analysisPresetWriter.isPending()) return
     if (activeAnalysisTask) {
@@ -944,21 +960,7 @@ function SidepanelWorkspace() {
               currentContentKey: videoContextRef.current.contentKey,
               effects: {
                 publishAnalysis: () => {
-                  setAnalysisView({
-                    ...execution.publication,
-                    errorMessage: null,
-                  })
-                  // Publishing an analysis replaces the displayed analysis
-                  // without starting a workspace load. Record the selection
-                  // synchronously so an in-flight History restore sees the
-                  // ownership change instead of a stale render.
-                  workspaceController.syncDisplaySelection({
-                    analysis: {
-                      contentKey: execution.publication.contentKey,
-                      analysisRunId: execution.publication.analysisRunId,
-                    },
-                    qaThreadId: workspaceController.getDisplaySelection().qaThreadId,
-                  })
+                  publishCompleted(execution.publication)
                 },
                 setAnalysisCompleted: () => {
                   setAnalysisPhase("completed")
@@ -985,10 +987,7 @@ function SidepanelWorkspace() {
             currentContentKey: videoContextRef.current.contentKey,
             effects: {
               publishAnalysis: () => {
-                setAnalysisView({
-                  ...execution.publication,
-                  errorMessage: null,
-                })
+                publishCompleted(execution.publication)
               },
               setAnalysisCompleted: () => {
                 setAnalysisPhase("completed")
@@ -1054,7 +1053,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishCompleted, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
     analysisTaskController.cancel()

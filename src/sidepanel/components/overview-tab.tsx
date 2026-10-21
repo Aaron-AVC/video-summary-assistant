@@ -47,6 +47,7 @@ type OverviewTabProps = {
   onOpenFullHistory: () => void
   formatTimestamp: (timestampSeconds: number) => string
   knowledgeItems?: KnowledgeItemEntity[]
+  knowledgeContentKey?: string | null
   isKnowledgeLoading?: boolean
   knowledgeError?: string | null
   currentTimestamp?: number | null
@@ -80,6 +81,7 @@ export function OverviewTab({
   onOpenFullHistory,
   formatTimestamp,
   knowledgeItems,
+  knowledgeContentKey = null,
   isKnowledgeLoading = false,
   knowledgeError = null,
   currentTimestamp = null,
@@ -129,6 +131,7 @@ export function OverviewTab({
       {knowledgeHandlers ? (
         <KnowledgePanel
           items={knowledgeItems ?? []}
+          contentKey={knowledgeContentKey ?? null}
           isLoading={isKnowledgeLoading}
           error={knowledgeError}
           currentTimestamp={currentTimestamp ?? null}

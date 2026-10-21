@@ -32,6 +32,10 @@ export type UpdateKnowledgeNoteInput = {
   text: string
 }
 
+export type ToggleBookmarkResult =
+  | { kind: "created"; item: KnowledgeItemEntity }
+  | { kind: "removed"; item: KnowledgeItemEntity }
+
 /**
  * Normalizes a playback timestamp into the exact second used for Bookmark
  * identity so repeated clicks at the same position dedupe deterministically.
@@ -65,7 +69,28 @@ export function createKnowledgeRepository(
     return stores.knowledgeItems ? await stores.knowledgeItems.toArray() : []
   }
 
-  return {
+  /**
+   * Serializes toggles that target the same `contentKey` + whole second. Two
+   * overlapping calls therefore run one after another: the second one observes
+   * the row the first one persisted instead of racing it into a duplicate.
+   */
+  const toggleQueues = new Map<string, Promise<unknown>>()
+
+  function enqueueToggle<T>(key: string, task: () => Promise<T>): Promise<T> {
+    const previous = toggleQueues.get(key) ?? Promise.resolve()
+    const next = previous.then(task, task)
+    const settled = next.then(
+      () => undefined,
+      () => undefined
+    )
+    toggleQueues.set(key, settled)
+    void settled.then(() => {
+      if (toggleQueues.get(key) === settled) toggleQueues.delete(key)
+    })
+    return next
+  }
+
+  const repository = {
     /**
      * Strict `contentKey` filter. Bilibili `p1` and `p2` never mix because the
      * canonical key carries the part suffix.
@@ -175,8 +200,31 @@ export function createKnowledgeRepository(
       await runWriteWithQuotaGuard(async () => {
         await stores.knowledgeItems?.clear()
       })
+    },
+
+    /**
+     * Atomic point-bookmark toggle. The decision reads persisted rows rather
+     * than any caller-side snapshot, so overlapping clicks at the same second
+     * can neither create duplicates nor skip a removal.
+     */
+    async toggleBookmark(input: CreateBookmarkInput): Promise<ToggleBookmarkResult> {
+      const contentKey = input.identity.contentKey
+      const timestamp = normalizeKnowledgeTimestamp(input.timestampSeconds)
+      return enqueueToggle(`${contentKey}@${timestamp}`, async () => {
+        const existing = (await repository.listByContentKey(contentKey)).find(
+          (entry) => entry.kind === "bookmark" && entry.startSec === timestamp
+        )
+        if (existing) {
+          await repository.deleteItem(existing.id)
+          return { kind: "removed" as const, item: existing }
+        }
+        const created = await repository.createBookmark(input)
+        return { kind: "created" as const, item: created }
+      })
     }
   }
+
+  return repository
 }
 
 export type KnowledgeRepository = ReturnType<typeof createKnowledgeRepository>

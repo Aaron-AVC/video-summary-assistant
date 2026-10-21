@@ -237,7 +237,7 @@ function SidepanelWorkspace() {
     knowledgeControllerRef.current = createKnowledgeController({
       repository: {
         listByContentKey: (contentKey) => knowledgeRepository.listByContentKey(contentKey),
-        createBookmark: (input) => knowledgeRepository.createBookmark(input),
+        toggleBookmark: (input) => knowledgeRepository.toggleBookmark(input),
         createNote: (input) => knowledgeRepository.createNote(input),
         updateNote: (input) => knowledgeRepository.updateNote(input),
         deleteItem: (id) => knowledgeRepository.deleteItem(id),
@@ -1386,6 +1386,12 @@ function SidepanelWorkspace() {
     ? identityFromContext(videoContext)
     : null
   const knowledgeVideoTitle = videoContext.title ?? knowledgeIdentity?.videoId ?? null
+  /**
+   * Canonical runtime identity for the Knowledge authoring draft. Mirrors the
+   * load effect, so an unsupported or missing runtime content clears the draft
+   * instead of keeping an editable state from the previous video.
+   */
+  const knowledgeContentKey = knowledgeIdentity ? knowledgeIdentity.contentKey : null
 
   const handleToggleKnowledgeBookmark = useCallback(async () => {
     if (!knowledgeIdentity || !knowledgeVideoTitle) return
@@ -1582,6 +1588,7 @@ function SidepanelWorkspace() {
             }}
             formatTimestamp={formatTimestamp}
             knowledgeItems={knowledgeSnapshot.items}
+            knowledgeContentKey={knowledgeContentKey}
             isKnowledgeLoading={knowledgeSnapshot.isLoading}
             knowledgeError={knowledgeSnapshot.error}
             currentTimestamp={Number.isFinite(videoContext.timestampSeconds)

@@ -15,7 +15,11 @@ export type KnowledgeSnapshot = {
 export type KnowledgeControllerDependencies = {
   repository: Pick<
     KnowledgeRepository,
-    "listByContentKey" | "createBookmark" | "createNote" | "updateNote" | "deleteItem"
+    | "listByContentKey"
+    | "toggleBookmark"
+    | "createNote"
+    | "updateNote"
+    | "deleteItem"
   >
 }
 
@@ -140,47 +144,23 @@ export function createKnowledgeController(dependencies: KnowledgeControllerDepen
      * Point bookmarks dedupe on the normalized whole second within the same
      * contentKey: clicking an existing bookmark second removes it instead of
      * stacking duplicates. Notes never participate in this rule.
+     *
+     * The check-and-toggle itself lives in the repository, which serializes
+     * overlapping calls. This command only republishes the authoritative rows,
+     * so an interleaved click can never leave a stale duplicate in the snapshot.
      */
     async toggleBookmark(request: KnowledgeBookmarkRequest): Promise<KnowledgeToggleBookmarkResult> {
       const contentKey = request.identity.contentKey
-      const timestamp = normalizeKnowledgeTimestamp(request.timestampSeconds)
       const generation = loadGeneration
-      const existing = snapshot.contentKey === contentKey
-        ? snapshot.items.find((item) => (
-            item.kind === "bookmark"
-            && item.contentKey === contentKey
-            && item.startSec === timestamp
-          ))
-        : undefined
-
-      if (existing) {
-        await repository.deleteItem(existing.id)
-        if (generation === loadGeneration) {
-          publish({
-            ...snapshot,
-            items: snapshot.items.filter((item) => item.id !== existing.id),
-          })
-        }
-        return { kind: "removed", item: existing }
-      }
-
-      const item = await repository.createBookmark({
+      const result = await repository.toggleBookmark({
         identity: request.identity,
         videoTitle: request.videoTitle,
-        timestampSeconds: timestamp,
+        timestampSeconds: normalizeKnowledgeTimestamp(request.timestampSeconds),
       })
       if (generation === loadGeneration) {
-        publish({
-          contentKey,
-          items: byNewestUpdated([
-            item,
-            ...snapshot.items.filter((entry) => entry.id !== item.id && entry.contentKey === contentKey),
-          ]),
-          isLoading: false,
-          error: null,
-        })
+        await refresh(contentKey, generation)
       }
-      return { kind: "created", item }
+      return result
     },
 
     async createNote(request: KnowledgeNoteRequest): Promise<KnowledgeItemEntity> {

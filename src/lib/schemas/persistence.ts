@@ -264,7 +264,7 @@ export const knowledgeItemSchema = z.object({
   text: z.string().nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema
-}).superRefine((item, context) => {
+}).strict().superRefine((item, context) => {
   const hasStart = item.startSec !== null
   const hasEnd = item.endSec !== null
   if (hasStart !== hasEnd) {

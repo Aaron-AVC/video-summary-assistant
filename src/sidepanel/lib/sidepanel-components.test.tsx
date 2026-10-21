@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { KnowledgePanel } from "@/features/knowledge/components/knowledge-panel"
+import { createKnowledgePanelDraftStore } from "@/features/knowledge/components/knowledge-panel-draft"
 import { AskTab } from "@/sidepanel/components/ask-tab"
 import { OverviewTab } from "@/sidepanel/components/overview-tab"
 import { SettingsTab } from "@/sidepanel/components/settings-tab"
@@ -485,6 +486,7 @@ describe("Knowledge panel", () => {
 
   const baseKnowledge = {
     items: [] as ReturnType<typeof knowledgeItem>[],
+    contentKey: "youtube:video-a" as string | null,
     isLoading: false,
     error: null,
     currentTimestamp: 12 as number | null,
@@ -585,6 +587,24 @@ describe("Knowledge panel", () => {
     expect(loading).not.toContain("No bookmarks or notes yet")
     expect(failed).toContain('role="alert"')
     expect(failed).toContain("db down")
+  })
+
+  it("never renders a draft authored on another video identity", () => {
+    const draftStore = createKnowledgePanelDraftStore("youtube:video-a")
+    draftStore.update({
+      action: { type: "note-text", value: "draft typed on video A" },
+      identityKey: "youtube:video-a",
+    })
+
+    const onSameVideo = renderToStaticMarkup(
+      <KnowledgePanel {...baseKnowledge} contentKey="youtube:video-a" draftStore={draftStore} />,
+    )
+    const onOtherVideo = renderToStaticMarkup(
+      <KnowledgePanel {...baseKnowledge} contentKey="youtube:video-b" draftStore={draftStore} />,
+    )
+
+    expect(onSameVideo).toContain("draft typed on video A")
+    expect(onOtherVideo).not.toContain("draft typed on video A")
   })
 
   it("ships Simplified Chinese translations for every Knowledge string", async () => {

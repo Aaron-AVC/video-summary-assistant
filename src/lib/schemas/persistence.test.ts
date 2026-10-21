@@ -204,6 +204,13 @@ describe("knowledge item schema", () => {
     ).toBeDefined()
   })
 
+  it("rejects rows that carry properties the persisted shape does not own", () => {
+    expect(() =>
+      knowledgeItemSchema.parse(knowledgeRow({ deletedAt: "2026-10-20T00:00:00.000Z" }))
+    ).toThrow()
+    expect(() => knowledgeItemSchema.parse(knowledgeRow({ timestampSeconds: 4 }))).toThrow()
+  })
+
   it("rejects a bookmark without a timestamp", () => {
     expect(() =>
       knowledgeItemSchema.parse(knowledgeRow({ startSec: null, endSec: null }))

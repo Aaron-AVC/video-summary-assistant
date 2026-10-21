@@ -284,4 +284,86 @@ describe("Knowledge repository", () => {
     await expect(failure).rejects.toBeInstanceOf(PersistenceError)
     await expect(failure).rejects.toMatchObject({ reason: "quota_exceeded" })
   })
+
+  it("toggles an existing same-second bookmark off instead of stacking it", async () => {
+    const { repository, table } = createRepository()
+
+    const first = await repository.toggleBookmark({
+      identity: identity("youtube:video-a"),
+      videoTitle: "A",
+      timestampSeconds: 30.4,
+    })
+    const second = await repository.toggleBookmark({
+      identity: identity("youtube:video-a"),
+      videoTitle: "A",
+      timestampSeconds: 30.9,
+    })
+
+    expect(first.kind).toBe("created")
+    expect(second.kind).toBe("removed")
+    expect(table.rows).toHaveLength(0)
+  })
+
+  it("serializes overlapping toggles at the same second so no duplicate row persists", async () => {
+    const { database, table } = createDatabase()
+    // Every read snapshots the rows that exist at call time, then waits for the
+    // gate. Two unserialized toggles would both snapshot "absent" and each
+    // persist a duplicate bookmark.
+    const originalToArray = database.knowledgeItems.toArray
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    database.knowledgeItems.toArray = async () => {
+      const captured = table.rows.map((row) => ({ ...row }))
+      await gate
+      return captured
+    }
+    expect(typeof originalToArray).toBe("function")
+
+    let sequence = 0
+    const repository = createKnowledgeRepository(database as never, {
+      now: () => `2026-10-20T00:00:0${sequence % 10}.000Z`,
+      randomId: () => `id-${++sequence}`,
+    })
+
+    const first = repository.toggleBookmark({
+      identity: identity("youtube:video-a"),
+      videoTitle: "A",
+      timestampSeconds: 12.4,
+    })
+    const second = repository.toggleBookmark({
+      identity: identity("youtube:video-a"),
+      videoTitle: "A",
+      timestampSeconds: 12.8,
+    })
+
+    release?.()
+    const results = await Promise.all([first, second])
+
+    expect(results.map((entry) => entry.kind)).toEqual(["created", "removed"])
+    expect(
+      table.rows.filter((row) => row.kind === "bookmark" && row.startSec === 12)
+    ).toHaveLength(0)
+  })
+
+  it("keeps overlapping toggles on different seconds independent", async () => {
+    const { repository, table } = createRepository()
+
+    const results = await Promise.all([
+      repository.toggleBookmark({
+        identity: identity("youtube:video-a"),
+        videoTitle: "A",
+        timestampSeconds: 10,
+      }),
+      repository.toggleBookmark({
+        identity: identity("youtube:video-a"),
+        videoTitle: "A",
+        timestampSeconds: 11,
+      }),
+    ])
+
+    expect(results.map((entry) => entry.kind)).toEqual(["created", "created"])
+    expect(table.rows.map((row) => row.startSec).sort()).toEqual([10, 11])
+  })
 })

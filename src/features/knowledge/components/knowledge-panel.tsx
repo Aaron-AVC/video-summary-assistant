@@ -1,9 +1,18 @@
-import { useState } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { Bookmark, NotebookPen, Pencil, Trash2 } from "lucide-react"
 
 import { useI18n } from "@/lib/i18n/i18n-provider"
 
 import { EmptyState } from "@/features/common/components/empty-state"
+import {
+  MAX_KNOWLEDGE_NOTE_LENGTH,
+  createKnowledgePanelDraftStore,
+  selectKnowledgeEditSubmission,
+  selectKnowledgeNoteSubmission,
+  syncKnowledgePanelDraft,
+  type KnowledgePanelDraftAction,
+  type KnowledgePanelDraftStore,
+} from "@/features/knowledge/components/knowledge-panel-draft"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import type { KnowledgeItemEntity } from "@/lib/schemas/persistence"
@@ -18,15 +27,24 @@ export type KnowledgePanelHandlers = {
 
 export type KnowledgePanelProps = {
   items: KnowledgeItemEntity[]
+  /**
+   * Canonical runtime `contentKey` the collection and the authoring draft are
+   * bound to. A transition clears the draft so it can never be saved onto the
+   * next video.
+   */
+  contentKey: string | null
   isLoading: boolean
   error: string | null
   /** Normalized playback point, or null when the runtime cannot report one. */
   currentTimestamp: number | null
   formatTimestamp: (timestampSeconds: number) => string
   handlers: KnowledgePanelHandlers
+  /**
+   * Optional externally owned draft store. Production renders use the panel's
+   * own store; tests reuse one store across successive renders.
+   */
+  draftStore?: KnowledgePanelDraftStore
 }
-
-const MAX_NOTE_LENGTH = 10000
 
 /**
  * Presentation-only Knowledge collection. It receives plain entities and
@@ -35,38 +53,47 @@ const MAX_NOTE_LENGTH = 10000
  */
 export function KnowledgePanel({
   items,
+  contentKey,
   isLoading,
   error,
   currentTimestamp,
   formatTimestamp,
   handlers,
+  draftStore,
 }: KnowledgePanelProps) {
   const { t } = useI18n()
-  const [noteText, setNoteText] = useState("")
-  const [attachTimestamp, setAttachTimestamp] = useState(true)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingText, setEditingText] = useState("")
+  const [ownedDraftStore] = useState(() => createKnowledgePanelDraftStore(contentKey))
+  const activeDraftStore = draftStore ?? ownedDraftStore
+  const storedDraft = useSyncExternalStore(
+    activeDraftStore.subscribe,
+    activeDraftStore.getSnapshot,
+    activeDraftStore.getSnapshot,
+  )
+  // Identity sync happens during render, so an A draft is already gone before
+  // any B interaction can read it.
+  const draft = syncKnowledgePanelDraft(storedDraft, contentKey)
+  const noteText = draft.noteText
 
-  const trimmedNote = noteText.trim()
-  const canSaveNote = trimmedNote.length > 0 && trimmedNote.length <= MAX_NOTE_LENGTH
   const canBookmark = currentTimestamp !== null
+  const noteSubmission = selectKnowledgeNoteSubmission(draft, contentKey, currentTimestamp)
+  const canSaveNote = noteSubmission !== null
+
+  function updateDraft(action: KnowledgePanelDraftAction) {
+    activeDraftStore.update({ action, identityKey: contentKey })
+  }
 
   async function saveNote() {
-    if (!canSaveNote) return
-    await handlers.onCreateNote({
-      text: trimmedNote,
-      attachTimestamp: attachTimestamp && currentTimestamp !== null,
-    })
-    setNoteText("")
+    const submission = selectKnowledgeNoteSubmission(draft, contentKey, currentTimestamp)
+    if (!submission) return
+    await handlers.onCreateNote(submission)
+    updateDraft({ type: "note-text", value: "" })
   }
 
   async function saveEdit() {
-    if (!editingId) return
-    const trimmed = editingText.trim()
-    if (!trimmed) return
-    await handlers.onUpdateNote(editingId, trimmed)
-    setEditingId(null)
-    setEditingText("")
+    const submission = selectKnowledgeEditSubmission(draft, contentKey)
+    if (!submission) return
+    await handlers.onUpdateNote(submission.id, submission.text)
+    updateDraft({ type: "end-edit" })
   }
 
   return (
@@ -101,17 +128,17 @@ export function KnowledgePanel({
         <Textarea
           id="knowledge-note-input"
           value={noteText}
-          maxLength={MAX_NOTE_LENGTH}
+          maxLength={MAX_KNOWLEDGE_NOTE_LENGTH}
           placeholder={t("knowledge.notePlaceholder")}
-          onChange={(event) => setNoteText(event.target.value)}
+          onChange={(event) => updateDraft({ type: "note-text", value: event.target.value })}
         />
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input
               type="checkbox"
-              checked={attachTimestamp}
+              checked={draft.attachTimestamp}
               disabled={!canBookmark}
-              onChange={(event) => setAttachTimestamp(event.target.checked)}
+              onChange={(event) => updateDraft({ type: "attach-timestamp", value: event.target.checked })}
             />
             {t("knowledge.attachCurrentTime")}
           </label>
@@ -143,7 +170,7 @@ export function KnowledgePanel({
         <ul className="flex min-w-0 flex-col gap-2">
           {items.map((item) => {
             const anchored = item.startSec !== null
-            const isEditing = editingId === item.id
+            const isEditing = draft.editingId === item.id
             return (
               <li
                 key={item.id}
@@ -162,9 +189,9 @@ export function KnowledgePanel({
                   isEditing ? (
                     <div className="flex min-w-0 flex-col gap-2">
                       <Textarea
-                        value={editingText}
-                        maxLength={MAX_NOTE_LENGTH}
-                        onChange={(event) => setEditingText(event.target.value)}
+                        value={draft.editingText}
+                        maxLength={MAX_KNOWLEDGE_NOTE_LENGTH}
+                        onChange={(event) => updateDraft({ type: "edit-text", value: event.target.value })}
                       />
                       <div className="flex flex-wrap gap-2">
                         <Button type="button" size="sm" onClick={() => void saveEdit()}>
@@ -174,10 +201,7 @@ export function KnowledgePanel({
                           type="button"
                           size="sm"
                           variant="ghost"
-                          onClick={() => {
-                            setEditingId(null)
-                            setEditingText("")
-                          }}
+                          onClick={() => updateDraft({ type: "end-edit" })}
                         >
                           {t("knowledge.cancelEdit")}
                         </Button>
@@ -206,10 +230,7 @@ export function KnowledgePanel({
                         size="sm"
                         variant="ghost"
                         aria-label={t("knowledge.edit")}
-                        onClick={() => {
-                          setEditingId(item.id)
-                          setEditingText(item.text ?? "")
-                        }}
+                        onClick={() => updateDraft({ type: "begin-edit", id: item.id, text: item.text ?? "" })}
                       >
                         <Pencil aria-hidden />
                       </Button>

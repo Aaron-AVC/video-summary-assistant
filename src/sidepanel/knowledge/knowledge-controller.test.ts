@@ -32,6 +32,7 @@ function item(overrides: Partial<KnowledgeItemEntity> = {}): KnowledgeItemEntity
 
 type RepositoryCalls = {
   listByContentKey: string[]
+  toggleBookmark: Array<{ contentKey: string; timestampSeconds: number }>
   createBookmark: Array<{ contentKey: string; timestampSeconds: number }>
   createNote: Array<{ contentKey: string; text: string; timestampSeconds: number | null }>
   updateNote: Array<{ id: string; text: string }>
@@ -41,6 +42,7 @@ type RepositoryCalls = {
 function createController(overrides: Partial<KnowledgeRepository> = {}) {
   const calls: RepositoryCalls = {
     listByContentKey: [],
+    toggleBookmark: [],
     createBookmark: [],
     createNote: [],
     updateNote: [],
@@ -77,6 +79,43 @@ function createController(overrides: Partial<KnowledgeRepository> = {}) {
       })
       rows.push(row)
       return { ...row }
+    },
+    async toggleBookmark(input: Parameters<KnowledgeRepository["toggleBookmark"]>[0]) {
+      calls.toggleBookmark.push({
+        contentKey: input.identity.contentKey,
+        timestampSeconds: input.timestampSeconds,
+      })
+      if (overrides.toggleBookmark) return overrides.toggleBookmark(input)
+      const timestamp = Math.floor(input.timestampSeconds)
+      const index = rows.findIndex(
+        (row) =>
+          row.kind === "bookmark" &&
+          row.contentKey === input.identity.contentKey &&
+          row.startSec === timestamp
+      )
+      if (index >= 0) {
+        const [removed] = rows.splice(index, 1)
+        calls.deleteItem.push(removed.id)
+        return { kind: "removed" as const, item: { ...removed } }
+      }
+      const row = item({
+        id: `bookmark-${++sequence}`,
+        contentKey: input.identity.contentKey,
+        platform: input.identity.platform,
+        videoId: input.identity.videoId,
+        partId: input.identity.partId ?? null,
+        videoTitle: input.videoTitle,
+        startSec: timestamp,
+        endSec: timestamp,
+        createdAt: `2026-10-20T00:00:0${sequence}.000Z`,
+        updatedAt: `2026-10-20T00:00:0${sequence}.000Z`,
+      })
+      calls.createBookmark.push({
+        contentKey: input.identity.contentKey,
+        timestampSeconds: timestamp,
+      })
+      rows.push(row)
+      return { kind: "created" as const, item: { ...row } }
     },
     async createNote(input: Parameters<KnowledgeRepository["createNote"]>[0]) {
       calls.createNote.push({
@@ -339,23 +378,88 @@ describe("KnowledgeController", () => {
     expect(controller.getSnapshot().items).toEqual([])
   })
 
-  it("surfaces repository errors without corrupting the previous valid snapshot", async () => {
-    const { controller, rows } = createController()
-    rows.push(item({ id: "a", contentKey: "youtube:video-a" }))
-    await controller.loadForContent({ identity: identity("youtube:video-a") })
-    const before = controller.getSnapshot()
-
-    const { controller: failing } = createController({
-      async listByContentKey() {
-        throw new Error("db down")
+  it("does not rely on its own snapshot while overlapping toggles are unresolved", async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let toggles = 0
+    const { controller, rows } = createController({
+      async toggleBookmark(input: Parameters<KnowledgeRepository["toggleBookmark"]>[0]) {
+        toggles += 1
+        await gate
+        const timestamp = Math.floor(input.timestampSeconds)
+        const index = rows.findIndex(
+          (row) =>
+            row.kind === "bookmark" &&
+            row.contentKey === input.identity.contentKey &&
+            row.startSec === timestamp
+        )
+        if (index >= 0) {
+          const [removed] = rows.splice(index, 1)
+          return { kind: "removed" as const, item: { ...removed } }
+        }
+        const row = item({
+          id: `bookmark-${toggles}`,
+          contentKey: input.identity.contentKey,
+          startSec: timestamp,
+          endSec: timestamp,
+        })
+        rows.push(row)
+        return { kind: "created" as const, item: { ...row } }
       },
     })
-    await failing.loadForContent({ identity: identity("youtube:video-a") })
-    expect(failing.getSnapshot().error).toBe("db down")
-    expect(failing.getSnapshot().items).toEqual([])
+    await controller.loadForContent({ identity: identity("youtube:video-a") })
 
-    // The healthy controller still holds its previous items.
-    expect(controller.getSnapshot().items).toBe(before.items)
+    const first = controller.toggleBookmark({
+      identity: identity("youtube:video-a"),
+      videoTitle: "Video A",
+      timestampSeconds: 12.4,
+    })
+    const second = controller.toggleBookmark({
+      identity: identity("youtube:video-a"),
+      videoTitle: "Video A",
+      timestampSeconds: 12.8,
+    })
+
+    release()
+    const results = await Promise.all([first, second])
+
+    expect(results.map((entry) => entry.kind)).toEqual(["created", "removed"])
+    expect(controller.getSnapshot().items).toEqual([])
+    expect(rows.filter((row) => row.kind === "bookmark")).toHaveLength(0)
+  })
+
+  it("keeps the authoritative contentKey and recovers after a failed reload", async () => {
+    let shouldFail = false
+    const { controller, rows } = createController({
+      async listByContentKey(contentKey: string) {
+        if (shouldFail) throw new Error("db down")
+        return rows
+          .filter((row) => row.contentKey === contentKey)
+          .map((row) => ({ ...row }))
+      },
+    })
+    rows.push(item({ id: "a", contentKey: "youtube:video-a" }))
+    const valid = await controller.loadForContent({ identity: identity("youtube:video-a") })
+    expect(valid.items.map((entry) => entry.id)).toEqual(["a"])
+
+    // The same controller transitions from a valid snapshot to a failure: the
+    // published contentKey must still name the content that was being loaded.
+    shouldFail = true
+    const failed = await controller.loadForContent({ identity: identity("youtube:video-a") })
+    expect(failed).toEqual({
+      contentKey: "youtube:video-a",
+      items: [],
+      isLoading: false,
+      error: "db down",
+    })
+    expect(controller.getSnapshot()).toEqual(failed)
+
+    shouldFail = false
+    const recovered = await controller.loadForContent({ identity: identity("youtube:video-a") })
+    expect(recovered.error).toBeNull()
+    expect(recovered.items.map((entry) => entry.id)).toEqual(["a"])
   })
 
   it("notifies subscribers once per published snapshot", async () => {

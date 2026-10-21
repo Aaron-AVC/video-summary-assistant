@@ -1,5 +1,5 @@
 import { Download, FileText, Loader2, Play, Search } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -84,6 +84,8 @@ type TranscriptTabProps = {
   onDownload: () => void | Promise<void>
   onJump: (timestampSeconds: number) => void | Promise<void>
   formatTimestamp: (timestampSeconds: number) => string
+  /** Segment a Search hit asked to reveal; scrolled into view once. */
+  focusTimestamp?: number | null
 }
 
 export function TranscriptTab({
@@ -96,13 +98,25 @@ export function TranscriptTab({
   onDownload,
   onJump,
   formatTimestamp,
+  focusTimestamp = null,
 }: TranscriptTabProps) {
   const { t } = useI18n()
   const [query, setQuery] = useState("")
+  const listRef = useRef<HTMLDivElement | null>(null)
   const filteredSegments = useMemo(
     () => filterTranscriptSegments(segments, query),
     [query, segments],
   )
+
+  useEffect(() => {
+    if (focusTimestamp === null) return
+
+    const node = listRef.current?.querySelector<HTMLElement>(
+      `[data-segment-start="${focusTimestamp}"]`,
+    )
+
+    node?.scrollIntoView({ block: "center" })
+  }, [focusTimestamp])
 
   if (!canLoad && segments.length === 0) {
     return (
@@ -186,11 +200,13 @@ export function TranscriptTab({
           </div>
         ) : (
           <ScrollArea className="h-[28rem] w-full max-w-full pr-3">
-            <div className="flex min-w-0 flex-col gap-2">
+            <div ref={listRef} className="flex min-w-0 flex-col gap-2">
               {filteredSegments.map((segment, index) => (
                 <button
                   key={`${segment.startSec}-${segment.endSec}-${index}`}
                   type="button"
+                  data-segment-start={segment.startSec}
+                  aria-current={focusTimestamp === segment.startSec ? "true" : undefined}
                   onClick={() => onJump(segment.startSec)}
                   aria-label={t("transcript.jump", { timestamp: formatTimestamp(segment.startSec) })}
                   className="flex min-w-0 max-w-full items-start gap-3 rounded-lg border border-border/70 bg-background/80 p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">

@@ -28,6 +28,7 @@ function buildResult(overrides: Partial<SearchResult> = {}): SearchResult {
     knowledgeItemId: "item-1",
     threadId: null,
     timestampSeconds: null,
+    targetSurface: null,
     ...overrides,
   }
 }

@@ -11,6 +11,7 @@ import type {
 import {
   MAX_SEARCH_RESULTS,
   buildSearchSnippet,
+  matchesSearchTokens,
   rankSearchResults,
   scoreSearchFields,
   tokenizeSearchQuery,
@@ -51,12 +52,18 @@ export type SearchResult = {
   knowledgeItemId: string | null
   threadId: string | null
   timestampSeconds: number | null
+  /**
+   * Where a current-runtime hit must be opened. Historical, knowledge and QA
+   * rows carry `null` because they always resolve their own surface.
+   */
+  targetSurface: "overview" | "transcript" | null
 }
 
 /** The authoritative runtime projection; only a matching contentKey is searchable. */
 export type SearchRuntimeProjection = {
   identity: VideoIdentity
   title: string
+  author: string | null
   analysis: {
     analysisRunId: string | null
     transcriptFingerprint: string | null
@@ -192,6 +199,10 @@ function buildHistoricalResults(
       { text: title, weight: TITLE_WEIGHT },
       ...analysisFields(run, segments),
     ]
+
+    if (record?.channelTitle) {
+      fields.push({ text: record.channelTitle, weight: BODY_WEIGHT })
+    }
     const score = scoreSearchFields(fields, tokens)
 
     if (score < 0) continue
@@ -219,6 +230,7 @@ function buildHistoricalResults(
         knowledgeItemId: null,
         threadId: null,
         timestampSeconds: null,
+        targetSurface: null,
       },
     })
   }
@@ -262,6 +274,7 @@ function buildKnowledgeResults(
         knowledgeItemId: item.id,
         threadId: null,
         timestampSeconds: item.startSec,
+        targetSurface: null,
       },
     })
   }
@@ -274,12 +287,16 @@ function buildQaResults(
   tokens: string[],
 ): Array<{ result: SearchResult; score: number }> {
   const results: Array<{ result: SearchResult; score: number }> = []
-  const restorableRunIds = new Set(candidates.analysisRuns.map((run) => run.id))
+  const restorableRunContentKeys = new Map(
+    candidates.analysisRuns.map((run) => [run.id, run.contentKey ?? null]),
+  )
 
   for (const thread of candidates.qaThreads) {
-    // Orphan threads cannot be restored to an exact saved run, so they are
-    // not offerable as results.
-    if (!restorableRunIds.has(thread.analysisRunId)) continue
+    // A thread is only openable when its completed run still exists AND that
+    // run belongs to the same canonical content as the thread itself. A run
+    // from another video must never unlock this conversation.
+    if (!restorableRunContentKeys.has(thread.analysisRunId)) continue
+    if (restorableRunContentKeys.get(thread.analysisRunId) !== thread.contentKey) continue
 
     const messages = candidates.qaMessagesByThreadId.get(thread.id) ?? []
     const fields: WeightedSearchField[] = [
@@ -313,6 +330,7 @@ function buildQaResults(
         knowledgeItemId: null,
         threadId: thread.id,
         timestampSeconds: null,
+        targetSurface: null,
       },
     })
   }
@@ -324,36 +342,49 @@ function buildCurrentRuntimeResults(
   runtime: SearchRuntimeProjection,
   tokens: string[],
 ): Array<{ result: SearchResult; score: number }> {
-  const fields: WeightedSearchField[] = [
+  const analysisFields: WeightedSearchField[] = [
     { text: runtime.title, weight: TITLE_WEIGHT },
   ]
 
+  if (runtime.author) {
+    analysisFields.push({ text: runtime.author, weight: TITLE_WEIGHT })
+  }
+
   if (runtime.analysis) {
-    fields.push({ text: runtime.analysis.analysis.summary, weight: BODY_WEIGHT })
+    analysisFields.push({ text: runtime.analysis.analysis.summary, weight: BODY_WEIGHT })
 
     for (const point of runtime.analysis.analysis.keyPoints) {
-      fields.push({ text: point.text, weight: BODY_WEIGHT })
+      analysisFields.push({ text: point.text, weight: BODY_WEIGHT })
     }
 
     for (const chapter of runtime.analysis.analysis.chapters) {
-      fields.push({ text: chapter.title, weight: BODY_WEIGHT })
-      fields.push({ text: chapter.summary, weight: BODY_WEIGHT })
-      fields.push({ text: chapter.detail, weight: DETAIL_WEIGHT })
+      analysisFields.push({ text: chapter.title, weight: BODY_WEIGHT })
+      analysisFields.push({ text: chapter.summary, weight: BODY_WEIGHT })
+      analysisFields.push({ text: chapter.detail, weight: DETAIL_WEIGHT })
     }
   }
 
-  for (const cue of runtime.transcript.cues) {
-    fields.push({ text: cue.text, weight: BODY_WEIGHT })
-  }
+  const transcriptFields: WeightedSearchField[] = runtime.transcript.cues.map((cue) => ({
+    text: cue.text,
+    weight: BODY_WEIGHT,
+  }))
 
-  const score = scoreSearchFields(fields, tokens)
+  const analysisScore = scoreSearchFields(analysisFields, tokens)
+  const transcriptScore = scoreSearchFields(transcriptFields, tokens)
 
-  if (score < 0) return []
+  if (analysisScore < 0 && transcriptScore < 0) return []
 
+  // Analysis, title and author hits belong to the Overview surface; a hit that
+  // only exists inside the transcript belongs to Transcript at the exact cue.
+  const surface: "overview" | "transcript" = analysisScore >= 0 ? "overview" : "transcript"
+  const matchingCue = surface === "transcript"
+    ? runtime.transcript.cues.find((cue) => matchesSearchTokens(cue.text, tokens)) ?? null
+    : null
+  const fields = surface === "overview" ? analysisFields : transcriptFields
   const { identity } = runtime
 
   return [{
-    score,
+    score: Math.max(analysisScore, transcriptScore),
     result: {
       id: `current-runtime-content:${identity.contentKey}`,
       kind: "current-runtime-content",
@@ -370,7 +401,8 @@ function buildCurrentRuntimeResults(
       transcriptFingerprint: runtime.analysis?.transcriptFingerprint ?? null,
       knowledgeItemId: null,
       threadId: null,
-      timestampSeconds: null,
+      timestampSeconds: matchingCue?.startSec ?? null,
+      targetSurface: surface,
     },
   }]
 }
@@ -417,11 +449,15 @@ export function createSearchController(
     const requestGeneration = ++generation
 
     if (tokens.length === 0) {
-      publish({ query: request.query, results: [], isSearching: false, error: null })
+      publish({ query: snapshot.query, results: [], isSearching: false, error: null })
       return
     }
 
-    publish({ query: request.query, results: snapshot.results, isSearching: true, error: null })
+    // Every later publication keeps the *current* query text. A scan that was
+    // started for an older query must never resurrect the stale text the user
+    // has since replaced. `setQuery` bumps the generation, so such a scan is
+    // already dropped by the `isCurrent` checks below.
+    publish({ query: snapshot.query, results: snapshot.results, isSearching: true, error: null })
 
     let candidates: SearchRepositoryCandidates
 
@@ -430,7 +466,7 @@ export function createSearchController(
     } catch (error) {
       if (!isCurrent(requestGeneration)) return
       publish({
-        query: request.query,
+        query: snapshot.query,
         results: [],
         isSearching: false,
         error: error instanceof Error ? error.message : "Search failed.",
@@ -453,7 +489,7 @@ export function createSearchController(
     const results = rank(combined)
 
     publish({
-      query: request.query,
+      query: snapshot.query,
       results,
       isSearching: false,
       error: null,
@@ -469,7 +505,12 @@ export function createSearchController(
     },
 
     setQuery: (query) => {
-      publish({ ...snapshot, query })
+      if (query === snapshot.query) return
+
+      // Editing the query invalidates any in-flight scan: its results describe
+      // the previous text and must not be published under the new one.
+      generation += 1
+      publish({ query, results: [], isSearching: false, error: null })
     },
 
     search: runSearch,

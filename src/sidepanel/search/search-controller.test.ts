@@ -6,6 +6,7 @@ import type {
   QaMessageEntity,
   QaThreadEntity,
   SegmentSummaryEntity,
+  VideoRecordEntity,
 } from "@/lib/schemas/persistence"
 import type { SearchRepositoryCandidates } from "@/features/search/lib/search-repository"
 import {
@@ -84,6 +85,24 @@ function buildThread(overrides: Partial<QaThreadEntity> = {}): QaThreadEntity {
   }
 }
 
+function buildVideoRecord(overrides: Partial<VideoRecordEntity> = {}): VideoRecordEntity {
+  return {
+    contentKey: "youtube:video-a",
+    platform: "youtube",
+    videoId: "video-a",
+    partId: null,
+    title: "Alpha video",
+    channelTitle: null,
+    thumbnailUrl: null,
+    canonicalUrl: null,
+    durationSec: null,
+    openedAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-02T00:00:00.000Z",
+    analyzedAt: null,
+    ...overrides,
+  }
+}
+
 function buildMessage(overrides: Partial<QaMessageEntity> = {}): QaMessageEntity {
   return {
     id: "message-1",
@@ -119,6 +138,7 @@ function buildRuntime(overrides: Partial<SearchRuntimeProjection> = {}): SearchR
       contentKey: "youtube:video-a",
     },
     title: "Alpha video",
+    author: null,
     analysis: null,
     transcript: { contentKey: null, cues: [] },
     ...overrides,
@@ -459,5 +479,186 @@ describe("search controller lifecycle", () => {
     controller.setQuery("abc")
 
     expect(notifications).toBe(2)
+  })
+})
+
+describe("search controller query generation", () => {
+  it("keeps the newest typed query when an older scan resolves", async () => {
+    let releaseScan: (() => void) | null = null
+    const controller = createSearchController({
+      repository: {
+        loadCandidates: () => new Promise((resolve) => {
+          releaseScan = () => resolve(emptyCandidates())
+        }),
+      },
+    })
+
+    const scanning = controller.search({ query: "alpha", runtime: null })
+    controller.setQuery("beta")
+    releaseScan?.()
+    await scanning
+
+    expect(controller.getSnapshot().query).toBe("beta")
+    expect(controller.getSnapshot().results).toEqual([])
+    expect(controller.getSnapshot().isSearching).toBe(false)
+  })
+
+  it("lets a newer overlapping scan win over an older one that resolves last", async () => {
+    const gates: Array<() => void> = []
+    const candidates = emptyCandidates()
+    candidates.knowledgeItems = [
+      buildKnowledgeItem({ id: "alpha-only", text: "alpha deployment notes" }),
+    ]
+    const controller = createSearchController({
+      repository: {
+        loadCandidates: () => new Promise((resolve) => {
+          gates.push(() => resolve(candidates))
+        }),
+      },
+    })
+
+    const scanA = controller.search({ query: "alpha", runtime: null })
+    controller.setQuery("beta")
+    const scanB = controller.search({ query: "beta", runtime: null })
+
+    // B finishes first and publishes, then A finishes late.
+    gates[1]?.()
+    await scanB
+    expect(controller.getSnapshot().query).toBe("beta")
+
+    gates[0]?.()
+    await scanA
+
+    // A must not resurrect either its results or its query text.
+    expect(controller.getSnapshot().query).toBe("beta")
+    expect(controller.getSnapshot().results).toEqual([])
+  })
+
+  it("drops previous results as soon as the query text changes", async () => {
+    const candidates = emptyCandidates()
+    candidates.knowledgeItems = [buildKnowledgeItem({ id: "alpha", text: "alpha deployment" })]
+    const controller = createSearchController({ repository: fixedRepository(candidates).repository })
+
+    await controller.search({ query: "alpha", runtime: null })
+    expect(controller.getSnapshot().results).toHaveLength(1)
+
+    controller.setQuery("alphab")
+
+    expect(controller.getSnapshot().query).toBe("alphab")
+    expect(controller.getSnapshot().results).toEqual([])
+  })
+})
+
+describe("search controller field completeness", () => {
+  it("matches the current runtime author", async () => {
+    const controller = createSearchController({ repository: fixedRepository(emptyCandidates()).repository })
+
+    await controller.search({ query: "nadia", runtime: buildRuntime({ author: "Nadia" }) })
+
+    const result = controller.getSnapshot().results.find(
+      (entry) => entry.kind === "current-runtime-content",
+    )
+    expect(result).toBeDefined()
+    expect(result?.targetSurface).toBe("overview")
+    expect(result?.timestampSeconds).toBeNull()
+  })
+
+  it("matches the historical video record channel title", async () => {
+    const candidates = emptyCandidates()
+    candidates.analysisRuns = [buildRun()]
+    candidates.videoRecords = [
+      buildVideoRecord({ channelTitle: "Nadia Channel" }),
+    ]
+    const controller = createSearchController({ repository: fixedRepository(candidates).repository })
+
+    await controller.search({ query: "nadia", runtime: null })
+
+    const result = controller.getSnapshot().results.find(
+      (entry) => entry.kind === "historical-analysis",
+    )
+    expect(result).toBeDefined()
+  })
+})
+
+describe("search controller current content targeting", () => {
+  it("marks an analysis hit as an Overview target", async () => {
+    const controller = createSearchController({ repository: fixedRepository(emptyCandidates()).repository })
+
+    await controller.search({
+      query: "rollback",
+      runtime: buildRuntime({
+        analysis: {
+          analysisRunId: "run-1",
+          transcriptFingerprint: "fp-1",
+          analysis: {
+            summary: "The rollback happened",
+            keyPoints: [{ text: "rollback" }],
+            chapters: [],
+          },
+        },
+      }),
+    })
+
+    const result = controller.getSnapshot().results.find(
+      (entry) => entry.kind === "current-runtime-content",
+    )
+    expect(result?.targetSurface).toBe("overview")
+    expect(result?.timestampSeconds).toBeNull()
+  })
+
+  it("marks a transcript-only hit as a Transcript target at the cue", async () => {
+    const controller = createSearchController({ repository: fixedRepository(emptyCandidates()).repository })
+
+    await controller.search({
+      query: "rollback",
+      runtime: buildRuntime({
+        transcript: {
+          contentKey: "youtube:video-a",
+          cues: [
+            { startSec: 12, endSec: 18, text: "unrelated words here" },
+            { startSec: 42, endSec: 48, text: "the rollback window" },
+          ],
+        },
+      }),
+    })
+
+    const result = controller.getSnapshot().results.find(
+      (entry) => entry.kind === "current-runtime-content",
+    )
+    expect(result?.targetSurface).toBe("transcript")
+    expect(result?.timestampSeconds).toBe(42)
+  })
+})
+
+describe("search controller QA cross-table gating", () => {
+  it("excludes a thread whose run belongs to another content key", async () => {
+    const candidates = emptyCandidates()
+    candidates.analysisRuns = [
+      buildRun({ id: "run-b", videoId: "video-b", contentKey: "youtube:video-b" }),
+    ]
+    candidates.qaThreads = [
+      buildThread({ id: "thread-a", contentKey: "youtube:video-a", analysisRunId: "run-b" }),
+    ]
+    const controller = createSearchController({ repository: fixedRepository(candidates).repository })
+
+    await controller.search({ query: "deployment", runtime: null })
+
+    expect(controller.getSnapshot().results.filter((entry) => entry.kind === "qa-thread"))
+      .toEqual([])
+  })
+
+  it("keeps a thread whose run belongs to the same content key", async () => {
+    const candidates = emptyCandidates()
+    candidates.analysisRuns = [buildRun({ id: "run-a", contentKey: "youtube:video-a" })]
+    candidates.qaThreads = [
+      buildThread({ id: "thread-a", contentKey: "youtube:video-a", analysisRunId: "run-a" }),
+    ]
+    const controller = createSearchController({ repository: fixedRepository(candidates).repository })
+
+    await controller.search({ query: "deployment", runtime: null })
+
+    const result = controller.getSnapshot().results.find((entry) => entry.kind === "qa-thread")
+    expect(result?.contentKey).toBe("youtube:video-a")
+    expect(result?.analysisRunId).toBe("run-a")
   })
 })

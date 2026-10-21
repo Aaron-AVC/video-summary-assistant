@@ -128,6 +128,11 @@ import {
 import { searchRepository } from "@/features/search/lib/search-repository"
 import { SearchTab } from "@/sidepanel/components/search-tab"
 import {
+  createSearchOpener,
+  type SearchOpener,
+  type SearchOpenerEffects,
+} from "@/sidepanel/search/search-opening"
+import {
   WorkspaceController,
   type WorkspaceHistoryRestoreMode,
 } from "@/sidepanel/workspace/workspace-controller"
@@ -280,6 +285,15 @@ function SidepanelWorkspace() {
   useEffect(() => searchController.subscribe(() => {
     setSearchSnapshot(searchController.getSnapshot())
   }), [searchController])
+
+  /**
+   * Latest published transcript cues, read by the Search opener when it has to
+   * recompute the restored fingerprint without re-rendering.
+   */
+  const transcriptCuesRef = useRef(transcriptSnapshot.cues)
+  transcriptCuesRef.current = transcriptSnapshot.cues
+
+  const [transcriptFocusTimestamp, setTranscriptFocusTimestamp] = useState<number | null>(null)
   const [markdownExportSections, setMarkdownExportSections] = useState<MarkdownExportSections>(
     DEFAULT_MARKDOWN_EXPORT_SECTIONS,
   )
@@ -1389,30 +1403,81 @@ function SidepanelWorkspace() {
     switch (outcome.kind) {
       case "missing-identity":
         toast.error(t("toast.noVideoContext"))
-        return
+        break
       case "jumped-active":
         toast.success(t("runtime.jumpedActive", { timestamp: formatTimestamp(timestampSeconds) }))
-        return
+        break
       case "opened-new-tab":
         toast.success(t("runtime.openedVideoAt", { timestamp: formatTimestamp(timestampSeconds) }))
-        return
+        break
       case "runtime-failure":
         toast.error(outcome.error)
+        break
     }
+
+    // The Search opener needs the real outcome to clear a pending cross-video
+    // request when navigation could not reach the target.
+    return outcome
   }, [jumpToTimestamp, t])
 
-  const pendingSearchIntentRef = useRef<
-    | { kind: "knowledge"; contentKey: string; timestampSeconds: number | null }
-    | {
-        kind: "qa"
-        contentKey: string
-        videoId: string
-        analysisRunId: string
-        threadId: string
-        transcriptFingerprint: string | null
+  /**
+   * Latest Search effects. The opener is created once and always forwards to
+   * this ref, so a re-render with fresh callbacks never strands it.
+   */
+  const searchOpeningEffectsRef = useRef<SearchOpenerEffects | null>(null)
+  searchOpeningEffectsRef.current = {
+    readCurrentContentKey: () => videoContextRef.current.contentKey,
+    readDisplayedAnalysis: () => workspaceController.getDisplaySelection().analysis,
+    readCurrentTranscriptFingerprint: () => currentTranscriptFingerprintRef.current,
+    resolveRestoredTranscriptFingerprint: () => askController.resolveOpenThreadTranscriptFingerprint({
+      currentFingerprint: currentTranscriptFingerprintRef.current,
+      transcriptCues: transcriptCuesRef.current,
+    }),
+    restoreAnalysis: (input) => handleOpenSavedAnalysis(
+      input.videoId,
+      input.contentKey,
+      input.analysisRunId,
+    ),
+    openThread: (input) => {
+      askController.invalidateExecutionGeneration()
+      return askController.openThread(input)
+    },
+    publishThread: (input) => {
+      workspaceController.setSelectedQaThreadId(input.threadId)
+      setQaThreadId(input.threadId)
+      setQaMessages(input.thread.messages)
+      setAskQuestion("")
+      setAskAnswer(input.thread.answer)
+    },
+    jump: (identity, timestampSeconds) => jumpWithIdentity(identity, timestampSeconds),
+    showSurface: (surface, timestampSeconds) => {
+      if (surface === "ask") {
+        setActiveTab("ask")
+        return
       }
-    | null
-  >(null)
+
+      setActiveTab(surface)
+
+      if (surface === "transcript") setTranscriptFocusTimestamp(timestampSeconds)
+    },
+  }
+
+  const searchOpenerRef = useRef<SearchOpener | null>(null)
+  if (!searchOpenerRef.current) {
+    const current = () => searchOpeningEffectsRef.current as SearchOpenerEffects
+
+    searchOpenerRef.current = createSearchOpener({
+      readCurrentContentKey: () => current().readCurrentContentKey(),
+      readDisplayedAnalysis: () => current().readDisplayedAnalysis(),
+      readCurrentTranscriptFingerprint: () => current().readCurrentTranscriptFingerprint(),
+      resolveRestoredTranscriptFingerprint: () => current().resolveRestoredTranscriptFingerprint(),
+      restoreAnalysis: (input) => current().restoreAnalysis(input),
+      openThread: (input) => current().openThread(input),
+      publishThread: (input) => current().publishThread(input),
+      jump: (identity, timestampSeconds) => current().jump(identity, timestampSeconds),
+      showSurface: (surface, timestampSeconds) => current().showSurface(surface, timestampSeconds),
+    })
+  }
 
   const handleSearchQueryChange = useCallback((query: string) => {
     searchController.setQuery(query)
@@ -1425,97 +1490,15 @@ function SidepanelWorkspace() {
     })
   }, [searchController, searchSnapshot.query])
 
-  const openSearchQaThread = useCallback(async (intent: {
-    threadId: string
-    videoId: string
-    contentKey: string
-    analysisRunId: string
-    transcriptFingerprint: string | null
-  }) => {
-    await handleOpenSavedAnalysis(intent.videoId, intent.contentKey, intent.analysisRunId)
-    const generation = workspaceController.captureLoadGeneration()
-    const isCurrent = () => (
-      workspaceController.isLoadGenerationCurrent(generation)
-      && videoContextRef.current.contentKey === intent.contentKey
-    )
-    askController.invalidateExecutionGeneration()
-    const result = await askController.openThread({
-      threadId: intent.threadId,
-      contentKey: intent.contentKey,
-      analysisRunId: intent.analysisRunId,
-      transcriptFingerprint: intent.transcriptFingerprint,
-      isCurrent,
-    })
-    if (result.kind !== "ready" || !isCurrent()) return
-    workspaceController.setSelectedQaThreadId(intent.threadId)
-    setQaThreadId(intent.threadId)
-    setQaMessages(result.thread.messages)
-    setAskQuestion("")
-    setAskAnswer(result.thread.answer)
-    setActiveTab("ask")
-  }, [askController, handleOpenSavedAnalysis, workspaceController])
-
   const handleOpenSearchResult = useCallback(async (result: SearchResult) => {
-    if (result.kind === "knowledge") {
-      if (videoContextRef.current.contentKey === result.contentKey) {
-        setActiveTab("overview")
-        if (result.timestampSeconds !== null) {
-          await jumpWithIdentity(
-            identityFromContext(videoContextRef.current),
-            result.timestampSeconds,
-          )
-        }
-        return
-      }
-      pendingSearchIntentRef.current = {
-        kind: "knowledge",
-        contentKey: result.contentKey,
-        timestampSeconds: result.timestampSeconds,
-      }
-      await jumpWithIdentity(result.identity, result.timestampSeconds ?? 0)
-      return
-    }
-    if (result.kind === "qa-thread") {
-      if (!result.threadId || !result.analysisRunId) return
-      const intent = {
-        kind: "qa" as const,
-        videoId: result.videoId,
-        contentKey: result.contentKey,
-        analysisRunId: result.analysisRunId,
-        threadId: result.threadId,
-        transcriptFingerprint: result.transcriptFingerprint,
-      }
-      if (videoContextRef.current.contentKey === result.contentKey) {
-        await openSearchQaThread(intent)
-        return
-      }
-      pendingSearchIntentRef.current = intent
-      await jumpWithIdentity(result.identity, 0)
-      return
-    }
-    if (result.analysisRunId) {
-      await handleOpenSavedAnalysis(result.videoId, result.contentKey, result.analysisRunId)
-    }
-    setActiveTab("overview")
-  }, [handleOpenSavedAnalysis, jumpWithIdentity, openSearchQaThread])
+    await searchOpenerRef.current?.open(result)
+  }, [])
 
   useEffect(() => {
-    const pending = pendingSearchIntentRef.current
-    if (!pending) return
-    if (videoContext.contentKey !== pending.contentKey) return
-    pendingSearchIntentRef.current = null
-    if (pending.kind === "knowledge") {
-      setActiveTab("overview")
-      if (pending.timestampSeconds !== null) {
-        void jumpWithIdentity(
-          identityFromContext(videoContextRef.current),
-          pending.timestampSeconds,
-        )
-      }
-      return
-    }
-    void openSearchQaThread(pending)
-  }, [jumpWithIdentity, openSearchQaThread, videoContext.contentKey])
+    // A pending cross-video request only resumes once the runtime bridge owns
+    // the exact contentKey it was queued for.
+    void searchOpenerRef.current?.notifyRuntimeContent(videoContext.contentKey)
+  }, [videoContext.contentKey])
 
   useEffect(() => {
     if (activeTab !== "search") return
@@ -1526,12 +1509,12 @@ function SidepanelWorkspace() {
     const identity = analysisView
       ? identityFromAnalysis(analysisView)
       : identityFromContext(videoContextRef.current)
-    return jumpWithIdentity(identity, timestampSeconds)
+    void jumpWithIdentity(identity, timestampSeconds)
   }, [analysisView, jumpWithIdentity])
 
-  const handleTranscriptJump = useCallback((timestampSeconds: number) => (
-    jumpWithIdentity(transcriptIdentity, timestampSeconds)
-  ), [jumpWithIdentity, transcriptIdentity])
+  const handleTranscriptJump = useCallback((timestampSeconds: number) => {
+    void jumpWithIdentity(transcriptIdentity, timestampSeconds)
+  }, [jumpWithIdentity, transcriptIdentity])
 
   /**
    * Knowledge commands always receive the complete canonical identity captured
@@ -1610,9 +1593,9 @@ function SidepanelWorkspace() {
     }
   }, [knowledgeController, t])
 
-  const handleKnowledgeJump = useCallback((timestampSeconds: number) => (
-    jumpWithIdentity(knowledgeIdentity, timestampSeconds)
-  ), [jumpWithIdentity, knowledgeIdentity])
+  const handleKnowledgeJump = useCallback((timestampSeconds: number) => {
+    void jumpWithIdentity(knowledgeIdentity, timestampSeconds)
+  }, [jumpWithIdentity, knowledgeIdentity])
 
   /**
    * Export is scoped to the authoritative runtime content only. The identity is
@@ -1673,6 +1656,7 @@ function SidepanelWorkspace() {
     return {
       identity,
       title: videoContext.title ?? identity.videoId,
+      author: videoContext.author ?? null,
       analysis: analysisMatches && analysisView
         ? {
             analysisRunId: analysisView.analysisRunId,
@@ -1915,6 +1899,7 @@ function SidepanelWorkspace() {
             onDownload={handleDownload}
             onJump={handleTranscriptJump}
             formatTimestamp={formatTimestamp}
+            focusTimestamp={transcriptFocusTimestamp}
           />
         )}
         ask={(

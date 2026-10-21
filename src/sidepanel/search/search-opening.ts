@@ -66,9 +66,21 @@ export type SearchOpenerThreadInput = {
   isCurrent: () => boolean
 }
 
+export type SearchDisplayedAnalysis = {
+  contentKey: string
+  analysisRunId: string | null
+}
+
 export type SearchOpenerEffects = {
   /** Canonical contentKey currently owned by the runtime bridge, or null. */
   readCurrentContentKey: () => string | null
+  /**
+   * Identity of the analysis the Workspace is currently displaying. This is a
+   * different domain from `readCurrentContentKey`: it can point at historical
+   * content while the player keeps showing another video. It must be readable
+   * synchronously, without waiting for a future React render.
+   */
+  readDisplayedAnalysis: () => SearchDisplayedAnalysis | null
   /** Transcript fingerprint currently published to the Workspace. */
   readCurrentTranscriptFingerprint: () => string | null
   /**
@@ -122,8 +134,10 @@ export type SearchOpener = {
  *    jumps and switches the surface of the content the runtime already owns.
  * 2. A QA thread is only published after the exact analysis run is restored
  *    and every identity component (contentKey, analysisRunId, transcript
- *    fingerprint) still matches what the result promised. Validation uses the
- *    restore boundary's reported identity, not React-rendered state.
+ *    fingerprint) still matches what the result promised. The initial check
+ *    uses the restore boundary's reported identity; the final check reads the
+ *    Workspace's displayed analysis identity, which is a different domain from
+ *    the runtime video and may legitimately point at historical content.
  * 3. Every `open` supersedes the previous one, so a slow older request can
  *    never publish over a newer result. The cross-video pending token follows
  *    the same rule for queued navigations.
@@ -167,11 +181,22 @@ export function createSearchOpener(effects: SearchOpenerEffects): SearchOpener {
       return { kind: "rejected", reason: "transcript-fingerprint-mismatch" }
     }
 
-    const isCurrent = () => (
-      isOpenCurrent(token)
-      && effects.readCurrentContentKey() === result.contentKey
-      && effects.readCurrentTranscriptFingerprint() === restored.transcriptFingerprint
-    )
+    // The restore result is authoritative for this opening, but it is a
+    // snapshot. Anything that changes what the Workspace displays before the
+    // thread is published must invalidate it, so currentness is re-read from
+    // the displayed analysis identity — not from runtime content, which still
+    // shows another video, and not from React-rendered state.
+    const isCurrent = () => {
+      if (!isOpenCurrent(token)) return false
+
+      const displayed = effects.readDisplayedAnalysis()
+
+      if (!displayed) return false
+      if (displayed.contentKey !== restored.contentKey) return false
+      if (displayed.analysisRunId !== restored.analysisRunId) return false
+
+      return effects.readCurrentTranscriptFingerprint() === restored.transcriptFingerprint
+    }
 
     const opened = await effects.openThread({
       threadId: result.threadId,
@@ -183,12 +208,14 @@ export function createSearchOpener(effects: SearchOpenerEffects): SearchOpener {
 
     if (!isOpenCurrent(token)) return superseded()
 
-    if (opened.kind !== "ready" || !isCurrent()) {
+    if (opened.kind !== "ready") {
       return {
         kind: "rejected",
         reason: opened.kind === "mismatch" ? opened.reason : opened.kind,
       }
     }
+
+    if (!isCurrent()) return { kind: "rejected", reason: "displayed-analysis-changed" }
 
     effects.publishThread({
       threadId: result.threadId,

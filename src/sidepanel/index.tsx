@@ -1075,6 +1075,20 @@ function SidepanelWorkspace() {
     } else {
       restored = await loadSavedAnalysis(videoId, generation)
     }
+    if (restored) {
+      // A published historical analysis is the authoritative displayed
+      // analysis from this point on. Publication happens synchronously inside
+      // the restore boundary, so record the selection here rather than waiting
+      // for the next render: the Search opener reads it to validate a QA
+      // thread whose content is not the runtime video.
+      workspaceController.syncDisplaySelection({
+        analysis: {
+          contentKey: restored.contentKey,
+          analysisRunId: restored.analysisRunId,
+        },
+        qaThreadId: workspaceController.getDisplaySelection().qaThreadId,
+      })
+    }
     toast.success(t("toast.loadedHistory"))
     return restored
   }, [askController, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController, workspaceController])
@@ -1426,6 +1440,7 @@ function SidepanelWorkspace() {
   const searchOpeningEffectsRef = useRef<SearchOpenerEffects | null>(null)
   searchOpeningEffectsRef.current = {
     readCurrentContentKey: () => videoContextRef.current.contentKey,
+    readDisplayedAnalysis: () => workspaceController.getDisplaySelection().analysis,
     readCurrentTranscriptFingerprint: () => currentTranscriptFingerprintRef.current,
     restoreAnalysis: (input) => handleOpenSavedAnalysis(
       input.videoId,
@@ -1462,6 +1477,7 @@ function SidepanelWorkspace() {
 
     searchOpenerRef.current = createSearchOpener({
       readCurrentContentKey: () => current().readCurrentContentKey(),
+      readDisplayedAnalysis: () => current().readDisplayedAnalysis(),
       readCurrentTranscriptFingerprint: () => current().readCurrentTranscriptFingerprint(),
       restoreAnalysis: (input) => current().restoreAnalysis(input),
       openThread: (input) => current().openThread(input),

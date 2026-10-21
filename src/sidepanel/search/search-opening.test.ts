@@ -78,9 +78,11 @@ function createHarness(overrides: HarnessOverrides = {}) {
   let currentContentKey = overrides.currentContentKey ?? "youtube:video-a"
   const fingerprint = overrides.fingerprint ?? "fp-a"
   const openThreadReleases: Array<() => void> = []
+  let displayedAnalysis: { contentKey: string; analysisRunId: string | null } | null = null
 
   const effects: SearchOpenerEffects = {
     readCurrentContentKey: () => currentContentKey,
+    readDisplayedAnalysis: () => displayedAnalysis,
     readCurrentTranscriptFingerprint: () => fingerprint,
     restoreAnalysis: async (input) => {
       calls.restore.push(input)
@@ -92,11 +94,20 @@ function createHarness(overrides: HarnessOverrides = {}) {
         ? overrides.restoreTo.transcriptFingerprint ?? null
         : fingerprint
 
-      return {
+      const restored = {
         contentKey: overrides.restoreTo?.contentKey ?? input.contentKey,
         analysisRunId: overrides.restoreTo?.analysisRunId ?? input.analysisRunId,
         transcriptFingerprint,
       }
+
+      // Publication is synchronous in production, so the displayed analysis is
+      // readable immediately after the restore resolves.
+      displayedAnalysis = {
+        contentKey: restored.contentKey,
+        analysisRunId: restored.analysisRunId,
+      }
+
+      return restored
     },
     openThread: async (input) => {
       calls.openThread.push({
@@ -145,6 +156,9 @@ function createHarness(overrides: HarnessOverrides = {}) {
     opener: createSearchOpener(effects),
     setCurrentContentKey: (next: string | null) => {
       currentContentKey = next
+    },
+    setDisplayedAnalysis: (next: { contentKey: string; analysisRunId: string | null } | null) => {
+      displayedAnalysis = next
     },
     releaseOpenThread: (index: number) => {
       openThreadReleases[index]?.()
@@ -601,5 +615,56 @@ describe("search opening generation", () => {
     releaseJump?.()
     expect(await slow).toEqual({ kind: "rejected", reason: "superseded" })
     expect(harness.calls.surfaces).toEqual([{ surface: "overview", timestampSeconds: null }])
+  })
+})
+
+describe("QA opening across content domains", () => {
+  it("opens a historical QA thread while the player still shows another video", async () => {
+    const harness = createHarness({ currentContentKey: "youtube:video-b" })
+
+    const opened = await harness.opener.open(buildResult({
+      kind: "qa-thread",
+      threadId: "thread-a",
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-1",
+      transcriptFingerprint: "fp-a",
+    }))
+
+    expect(opened).toEqual({ kind: "opened", surface: "ask" })
+    expect(harness.calls.restore).toEqual([{
+      videoId: "video-a",
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-1",
+    }])
+    expect(harness.calls.publish).toEqual([{
+      threadId: "thread-a",
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-1",
+    }])
+    expect(harness.calls.surfaces).toEqual([{ surface: "ask", timestampSeconds: null }])
+  })
+
+  it("never publishes when another run replaces the displayed analysis while the thread loads", async () => {
+    const harness = createHarness({ deferOpenThreads: true })
+
+    const opening = harness.opener.open(buildResult({
+      kind: "qa-thread",
+      threadId: "thread-a",
+      analysisRunId: "run-1",
+      transcriptFingerprint: "fp-a",
+    }))
+    await flushMicrotasks()
+
+    // Same content, same fingerprint, different analysis run: the restored
+    // identity is no longer what the Workspace displays.
+    harness.setDisplayedAnalysis({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-2",
+    })
+    harness.releaseOpenThread(0)
+
+    expect(await opening).toEqual({ kind: "rejected", reason: "displayed-analysis-changed" })
+    expect(harness.calls.publish).toEqual([])
+    expect(harness.calls.surfaces).toEqual([])
   })
 })

@@ -132,6 +132,7 @@ import {
   type SearchOpener,
   type SearchOpenerEffects,
 } from "@/sidepanel/search/search-opening"
+import { commitRestoredDisplaySelection } from "@/sidepanel/workspace/restored-display-selection"
 import {
   WorkspaceController,
   type WorkspaceHistoryRestoreMode,
@@ -1075,22 +1076,25 @@ function SidepanelWorkspace() {
     } else {
       restored = await loadSavedAnalysis(videoId, generation)
     }
-    if (restored) {
-      // A published historical analysis is the authoritative displayed
-      // analysis from this point on. Publication happens synchronously inside
-      // the restore boundary, so record the selection here rather than waiting
-      // for the next render: the Search opener reads it to validate a QA
-      // thread whose content is not the runtime video.
-      workspaceController.syncDisplaySelection({
-        analysis: {
-          contentKey: restored.contentKey,
-          analysisRunId: restored.analysisRunId,
-        },
-        qaThreadId: workspaceController.getDisplaySelection().qaThreadId,
-      })
-    }
+    // A finished restore is not proof that this request is still current: the
+    // publication boundary permits a newer load to start while an older one is
+    // awaiting its QA restore, and does not roll back. Commit the displayed
+    // selection only when the captured generation is still current, and keep
+    // that check and the update in one synchronous segment.
+    const committed = commitRestoredDisplaySelection({
+      generation,
+      restored,
+      effects: {
+        isLoadGenerationCurrent: (value) => workspaceController.isLoadGenerationCurrent(value),
+        readSelectedQaThreadId: () => workspaceController.getDisplaySelection().qaThreadId,
+        syncDisplaySelection: (selection) => workspaceController.syncDisplaySelection(selection),
+      },
+    })
+
+    if (!committed) return null
+
     toast.success(t("toast.loadedHistory"))
-    return restored
+    return committed
   }, [askController, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController, workspaceController])
 
   const hasActiveTaskForContent = useCallback((contentKey?: string) => {

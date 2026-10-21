@@ -135,6 +135,7 @@ import {
 import {
   WorkspaceController,
   type WorkspaceHistoryRestoreMode,
+  type WorkspaceRestoredAnalysisIdentity,
 } from "@/sidepanel/workspace/workspace-controller"
 
 type AnalysisView = {
@@ -285,13 +286,6 @@ function SidepanelWorkspace() {
   useEffect(() => searchController.subscribe(() => {
     setSearchSnapshot(searchController.getSnapshot())
   }), [searchController])
-
-  /**
-   * Latest published transcript cues, read by the Search opener when it has to
-   * recompute the restored fingerprint without re-rendering.
-   */
-  const transcriptCuesRef = useRef(transcriptSnapshot.cues)
-  transcriptCuesRef.current = transcriptSnapshot.cues
 
   const [transcriptFocusTimestamp, setTranscriptFocusTimestamp] = useState<number | null>(null)
   const [markdownExportSections, setMarkdownExportSections] = useState<MarkdownExportSections>(
@@ -589,13 +583,14 @@ function SidepanelWorkspace() {
         videoId,
         isCurrent: isRestoreCurrent,
       })
-      if (result.kind !== "ready") return
-      await publishHistoryRestore({
+      if (result.kind !== "ready") return null
+      const publication = await publishHistoryRestore({
         mode: "legacy-video",
         snapshot: result.snapshot,
         workspaceEpoch,
         generation,
       })
+      return publication.kind === "published" ? publication.restored : null
     } finally {
       if (workspaceController.isLoadGenerationCurrent(generation)) {
         setIsAnalysisFetching(false)
@@ -626,13 +621,14 @@ function SidepanelWorkspace() {
         context: historyContext,
         isCurrent: isRestoreCurrent,
       })
-      if (result.kind !== "ready") return
-      await publishHistoryRestore({
+      if (result.kind !== "ready") return null
+      const publication = await publishHistoryRestore({
         mode: "current-context",
         snapshot: result.snapshot,
         workspaceEpoch,
         generation,
       })
+      return publication.kind === "published" ? publication.restored : null
     } finally {
       if (workspaceController.isLoadGenerationCurrent(generation)) setIsAnalysisFetching(false)
     }
@@ -650,13 +646,14 @@ function SidepanelWorkspace() {
         analysisRunId,
         isCurrent: isRestoreCurrent,
       })
-      if (result.kind !== "ready") return
-      await publishHistoryRestore({
+      if (result.kind !== "ready") return null
+      const publication = await publishHistoryRestore({
         mode: "saved-run",
         snapshot: result.snapshot,
         workspaceEpoch,
         generation,
       })
+      return publication.kind === "published" ? publication.restored : null
     } finally {
       if (workspaceController.isLoadGenerationCurrent(generation)) setIsAnalysisFetching(false)
     }
@@ -1063,11 +1060,12 @@ function SidepanelWorkspace() {
     setAskError(null)
     setAnalysisError(null)
     const generation = workspaceController.beginLoadGeneration()
+    let restored: WorkspaceRestoredAnalysisIdentity | null = null
     if (analysisRunId) {
-      await loadSavedAnalysisRun(analysisRunId, generation)
+      restored = await loadSavedAnalysisRun(analysisRunId, generation)
     } else if (contentKey) {
       const current = videoContextRef.current
-      await loadSavedAnalysisForContext({
+      restored = await loadSavedAnalysisForContext({
         ...current,
         videoId,
         contentKey,
@@ -1075,9 +1073,10 @@ function SidepanelWorkspace() {
         partId: contentKey.startsWith("bilibili:") ? contentKey.split(":p:")[1] ?? null : null,
       }, generation)
     } else {
-      await loadSavedAnalysis(videoId, generation)
+      restored = await loadSavedAnalysis(videoId, generation)
     }
     toast.success(t("toast.loadedHistory"))
+    return restored
   }, [askController, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController, workspaceController])
 
   const hasActiveTaskForContent = useCallback((contentKey?: string) => {
@@ -1427,12 +1426,7 @@ function SidepanelWorkspace() {
   const searchOpeningEffectsRef = useRef<SearchOpenerEffects | null>(null)
   searchOpeningEffectsRef.current = {
     readCurrentContentKey: () => videoContextRef.current.contentKey,
-    readDisplayedAnalysis: () => workspaceController.getDisplaySelection().analysis,
     readCurrentTranscriptFingerprint: () => currentTranscriptFingerprintRef.current,
-    resolveRestoredTranscriptFingerprint: () => askController.resolveOpenThreadTranscriptFingerprint({
-      currentFingerprint: currentTranscriptFingerprintRef.current,
-      transcriptCues: transcriptCuesRef.current,
-    }),
     restoreAnalysis: (input) => handleOpenSavedAnalysis(
       input.videoId,
       input.contentKey,
@@ -1468,9 +1462,7 @@ function SidepanelWorkspace() {
 
     searchOpenerRef.current = createSearchOpener({
       readCurrentContentKey: () => current().readCurrentContentKey(),
-      readDisplayedAnalysis: () => current().readDisplayedAnalysis(),
       readCurrentTranscriptFingerprint: () => current().readCurrentTranscriptFingerprint(),
-      resolveRestoredTranscriptFingerprint: () => current().resolveRestoredTranscriptFingerprint(),
       restoreAnalysis: (input) => current().restoreAnalysis(input),
       openThread: (input) => current().openThread(input),
       publishThread: (input) => current().publishThread(input),
@@ -1856,7 +1848,9 @@ function SidepanelWorkspace() {
             onCancel={handleCancelAnalysis}
             onConfigureProvider={() => setActiveTab("settings")}
             onJump={handleAnalysisJump}
-            onSelectHistory={handleOpenSavedAnalysis}
+            onSelectHistory={(videoId, contentKey, analysisRunId) => {
+              void handleOpenSavedAnalysis(videoId, contentKey, analysisRunId)
+            }}
             onDeleteAnalysis={handleDeleteAnalysis}
             onDeleteVideo={handleDeleteVideo}
             onOpenFullHistory={() => {

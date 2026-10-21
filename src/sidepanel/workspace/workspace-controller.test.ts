@@ -573,7 +573,7 @@ describe("WorkspaceController publishHistoryRestore stale decisions", () => {
       effects: recorder.effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(result).toEqual({ kind: "published", analysisPublished: true, restored: { contentKey: "bilibili:other-video", analysisRunId: "run-9", transcriptFingerprint: "fp-other" } })
     expect(recorder.restoreQaConversation).toEqual([{
       contentKey: "bilibili:other-video",
       analysisRunId: "run-9",
@@ -614,7 +614,7 @@ describe("WorkspaceController publishHistoryRestore no-analysis publication", ()
       effects: recorder.effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: false })
+    expect(result).toEqual({ kind: "published", analysisPublished: false, restored: null })
     expect(recorder.order).toEqual([
       "publishTranscript",
       "clearTranscriptError",
@@ -640,7 +640,7 @@ describe("WorkspaceController publishHistoryRestore no-analysis publication", ()
       effects: recorder.effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: false })
+    expect(result).toEqual({ kind: "published", analysisPublished: false, restored: null })
     expect(recorder.order).toEqual([
       "publishTranscript",
       "clearAnalysis",
@@ -665,7 +665,7 @@ describe("WorkspaceController publishHistoryRestore analysis publication", () =>
       effects: recorder.effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(result).toEqual({ kind: "published", analysisPublished: true, restored: { contentKey: "youtube:video-a", analysisRunId: "run-1", transcriptFingerprint: "fp-transcript" } })
     expect(recorder.order).toEqual([
       "publishTranscript",
       "clearTranscriptError",
@@ -688,7 +688,7 @@ describe("WorkspaceController publishHistoryRestore analysis publication", () =>
       effects: recorder.effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(result).toEqual({ kind: "published", analysisPublished: true, restored: { contentKey: "youtube:video-a", analysisRunId: "run-1", transcriptFingerprint: "fp-transcript" } })
     expect(recorder.order).toEqual([
       "publishTranscript",
       "publishAnalysis",
@@ -711,7 +711,7 @@ describe("WorkspaceController publishHistoryRestore analysis publication", () =>
       effects: recorder.effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(result).toEqual({ kind: "published", analysisPublished: true, restored: { contentKey: "youtube:video-a", analysisRunId: "run-1", transcriptFingerprint: "fp-transcript" } })
     expect(recorder.order).toEqual([
       "publishTranscript",
       "clearTranscriptError",
@@ -885,7 +885,7 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
       effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(result).toEqual({ kind: "published", analysisPublished: true, restored: { contentKey: "youtube:video-a", analysisRunId: "run-1", transcriptFingerprint: "fp-transcript" } })
     expect(requestChecks).toBe(1)
     expect(recorder.order).toEqual([
       "publishTranscript",
@@ -913,7 +913,7 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
       effects: recorder.effects,
     })
 
-    expect(result).toEqual({ kind: "published", analysisPublished: true })
+    expect(result).toEqual({ kind: "published", analysisPublished: true, restored: { contentKey: "youtube:video-a", analysisRunId: "run-1", transcriptFingerprint: "fp-transcript" } })
     expect(recorder.order).toEqual([
       "publishTranscript",
       "publishAnalysis",

@@ -43,15 +43,27 @@ function buildResult(overrides: Partial<SearchResult> = {}): SearchResult {
 
 type HarnessOverrides = {
   currentContentKey?: string | null
-  displayed?: { contentKey: string; analysisRunId: string | null } | null
   fingerprint?: string | null
-  /** Forces the restore to land on a different identity than requested. */
-  restoreTo?: { contentKey?: string; analysisRunId?: string }
+  /** Identity the restore boundary reports; defaults to the requested run. */
+  restoreTo?: {
+    contentKey?: string
+    analysisRunId?: string
+    transcriptFingerprint?: string | null
+  }
+  /** Simulates a restore that was superseded and published nothing. */
+  restoreNothing?: boolean
   jump?: (
     target: VideoIdentity,
     timestampSeconds: number,
   ) => Promise<SearchTimestampNavigationOutcome>
   openThreadKind?: "ready" | "stale" | "mismatch"
+  deferOpenThreads?: boolean
+}
+
+async function flushMicrotasks(): Promise<void> {
+  for (let index = 0; index < 12; index += 1) {
+    await Promise.resolve()
+  }
 }
 
 function createHarness(overrides: HarnessOverrides = {}) {
@@ -63,20 +75,27 @@ function createHarness(overrides: HarnessOverrides = {}) {
     surfaces: [] as Array<{ surface: string; timestampSeconds: number | null }>,
   }
 
-  let displayed = overrides.displayed ?? null
   let currentContentKey = overrides.currentContentKey ?? "youtube:video-a"
   const fingerprint = overrides.fingerprint ?? "fp-a"
+  const openThreadReleases: Array<() => void> = []
 
   const effects: SearchOpenerEffects = {
     readCurrentContentKey: () => currentContentKey,
-    readDisplayedAnalysis: () => displayed,
     readCurrentTranscriptFingerprint: () => fingerprint,
-    resolveRestoredTranscriptFingerprint: async () => fingerprint,
     restoreAnalysis: async (input) => {
       calls.restore.push(input)
-      displayed = {
+
+      if (overrides.restoreNothing) return null
+
+      const transcriptFingerprint = overrides.restoreTo
+        && "transcriptFingerprint" in overrides.restoreTo
+        ? overrides.restoreTo.transcriptFingerprint ?? null
+        : fingerprint
+
+      return {
         contentKey: overrides.restoreTo?.contentKey ?? input.contentKey,
         analysisRunId: overrides.restoreTo?.analysisRunId ?? input.analysisRunId,
+        transcriptFingerprint,
       }
     },
     openThread: async (input) => {
@@ -85,6 +104,12 @@ function createHarness(overrides: HarnessOverrides = {}) {
         contentKey: input.contentKey,
         analysisRunId: input.analysisRunId,
       })
+
+      if (overrides.deferOpenThreads) {
+        await new Promise<void>((resolve) => {
+          openThreadReleases.push(resolve)
+        })
+      }
 
       if (overrides.openThreadKind === "stale") return { kind: "stale" }
       if (overrides.openThreadKind === "mismatch") {
@@ -121,6 +146,10 @@ function createHarness(overrides: HarnessOverrides = {}) {
     setCurrentContentKey: (next: string | null) => {
       currentContentKey = next
     },
+    releaseOpenThread: (index: number) => {
+      openThreadReleases[index]?.()
+    },
+    openThreadCallCount: () => openThreadReleases.length,
   }
 }
 
@@ -307,7 +336,7 @@ describe("QA thread opening", () => {
   })
 
   it("rejects a thread whose restored fingerprint moved", async () => {
-    const harness = createHarness({ fingerprint: "fp-moved" })
+    const harness = createHarness({ restoreTo: { transcriptFingerprint: "fp-moved" } })
 
     const outcome = await harness.opener.open(buildResult({
       kind: "qa-thread",
@@ -442,7 +471,7 @@ describe("cross-video pending intent", () => {
     expect(newer).toEqual({ kind: "pending", contentKey: "youtube:video-c" })
 
     releaseOlder?.({ kind: "runtime-failure", error: "stale tab" })
-    expect(await older).toEqual({ kind: "rejected", reason: "runtime-failure" })
+    expect(await older).toEqual({ kind: "rejected", reason: "superseded" })
 
     // The older failure must not clear the newer request.
     expect(harness.opener.pendingContentKey()).toBe("youtube:video-c")
@@ -455,6 +484,122 @@ describe("cross-video pending intent", () => {
     await harness.opener.notifyRuntimeContent("youtube:video-c")
 
     expect(harness.opener.pendingContentKey()).toBeNull()
+    expect(harness.calls.surfaces).toEqual([{ surface: "overview", timestampSeconds: null }])
+  })
+})
+
+describe("current transcript navigation", () => {
+  it("moves the player to the cue through the navigation service and never restores history", async () => {
+    const harness = createHarness({ currentContentKey: "youtube:video-a" })
+
+    const outcome = await harness.opener.open(buildResult({
+      kind: "current-runtime-content",
+      targetSurface: "transcript",
+      timestampSeconds: 42,
+    }))
+
+    expect(outcome).toEqual({ kind: "opened", surface: "transcript" })
+    expect(harness.calls.restore).toEqual([])
+    expect(harness.calls.jump).toEqual([{
+      identity: identity(),
+      timestampSeconds: 42,
+    }])
+    expect(harness.calls.surfaces).toEqual([{ surface: "transcript", timestampSeconds: 42 }])
+  })
+})
+
+describe("QA restore identity validation", () => {
+  it("validates the outcome the restore boundary reported, without waiting for a re-render", async () => {
+    const harness = createHarness()
+
+    const outcome = await harness.opener.open(buildResult({
+      kind: "qa-thread",
+      threadId: "thread-1",
+      analysisRunId: "run-1",
+      transcriptFingerprint: "fp-a",
+    }))
+
+    expect(outcome).toEqual({ kind: "opened", surface: "ask" })
+    expect(harness.calls.publish).toHaveLength(1)
+  })
+
+  it("fails closed when the restore boundary publishes nothing", async () => {
+    const harness = createHarness({ restoreNothing: true })
+
+    const outcome = await harness.opener.open(buildResult({
+      kind: "qa-thread",
+      threadId: "thread-1",
+      analysisRunId: "run-1",
+      transcriptFingerprint: "fp-a",
+    }))
+
+    expect(outcome).toEqual({ kind: "rejected", reason: "restored-analysis-unavailable" })
+    expect(harness.calls.openThread).toEqual([])
+    expect(harness.calls.publish).toEqual([])
+  })
+})
+
+describe("search opening generation", () => {
+  it("never publishes a slow older QA thread after a newer thread opened", async () => {
+    const harness = createHarness({ deferOpenThreads: true })
+    const shared = {
+      kind: "qa-thread" as const,
+      analysisRunId: "run-1",
+      transcriptFingerprint: "fp-a",
+    }
+
+    const openingA = harness.opener.open(buildResult({
+      ...shared,
+      id: "qa-thread:thread-a",
+      threadId: "thread-a",
+    }))
+    await flushMicrotasks()
+
+    const openingB = harness.opener.open(buildResult({
+      ...shared,
+      id: "qa-thread:thread-b",
+      threadId: "thread-b",
+    }))
+    await flushMicrotasks()
+
+    expect(harness.openThreadCallCount()).toBe(2)
+
+    // B finishes first and publishes.
+    harness.releaseOpenThread(1)
+    expect(await openingB).toEqual({ kind: "opened", surface: "ask" })
+    expect(harness.calls.publish.map((entry) => entry.threadId)).toEqual(["thread-b"])
+
+    // A finishes last and must never publish over B.
+    harness.releaseOpenThread(0)
+    expect(await openingA).toEqual({ kind: "rejected", reason: "superseded" })
+    expect(harness.calls.publish.map((entry) => entry.threadId)).toEqual(["thread-b"])
+    expect(harness.calls.surfaces).toEqual([{ surface: "ask", timestampSeconds: null }])
+  })
+
+  it("supersedes a slow transcript opening with a newer overview opening", async () => {
+    let releaseJump: (() => void) | null = null
+    const harness = createHarness({
+      currentContentKey: "youtube:video-a",
+      jump: () => new Promise((resolve) => {
+        releaseJump = () => resolve({ kind: "jumped-active" })
+      }),
+    })
+
+    const slow = harness.opener.open(buildResult({
+      kind: "current-runtime-content",
+      targetSurface: "transcript",
+      timestampSeconds: 42,
+    }))
+    await flushMicrotasks()
+
+    const fast = await harness.opener.open(buildResult({
+      kind: "current-runtime-content",
+      targetSurface: "overview",
+    }))
+    expect(fast).toEqual({ kind: "opened", surface: "overview" })
+
+    releaseJump?.()
+    expect(await slow).toEqual({ kind: "rejected", reason: "superseded" })
     expect(harness.calls.surfaces).toEqual([{ surface: "overview", timestampSeconds: null }])
   })
 })

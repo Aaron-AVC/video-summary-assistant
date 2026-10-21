@@ -101,11 +101,25 @@ export type WorkspaceHistoryPublicationRequest = {
   effects: WorkspaceHistoryPublicationEffects
 }
 
+/**
+ * Authoritative identity of an analysis that a History restore actually
+ * published. It is derived from the persisted snapshot rather than from
+ * React-rendered Workspace state, so callers can validate a restore outcome
+ * synchronously.
+ */
+export type WorkspaceRestoredAnalysisIdentity = {
+  contentKey: string
+  analysisRunId: string | null
+  transcriptFingerprint: string | null
+}
+
 export type WorkspaceHistoryPublicationResult =
   | { kind: "stale" }
   | {
       kind: "published"
       analysisPublished: boolean
+      /** Null when the restored snapshot carried no analysis. */
+      restored: WorkspaceRestoredAnalysisIdentity | null
     }
 
 /**
@@ -487,7 +501,7 @@ export class WorkspaceController {
       effects.clearAnalysis()
       effects.setAnalysisIdle()
       effects.clearAskWorkspace()
-      return { kind: "published", analysisPublished: false }
+      return { kind: "published", analysisPublished: false, restored: null }
     }
 
     effects.publishAnalysis(analysis)
@@ -499,7 +513,15 @@ export class WorkspaceController {
       transcriptFingerprint: snapshot.transcript.fingerprint,
     })
 
-    return { kind: "published", analysisPublished: true }
+    return {
+      kind: "published",
+      analysisPublished: true,
+      restored: {
+        contentKey: analysis.contentKey,
+        analysisRunId: analysis.analysisRunId,
+        transcriptFingerprint: snapshot.transcript.fingerprint,
+      },
+    }
   }
 
   /**

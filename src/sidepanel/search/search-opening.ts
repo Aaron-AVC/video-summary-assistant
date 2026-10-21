@@ -9,6 +9,18 @@ import type { SearchResult } from "@/sidepanel/search/search-controller"
 export type SearchOpeningSurface = "overview" | "transcript" | "ask"
 
 /**
+ * Authoritative identity reported by the restore boundary. Every component is
+ * read from the persisted snapshot that was actually published, never from
+ * React-rendered Workspace state, so opening a QA thread can validate the
+ * restore outcome synchronously.
+ */
+export type SearchRestoredAnalysis = {
+  contentKey: string
+  analysisRunId: string | null
+  transcriptFingerprint: string | null
+}
+
+/**
  * Pure classification of a result into the surface it must open. Current
  * runtime hits carry their own target surface; historical, knowledge and QA
  * rows always resolve to their own surface.
@@ -57,17 +69,17 @@ export type SearchOpenerThreadInput = {
 export type SearchOpenerEffects = {
   /** Canonical contentKey currently owned by the runtime bridge, or null. */
   readCurrentContentKey: () => string | null
-  /** Analysis currently published to the Workspace, or null. */
-  readDisplayedAnalysis: () => { contentKey: string; analysisRunId: string | null } | null
   /** Transcript fingerprint currently published to the Workspace. */
   readCurrentTranscriptFingerprint: () => string | null
-  /** Fingerprint of the transcript restored alongside the displayed analysis. */
-  resolveRestoredTranscriptFingerprint: () => Promise<string | null>
+  /**
+   * Restores an exact analysis run and returns the identity it actually
+   * published, or null when the restore was superseded and published nothing.
+   */
   restoreAnalysis: (input: {
     videoId: string
     contentKey: string
     analysisRunId: string
-  }) => Promise<void>
+  }) => Promise<SearchRestoredAnalysis | null>
   openThread: (input: SearchOpenerThreadInput) => Promise<AskOpenThreadResult>
   publishThread: (input: {
     threadId: string
@@ -105,62 +117,71 @@ export type SearchOpener = {
 /**
  * React-free opening policy for Search results.
  *
- * Two invariants are load-bearing:
+ * Three invariants are load-bearing:
  * 1. A current-runtime hit never touches the History restore path; it only
- *    switches the surface of the content the runtime already owns.
+ *    jumps and switches the surface of the content the runtime already owns.
  * 2. A QA thread is only published after the exact analysis run is restored
  *    and every identity component (contentKey, analysisRunId, transcript
- *    fingerprint) still matches what the result promised.
+ *    fingerprint) still matches what the result promised. Validation uses the
+ *    restore boundary's reported identity, not React-rendered state.
+ * 3. Every `open` supersedes the previous one, so a slow older request can
+ *    never publish over a newer result. The cross-video pending token follows
+ *    the same rule for queued navigations.
  */
 export function createSearchOpener(effects: SearchOpenerEffects): SearchOpener {
   let pending: PendingSearchResult | null = null
   let pendingToken = 0
+  let openSequence = 0
 
-  async function openQaThread(result: SearchResult): Promise<SearchOpeningOutcome> {
+  const isOpenCurrent = (token: number) => token === openSequence
+
+  const superseded = (): SearchOpeningOutcome => ({ kind: "rejected", reason: "superseded" })
+
+  async function openQaThread(
+    result: SearchResult,
+    token: number,
+  ): Promise<SearchOpeningOutcome> {
     const { analysisRunId } = result
 
     if (!result.threadId) return { kind: "rejected", reason: "missing-thread" }
     if (!analysisRunId) return { kind: "rejected", reason: "missing-analysis-run" }
 
-    await effects.restoreAnalysis({
+    const restored = await effects.restoreAnalysis({
       videoId: result.videoId,
       contentKey: result.contentKey,
       analysisRunId,
     })
 
-    const displayed = effects.readDisplayedAnalysis()
+    if (!isOpenCurrent(token)) return superseded()
+    if (!restored) return { kind: "rejected", reason: "restored-analysis-unavailable" }
 
-    if (displayed?.contentKey !== result.contentKey) {
+    if (restored.contentKey !== result.contentKey) {
       return { kind: "rejected", reason: "restored-content-mismatch" }
     }
 
-    if (displayed.analysisRunId !== analysisRunId) {
+    if (restored.analysisRunId !== analysisRunId) {
       return { kind: "rejected", reason: "restored-run-mismatch" }
     }
 
-    const restoredFingerprint = await effects.resolveRestoredTranscriptFingerprint()
-
-    if (restoredFingerprint !== result.transcriptFingerprint) {
+    if (restored.transcriptFingerprint !== result.transcriptFingerprint) {
       return { kind: "rejected", reason: "transcript-fingerprint-mismatch" }
     }
 
-    const isCurrent = () => {
-      const now = effects.readDisplayedAnalysis()
-
-      return (
-        now?.contentKey === result.contentKey
-        && now.analysisRunId === analysisRunId
-        && effects.readCurrentTranscriptFingerprint() === restoredFingerprint
-      )
-    }
+    const isCurrent = () => (
+      isOpenCurrent(token)
+      && effects.readCurrentContentKey() === result.contentKey
+      && effects.readCurrentTranscriptFingerprint() === restored.transcriptFingerprint
+    )
 
     const opened = await effects.openThread({
       threadId: result.threadId,
       contentKey: result.contentKey,
       analysisRunId,
-      transcriptFingerprint: restoredFingerprint,
+      transcriptFingerprint: restored.transcriptFingerprint,
       isCurrent,
     })
+
+    if (!isOpenCurrent(token)) return superseded()
 
     if (opened.kind !== "ready" || !isCurrent()) {
       return {
@@ -180,17 +201,22 @@ export function createSearchOpener(effects: SearchOpenerEffects): SearchOpener {
     return { kind: "opened", surface: "ask" }
   }
 
-  async function queueCrossVideo(result: SearchResult): Promise<SearchOpeningOutcome> {
-    const token = ++pendingToken
+  async function queueCrossVideo(
+    result: SearchResult,
+    token: number,
+  ): Promise<SearchOpeningOutcome> {
+    const requestToken = ++pendingToken
 
-    pending = { token, result }
+    pending = { token: requestToken, result }
 
     const outcome = await effects.jump(result.identity, result.timestampSeconds ?? 0)
+
+    if (!isOpenCurrent(token)) return superseded()
 
     if (outcome.kind === "missing-identity" || outcome.kind === "runtime-failure") {
       // Only the request that failed may clear the queue. A newer request that
       // replaced this one must survive an older navigation failure.
-      if (pending?.token === token) pending = null
+      if (pending?.token === requestToken) pending = null
 
       return { kind: "rejected", reason: outcome.kind }
     }
@@ -199,39 +225,64 @@ export function createSearchOpener(effects: SearchOpenerEffects): SearchOpener {
   }
 
   async function open(result: SearchResult): Promise<SearchOpeningOutcome> {
+    const token = ++openSequence
     const decision = resolveSearchOpening(result)
+
+    if (decision.kind === "current" || decision.kind === "knowledge") {
+      if (effects.readCurrentContentKey() !== result.contentKey) {
+        return queueCrossVideo(result, token)
+      }
+    }
+
+    // Every non-queued opening supersedes any pending cross-video request.
+    pending = null
+    pendingToken += 1
 
     if (decision.kind === "historical") {
       if (!result.analysisRunId) {
         return { kind: "rejected", reason: "missing-analysis-run" }
       }
 
-      await effects.restoreAnalysis({
+      const restored = await effects.restoreAnalysis({
         videoId: result.videoId,
         contentKey: result.contentKey,
         analysisRunId: result.analysisRunId,
       })
+
+      if (!isOpenCurrent(token)) return superseded()
+      if (!restored) return { kind: "rejected", reason: "restored-analysis-unavailable" }
+
       effects.showSurface("overview", null)
 
       return { kind: "opened", surface: "overview" }
     }
 
     if (decision.kind === "qa") {
-      return openQaThread(result)
-    }
-
-    if (effects.readCurrentContentKey() !== result.contentKey) {
-      return queueCrossVideo(result)
+      return openQaThread(result, token)
     }
 
     if (decision.kind === "current") {
-      effects.showSurface(decision.surface, decision.timestampSeconds)
+      if (decision.surface === "transcript" && decision.timestampSeconds !== null) {
+        // A transcript hit must move the player to the cue through the existing
+        // timestamp navigation service, then focus that cue in the panel.
+        await effects.jump(result.identity, decision.timestampSeconds)
 
-      return { kind: "opened", surface: decision.surface }
+        if (!isOpenCurrent(token)) return superseded()
+
+        effects.showSurface("transcript", decision.timestampSeconds)
+
+        return { kind: "opened", surface: "transcript" }
+      }
+
+      effects.showSurface("overview", null)
+
+      return { kind: "opened", surface: "overview" }
     }
 
     if (decision.timestampSeconds !== null) {
       await effects.jump(result.identity, decision.timestampSeconds)
+
+      if (!isOpenCurrent(token)) return superseded()
     }
 
     effects.showSurface("overview", decision.timestampSeconds)

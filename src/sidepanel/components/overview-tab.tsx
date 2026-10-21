@@ -9,6 +9,10 @@ import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
 import { DEFAULT_ANALYSIS_PRESET_ID } from "@/features/analysis/lib/analysis-preset"
 import { EmptyState } from "@/features/common/components/empty-state"
 import {
+  MarkdownExportPanel,
+  type MarkdownExportPanelProps,
+} from "@/features/export/components/markdown-export-panel"
+import {
   KnowledgePanel,
   type KnowledgePanelHandlers,
 } from "@/features/knowledge/components/knowledge-panel"
@@ -52,6 +56,7 @@ type OverviewTabProps = {
   knowledgeError?: string | null
   currentTimestamp?: number | null
   knowledgeHandlers?: KnowledgePanelHandlers
+  markdownExport?: MarkdownExportPanelProps
 }
 
 export function OverviewTab({
@@ -86,6 +91,7 @@ export function OverviewTab({
   knowledgeError = null,
   currentTimestamp = null,
   knowledgeHandlers,
+  markdownExport,
 }: OverviewTabProps) {
   const { t } = useI18n()
   const chapters = analysis?.chapters.map((chapter, index) => ({
@@ -139,6 +145,7 @@ export function OverviewTab({
           handlers={knowledgeHandlers}
         />
       ) : null}
+      {markdownExport ? <MarkdownExportPanel {...markdownExport} /> : null}
       {!isLoading && !analysis ? (
         <EmptyState
           className="border border-dashed border-border/70 bg-card/70"

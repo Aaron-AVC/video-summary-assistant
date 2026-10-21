@@ -107,6 +107,16 @@ import {
   type HistoryRestoreSnapshot,
 } from "@/sidepanel/history/history-controller"
 import { createPendingHistoryOpenAdapter } from "@/sidepanel/history/pending-history-open-adapter"
+import {
+  DEFAULT_MARKDOWN_EXPORT_SECTIONS,
+  buildMarkdownExport,
+  type MarkdownExportSections,
+} from "@/features/export/lib/markdown-export"
+import {
+  copyMarkdownExport,
+  downloadMarkdownExport,
+} from "@/features/export/lib/markdown-delivery"
+import { downloadMarkdownFile } from "@/sidepanel/lib/markdown-download"
 import { createAskController } from "@/sidepanel/ask/ask-controller"
 import { createKnowledgeController } from "@/sidepanel/knowledge/knowledge-controller"
 import {
@@ -249,6 +259,9 @@ function SidepanelWorkspace() {
     transcriptController.getSnapshot(),
   )
   const [knowledgeSnapshot, setKnowledgeSnapshot] = useState(knowledgeController.getSnapshot())
+  const [markdownExportSections, setMarkdownExportSections] = useState<MarkdownExportSections>(
+    DEFAULT_MARKDOWN_EXPORT_SECTIONS,
+  )
   const {
     cues: transcriptCues,
     identity: transcriptIdentity,
@@ -1459,6 +1472,88 @@ function SidepanelWorkspace() {
     jumpWithIdentity(knowledgeIdentity, timestampSeconds)
   ), [jumpWithIdentity, knowledgeIdentity])
 
+  /**
+   * Export is scoped to the authoritative runtime content only. The identity is
+   * re-derived from the current video context on every render, so a video switch
+   * can never keep exporting data captured from the previous video.
+   */
+  const markdownExportIdentity = (() => {
+    if (!videoContext.isReady) return null
+    const identity = identityFromContext(videoContext)
+    if (!identity) return null
+    return {
+      contentKey: identity.contentKey,
+      platform: identity.platform,
+      videoId: identity.videoId,
+      partId: identity.partId ?? null,
+    }
+  })()
+
+  const buildMarkdownExportPayload = useCallback(() => {
+    if (!markdownExportIdentity) return null
+    return buildMarkdownExport({
+      identity: markdownExportIdentity,
+      title: videoContext.title ?? analysisView?.title ?? markdownExportIdentity.contentKey,
+      canonicalUrl: videoContext.canonicalUrl ?? videoContext.url ?? null,
+      analysis: analysisView
+        ? {
+            contentKey: analysisView.contentKey,
+            analysis: analysisView.analysis,
+            analysisRunId: analysisView.analysisRunId,
+            lastAnalyzedAt: analysisView.lastAnalyzedAt,
+          }
+        : null,
+      transcript: {
+        contentKey: transcriptSnapshot.identity?.contentKey ?? null,
+        cues: transcriptCues,
+      },
+      knowledge: knowledgeSnapshot.contentKey
+        ? { contentKey: knowledgeSnapshot.contentKey, items: knowledgeSnapshot.items }
+        : null,
+      sections: markdownExportSections,
+      generatedAt: new Date().toISOString(),
+    })
+  }, [
+    analysisView,
+    knowledgeSnapshot.contentKey,
+    knowledgeSnapshot.items,
+    markdownExportIdentity,
+    markdownExportSections,
+    transcriptCues,
+    transcriptSnapshot.identity,
+    videoContext.canonicalUrl,
+    videoContext.title,
+    videoContext.url,
+  ])
+
+  const handleCopyMarkdown = useCallback(async () => {
+    const payload = buildMarkdownExportPayload()
+    if (!payload || payload.includedSections.length === 0) {
+      toast.error(t("export.empty"))
+      return
+    }
+    try {
+      await copyMarkdownExport(payload, (value) => navigator.clipboard.writeText(value))
+      toast.success(t("export.copySuccess"))
+    } catch {
+      toast.error(t("export.copyFailed"))
+    }
+  }, [buildMarkdownExportPayload, t])
+
+  const handleDownloadMarkdown = useCallback(async () => {
+    const payload = buildMarkdownExportPayload()
+    if (!payload || payload.includedSections.length === 0) {
+      toast.error(t("export.empty"))
+      return
+    }
+    try {
+      downloadMarkdownExport(payload, downloadMarkdownFile)
+      toast.success(t("toast.downloadStarted"))
+    } catch {
+      toast.error(t("export.downloadFailed"))
+    }
+  }, [buildMarkdownExportPayload, t])
+
   const handleDownload = useCallback(async () => {
     if (!rawVtt || !transcriptIdentity) {
       toast.error(t("toast.originalUnavailable"))
@@ -1594,6 +1689,13 @@ function SidepanelWorkspace() {
             currentTimestamp={Number.isFinite(videoContext.timestampSeconds)
               ? normalizeKnowledgeTimestamp(videoContext.timestampSeconds)
               : null}
+            markdownExport={{
+              isAvailable: markdownExportIdentity !== null,
+              sections: markdownExportSections,
+              onSectionsChange: setMarkdownExportSections,
+              onCopy: handleCopyMarkdown,
+              onDownload: handleDownloadMarkdown,
+            }}
             knowledgeHandlers={{
               onToggleBookmark: handleToggleKnowledgeBookmark,
               onCreateNote: handleCreateKnowledgeNote,

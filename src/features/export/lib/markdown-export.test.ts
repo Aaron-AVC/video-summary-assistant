@@ -104,6 +104,7 @@ function request(overrides: Partial<MarkdownExportRequest> = {}): MarkdownExport
   return {
     identity: YOUTUBE,
     title: "Understanding Tests",
+    author: "Test Author",
     canonicalUrl: "https://example.com/watch?v=video-abc",
     ...sources(),
     sections: DEFAULT_MARKDOWN_EXPORT_SECTIONS,
@@ -119,6 +120,7 @@ describe("markdown export formatter", () => {
     expect(result.markdown).toContain("- Platform: YouTube")
     expect(result.markdown).toContain("- Video ID: video-abc")
     expect(result.markdown).toContain("- Content key: `youtube:video-abc`")
+    expect(result.markdown).toContain("- Author: Test Author")
     expect(result.markdown).toContain("- URL: https://example.com/watch?v=video-abc")
     expect(result.markdown).not.toContain("- Part:")
   })
@@ -360,6 +362,80 @@ describe("markdown export formatter", () => {
     expect(first).toContain("[BV1test-p1]")
     expect(second).toContain("[BV1test-p2]")
     expect(first.length).toBeLessThanOrEqual(84)
+  })
+})
+
+describe("authoritative export metadata", () => {
+  const identityB: MarkdownExportIdentity = {
+    contentKey: "youtube:video-b",
+    platform: "youtube",
+    videoId: "video-b",
+    partId: null,
+  }
+
+  /** Everything displayed still belongs to the previous video `A`. */
+  const displayedA = {
+    analysis: {
+      contentKey: YOUTUBE.contentKey,
+      analysis: analysisFixture({ summary: "Video A summary." }),
+      analysisRunId: "run-a",
+      lastAnalyzedAt: null,
+    },
+    transcript: {
+      contentKey: YOUTUBE.contentKey,
+      cues: [{ startSec: 0, endSec: 1, text: "A transcript." }],
+    },
+    knowledge: {
+      contentKey: YOUTUBE.contentKey,
+      items: [knowledgeItem({ text: "A note." })],
+    },
+  }
+
+  it("falls back to the runtime identity instead of a displayed analysis title", () => {
+    const result = buildMarkdownExport({
+      identity: identityB,
+      title: null,
+      author: null,
+      canonicalUrl: null,
+      ...displayedA,
+      sections: DEFAULT_MARKDOWN_EXPORT_SECTIONS,
+    })
+
+    expect(result.markdown).toContain("# video-b")
+    expect(result.markdown).not.toContain("# Video A")
+    expect(result.markdown).not.toContain("Video A summary.")
+    expect(result.markdown).not.toContain("A transcript.")
+    expect(result.filename).toContain("[video-b]")
+  })
+
+  it("takes the author only from authoritative runtime metadata", () => {
+    const { markdown } = buildMarkdownExport({
+      identity: identityB,
+      title: null,
+      author: "Author B",
+      canonicalUrl: null,
+      ...displayedA,
+      sections: DEFAULT_MARKDOWN_EXPORT_SECTIONS,
+    })
+
+    expect(markdown).toContain("- Author: Author B")
+    expect(markdown).not.toContain("Test Author")
+  })
+
+  it("omits the author line when the runtime author is null", () => {
+    const { markdown } = buildMarkdownExport(
+      request({ author: null })
+    )
+
+    expect(markdown).not.toContain("- Author:")
+  })
+
+  it("omits the author line when the runtime author is empty", () => {
+    const { markdown } = buildMarkdownExport(
+      request({ author: "   " })
+    )
+
+    expect(markdown).not.toContain("- Author:")
   })
 })
 

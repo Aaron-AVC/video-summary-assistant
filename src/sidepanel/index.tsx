@@ -1523,7 +1523,8 @@ function SidepanelWorkspace() {
     if (!markdownExportIdentity) return null
     return buildMarkdownExport({
       identity: markdownExportIdentity,
-      title: videoContext.title ?? analysisView?.title ?? markdownExportIdentity.contentKey,
+      title: videoContext.title ?? markdownExportIdentity.videoId ?? markdownExportIdentity.contentKey,
+      author: videoContext.author ?? null,
       canonicalUrl: videoContext.canonicalUrl ?? null,
       ...markdownExportSources,
       sections: markdownExportSections,
@@ -1536,6 +1537,7 @@ function SidepanelWorkspace() {
     markdownExportSections,
     transcriptCues,
     transcriptSnapshot.identity,
+    videoContext.author,
     videoContext.canonicalUrl,
     videoContext.title,
   ])

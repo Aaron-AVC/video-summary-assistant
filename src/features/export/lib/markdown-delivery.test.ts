@@ -29,6 +29,7 @@ function productionPayload(): MarkdownExportPayload {
       partId: null,
     },
     title: "Understanding Tests",
+    author: "Test Author",
     canonicalUrl: "https://example.com/watch?v=video-abc",
     analysis: {
       contentKey: "youtube:video-abc",

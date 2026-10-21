@@ -55,7 +55,13 @@ export const DEFAULT_MARKDOWN_EXPORT_SECTIONS: MarkdownExportSections = Object.f
 
 export type MarkdownExportRequest = {
   identity: MarkdownExportIdentity
-  title: string
+  /**
+   * Authoritative runtime title only. The formatter falls back to the identity,
+   * never to a displayed analysis/history title.
+   */
+  title: string | null
+  /** Authoritative runtime author only. Never derived from another feature. */
+  author: string | null
   canonicalUrl: string | null
   analysis: MarkdownExportAnalysisSource | null
   transcript: MarkdownExportTranscriptSource | null
@@ -287,12 +293,15 @@ export function buildMarkdownExport(request: MarkdownExportRequest): MarkdownExp
   const includedSections: MarkdownExportSectionId[] = []
   const lines: string[] = []
 
-  lines.push(`# ${oneLine(request.title) || identity.contentKey}`)
+  const title = oneLine(request.title ?? "") || identity.videoId || identity.contentKey
+  lines.push(`# ${title}`)
   lines.push("")
   lines.push(`- Platform: ${platformLabel(identity.platform)}`)
   lines.push(`- Video ID: ${identity.videoId}`)
   if (identity.partId !== null) lines.push(`- Part: ${identity.partId}`)
   lines.push(`- Content key: \`${identity.contentKey}\``)
+  const author = oneLine(request.author ?? "")
+  if (author) lines.push(`- Author: ${author}`)
   if (request.canonicalUrl) lines.push(`- URL: ${oneLine(request.canonicalUrl)}`)
   lines.push("")
 
@@ -323,7 +332,7 @@ export function buildMarkdownExport(request: MarkdownExportRequest): MarkdownExp
 
   return {
     markdown,
-    filename: sanitizeMarkdownFilename(request.title, identity),
+    filename: sanitizeMarkdownFilename(request.title ?? "", identity),
     includedSections,
   }
 }

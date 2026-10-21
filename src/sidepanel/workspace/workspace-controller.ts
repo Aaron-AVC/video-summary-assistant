@@ -278,6 +278,18 @@ export class WorkspaceController {
     qaThreadId: null,
   }
 
+  /**
+   * Monotonic counter of displayed-analysis ownership changes.
+   *
+   * Every synchronous write that replaces the displayed analysis advances it,
+   * whether the write comes from a History restore commit, an ordinary
+   * analysis publication, or a rendered workspace sync. A restore captures this
+   * token when it starts and refuses to commit once it moved, which is what
+   * makes a competing non-History publication visible even though it never
+   * touches the load generation.
+   */
+  private displayGeneration = 0
+
   getSnapshot(): WorkspaceSnapshot {
     return {
       runtimeContent: { ...this.runtimeContent },
@@ -298,6 +310,16 @@ export class WorkspaceController {
   }
 
   /**
+   * Token that changes whenever the displayed analysis identity changes.
+   *
+   * Callers that are about to await a restore capture it first and re-read it
+   * in the same synchronous segment as their commit.
+   */
+  getDisplayGeneration(): number {
+    return this.displayGeneration
+  }
+
+  /**
    * Replaces the display-selection reference projection.
    *
    * This is deliberately side-effect free with respect to everything else:
@@ -306,11 +328,25 @@ export class WorkspaceController {
    * display-selection change is *not* a workspace identity transition, so
    * historical display selection may legitimately differ from the runtime
    * content.
+   *
+   * Replacing the displayed *analysis* does advance the display generation:
+   * that is the ownership signal competing publications are checked against.
+   * Changing only the selected QA thread does not.
    */
   syncDisplaySelection(
     input: WorkspaceDisplaySelection,
   ): WorkspaceDisplaySelection {
-    this.displaySelection = cloneWorkspaceDisplaySelection(input)
+    const previous = this.displaySelection.analysis
+    const next = cloneWorkspaceDisplaySelection(input)
+    const current = next.analysis
+    const analysisChanged = previous === null || current === null
+      ? previous !== current
+      : previous.contentKey !== current.contentKey
+        || previous.analysisRunId !== current.analysisRunId
+
+    this.displaySelection = next
+
+    if (analysisChanged) this.displayGeneration += 1
 
     return cloneWorkspaceDisplaySelection(this.displaySelection)
   }

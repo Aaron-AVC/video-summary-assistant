@@ -948,6 +948,17 @@ function SidepanelWorkspace() {
                     ...execution.publication,
                     errorMessage: null,
                   })
+                  // Publishing an analysis replaces the displayed analysis
+                  // without starting a workspace load. Record the selection
+                  // synchronously so an in-flight History restore sees the
+                  // ownership change instead of a stale render.
+                  workspaceController.syncDisplaySelection({
+                    analysis: {
+                      contentKey: execution.publication.contentKey,
+                      analysisRunId: execution.publication.analysisRunId,
+                    },
+                    qaThreadId: workspaceController.getDisplaySelection().qaThreadId,
+                  })
                 },
                 setAnalysisCompleted: () => {
                   setAnalysisPhase("completed")
@@ -1061,6 +1072,10 @@ function SidepanelWorkspace() {
     setAskError(null)
     setAnalysisError(null)
     const generation = workspaceController.beginLoadGeneration()
+    // Ownership of the displayed analysis, captured before any await. A
+    // competing analysis publication replaces the displayed analysis without
+    // starting a workspace load, so the load generation alone cannot see it.
+    const displayGeneration = workspaceController.getDisplayGeneration()
     let restored: WorkspaceRestoredAnalysisIdentity | null = null
     if (analysisRunId) {
       restored = await loadSavedAnalysisRun(analysisRunId, generation)
@@ -1083,9 +1098,12 @@ function SidepanelWorkspace() {
     // that check and the update in one synchronous segment.
     const committed = commitRestoredDisplaySelection({
       generation,
+      displayGeneration,
       restored,
       effects: {
         isLoadGenerationCurrent: (value) => workspaceController.isLoadGenerationCurrent(value),
+        readDisplayedAnalysis: () => workspaceController.getDisplaySelection().analysis,
+        readDisplayGeneration: () => workspaceController.getDisplayGeneration(),
         readSelectedQaThreadId: () => workspaceController.getDisplaySelection().qaThreadId,
         syncDisplaySelection: (selection) => workspaceController.syncDisplaySelection(selection),
       },

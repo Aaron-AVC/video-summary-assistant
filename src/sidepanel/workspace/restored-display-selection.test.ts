@@ -110,6 +110,8 @@ function publicationEffects(
 function commitEffects(controller: WorkspaceController) {
   return {
     isLoadGenerationCurrent: (generation: number) => controller.isLoadGenerationCurrent(generation),
+    readDisplayedAnalysis: () => controller.getDisplaySelection().analysis,
+    readDisplayGeneration: () => controller.getDisplayGeneration(),
     readSelectedQaThreadId: () => controller.getDisplaySelection().qaThreadId,
     syncDisplaySelection: (selection: Parameters<WorkspaceController["syncDisplaySelection"]>[0]) => {
       controller.syncDisplaySelection(selection)
@@ -162,15 +164,43 @@ function observe(controller: WorkspaceController, contentKey = "youtube:video-a"
   })
 }
 
+/**
+ * A competing, non-History publication. It replaces the displayed analysis
+ * without starting a workspace load, exactly like an ordinary analysis result
+ * reaching the workspace.
+ */
+async function publishCompetingAnalysis(
+  controller: WorkspaceController,
+  analysisRunId: string,
+): Promise<void> {
+  await controller.publishAnalysisResult({
+    workspaceEpoch: controller.captureEpoch(),
+    taskContentKey: "youtube:video-a",
+    currentContentKey: "youtube:video-a",
+    effects: {
+      publishAnalysis: () => {
+        controller.syncDisplaySelection({
+          analysis: { contentKey: "youtube:video-a", analysisRunId },
+          qaThreadId: controller.getDisplaySelection().qaThreadId,
+        })
+      },
+      setAnalysisCompleted: () => {},
+      restoreQaConversation: async () => {},
+    },
+  })
+}
+
 describe("commitRestoredDisplaySelection", () => {
   it("records the restored analysis identity and preserves the selected QA thread", () => {
     const controller = new WorkspaceController()
     observe(controller)
     controller.setSelectedQaThreadId("thread-existing")
     const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
 
     const committed = commitRestoredDisplaySelection({
       generation,
+      displayGeneration,
       restored: {
         contentKey: "youtube:video-a",
         analysisRunId: "run-2",
@@ -194,11 +224,13 @@ describe("commitRestoredDisplaySelection", () => {
     const controller = new WorkspaceController()
     observe(controller)
     const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
 
     controller.beginLoadGeneration()
 
     const committed = commitRestoredDisplaySelection({
       generation,
+      displayGeneration,
       restored: {
         contentKey: "youtube:video-a",
         analysisRunId: "run-1",
@@ -215,9 +247,11 @@ describe("commitRestoredDisplaySelection", () => {
     const controller = new WorkspaceController()
     observe(controller)
     const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
 
     const committed = commitRestoredDisplaySelection({
       generation,
+      displayGeneration,
       restored: null,
       effects: commitEffects(controller),
     })
@@ -231,9 +265,11 @@ describe("commitRestoredDisplaySelection", () => {
     observe(controller, "youtube:video-b")
     const before = controller.getSnapshot().runtimeContent
     const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
 
     commitRestoredDisplaySelection({
       generation,
+      displayGeneration,
       restored: {
         contentKey: "youtube:video-a",
         analysisRunId: "run-1",
@@ -245,6 +281,33 @@ describe("commitRestoredDisplaySelection", () => {
     expect(controller.getSnapshot().runtimeContent).toEqual(before)
     expect(controller.getSnapshot().runtimeContent.contentKey).toBe("youtube:video-b")
   })
+
+  it("still commits after its own publication moved the display generation", () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
+
+    // The restore publication itself becomes the displayed analysis, which
+    // advances the display generation without any competing request.
+    controller.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+      qaThreadId: null,
+    })
+
+    const committed = commitRestoredDisplaySelection({
+      generation,
+      displayGeneration,
+      restored: {
+        contentKey: "youtube:video-a",
+        analysisRunId: "run-1",
+        transcriptFingerprint: "fp-a",
+      },
+      effects: commitEffects(controller),
+    })
+
+    expect(committed?.analysisRunId).toBe("run-1")
+  })
 })
 
 describe("stale restore publication race", () => {
@@ -254,6 +317,7 @@ describe("stale restore publication race", () => {
     const gate = createDeferred()
 
     const generationA = controller.beginLoadGeneration()
+    const displayGenerationA = controller.getDisplayGeneration()
     const publishingA = controller.publishHistoryRestore({
       mode: "saved-run",
       snapshot: restoreSnapshot("run-1"),
@@ -267,6 +331,7 @@ describe("stale restore publication race", () => {
     await flushMicrotasks()
 
     const generationB = controller.beginLoadGeneration()
+    const displayGenerationB = controller.getDisplayGeneration()
     const publishedB = await controller.publishHistoryRestore({
       mode: "saved-run",
       snapshot: restoreSnapshot("run-2"),
@@ -277,6 +342,7 @@ describe("stale restore publication race", () => {
 
     const committedB = commitRestoredDisplaySelection({
       generation: generationB,
+      displayGeneration: displayGenerationB,
       restored: publishedB.kind === "published" ? publishedB.restored : null,
       effects: commitEffects(controller),
     })
@@ -289,6 +355,7 @@ describe("stale restore publication race", () => {
     const publishedA = await publishingA
     const committedA = commitRestoredDisplaySelection({
       generation: generationA,
+      displayGeneration: displayGenerationA,
       restored: publishedA.kind === "published" ? publishedA.restored : null,
       effects: commitEffects(controller),
     })
@@ -312,6 +379,7 @@ describe("stale restore publication race", () => {
       analysisRunId: string
     }) => {
       const generation = controller.beginLoadGeneration()
+      const displayGeneration = controller.getDisplayGeneration()
       const published = await controller.publishHistoryRestore({
         mode: "saved-run",
         snapshot: restoreSnapshot(input.analysisRunId),
@@ -326,6 +394,7 @@ describe("stale restore publication race", () => {
 
       return commitRestoredDisplaySelection({
         generation,
+        displayGeneration,
         restored: published.kind === "published" ? published.restored : null,
         effects: commitEffects(controller),
       })
@@ -358,6 +427,110 @@ describe("stale restore publication race", () => {
     expect(await openingA).toEqual({ kind: "rejected", reason: "superseded" })
 
     expect(publishedThreads).toEqual(["thread-b"])
+    expect(controller.getDisplaySelection().analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-2",
+    })
+  })
+})
+
+describe("competing analysis publication", () => {
+  it("never lets a history restore overwrite a competing analysis publication", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const gate = createDeferred()
+
+    const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
+    const publishing = controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot("run-1"),
+      workspaceEpoch: controller.captureEpoch(),
+      isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
+      effects: publicationEffects({
+        restoreQaConversation: () => gate.promise,
+      }),
+    })
+
+    await flushMicrotasks()
+
+    // A non-History publication replaces the displayed analysis. It never
+    // touches the load generation, so only the display generation can see it.
+    await publishCompetingAnalysis(controller, "run-2")
+
+    expect(controller.isLoadGenerationCurrent(generation)).toBe(true)
+
+    gate.resolve()
+    const published = await publishing
+    const committed = commitRestoredDisplaySelection({
+      generation,
+      displayGeneration,
+      restored: published.kind === "published" ? published.restored : null,
+      effects: commitEffects(controller),
+    })
+
+    expect(committed).toBeNull()
+    expect(controller.getDisplaySelection().analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-2",
+    })
+  })
+
+  it("never publishes a stale QA thread when a competing analysis publication wins", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const gate = createDeferred()
+    const publishedThreads: string[] = []
+
+    const restoreFor = async (input: {
+      videoId: string
+      contentKey: string
+      analysisRunId: string
+    }) => {
+      const generation = controller.beginLoadGeneration()
+      const displayGeneration = controller.getDisplayGeneration()
+      const published = await controller.publishHistoryRestore({
+        mode: "saved-run",
+        snapshot: restoreSnapshot(input.analysisRunId),
+        workspaceEpoch: controller.captureEpoch(),
+        isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
+        effects: publicationEffects({
+          restoreQaConversation: () => gate.promise,
+        }),
+      })
+
+      return commitRestoredDisplaySelection({
+        generation,
+        displayGeneration,
+        restored: published.kind === "published" ? published.restored : null,
+        effects: commitEffects(controller),
+      })
+    }
+
+    const opener = createSearchOpener({
+      readCurrentContentKey: () => "youtube:video-a",
+      readDisplayedAnalysis: () => controller.getDisplaySelection().analysis,
+      readCurrentTranscriptFingerprint: () => "fp-a",
+      restoreAnalysis: restoreFor,
+      openThread: async (input) => ({
+        kind: "ready",
+        thread: { threadId: input.threadId, messages: [], answer: null },
+      }),
+      publishThread: (input) => {
+        publishedThreads.push(input.threadId)
+      },
+      jump: async () => ({ kind: "jumped-active" }),
+      showSurface: () => {},
+    })
+
+    const openingA = opener.open(qaResult("thread-a", "run-1"))
+    await flushMicrotasks()
+
+    await publishCompetingAnalysis(controller, "run-2")
+    gate.resolve()
+
+    expect(await openingA).toEqual({ kind: "rejected", reason: "restored-analysis-unavailable" })
+    expect(publishedThreads).toEqual([])
     expect(controller.getDisplaySelection().analysis).toEqual({
       contentKey: "youtube:video-a",
       analysisRunId: "run-2",

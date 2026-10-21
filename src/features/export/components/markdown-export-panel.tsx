@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type {
+  MarkdownExportAvailability,
   MarkdownExportSectionId,
   MarkdownExportSections,
 } from "@/features/export/lib/markdown-export"
@@ -13,6 +14,12 @@ import { useI18n } from "@/lib/i18n/i18n-provider"
 export type MarkdownExportPanelProps = {
   /** False while no authoritative runtime identity is available. */
   isAvailable: boolean
+  /**
+   * Per-section availability derived from the authoritative runtime
+   * `contentKey`. A section from a stale source stays disabled, so a video
+   * switch can never leave a stale section exportable.
+   */
+  availability: MarkdownExportAvailability
   sections: MarkdownExportSections
   onSectionsChange: (sections: MarkdownExportSections) => void
   onCopy: () => void | Promise<void>
@@ -24,6 +31,7 @@ const SECTION_IDS: MarkdownExportSectionId[] = ["analysis", "transcript", "knowl
 
 export function MarkdownExportPanel({
   isAvailable,
+  availability,
   sections,
   onSectionsChange,
   onCopy,
@@ -34,8 +42,12 @@ export function MarkdownExportPanel({
   const [localBusy, setLocalBusy] = useState(false)
 
   const selected = SECTION_IDS.filter((sectionId) => sections[sectionId])
+  const exportable = SECTION_IDS.filter(
+    (sectionId) => sections[sectionId] && availability[sectionId]
+  )
+  const hasAvailableSection = SECTION_IDS.some((sectionId) => availability[sectionId])
   const busy = isBusy || localBusy
-  const disabled = !isAvailable || busy || selected.length === 0
+  const disabled = !isAvailable || busy || exportable.length === 0
 
   const run = async (action: () => void | Promise<void>) => {
     if (busy) return
@@ -79,6 +91,7 @@ export function MarkdownExportPanel({
                   <ToggleGroupItem
                     key={sectionId}
                     value={sectionId}
+                    disabled={!availability[sectionId]}
                     aria-label={t(`export.section.${sectionId}`)}
                   >
                     {t(`export.section.${sectionId}`)}
@@ -86,6 +99,11 @@ export function MarkdownExportPanel({
                 ))}
               </ToggleGroup>
             </div>
+            {hasAvailableSection ? null : (
+              <p className="text-xs text-muted-foreground">
+                {t("export.noAvailableSections")}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"

@@ -54,6 +54,7 @@ export const zhCN = {
   "export.copyFailed": "复制 Markdown 失败，请检查剪贴板权限后重试。",
   "export.downloadFailed": "下载 Markdown 失败。",
   "export.empty": "请至少选择一个有可用内容的分区。",
+  "export.noAvailableSections": "所选分区在当前视频中没有可导出的内容。",
   "knowledge.title": "书签与笔记",
   "knowledge.description": "仅保存在本地，无需提供商或分析结果。",
   "knowledge.bookmarkCurrent": "收藏当前时间",

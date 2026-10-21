@@ -249,6 +249,7 @@ export const en = {
   "export.copyFailed": "Could not copy Markdown. Check clipboard access and try again.",
   "export.downloadFailed": "Could not download Markdown.",
   "export.empty": "Select at least one section with available data.",
+  "export.noAvailableSections": "No selected section has content for this video.",
   "knowledge.title": "Bookmarks and notes",
   "knowledge.description": "Saved locally for this video. No provider or analysis is required.",
   "knowledge.bookmarkCurrent": "Bookmark current time",

@@ -110,6 +110,7 @@ import { createPendingHistoryOpenAdapter } from "@/sidepanel/history/pending-his
 import {
   DEFAULT_MARKDOWN_EXPORT_SECTIONS,
   buildMarkdownExport,
+  resolveMarkdownExportAvailability,
   type MarkdownExportSections,
 } from "@/features/export/lib/markdown-export"
 import {
@@ -1489,29 +1490,43 @@ function SidepanelWorkspace() {
     }
   })()
 
+  /**
+   * Export sources are rebuilt from the same authoritative runtime identity on
+   * every render, so availability and payload can never drift apart.
+   */
+  const markdownExportSources = {
+    analysis: analysisView
+      ? {
+          contentKey: analysisView.contentKey,
+          analysis: analysisView.analysis,
+          analysisRunId: analysisView.analysisRunId,
+          lastAnalyzedAt: analysisView.lastAnalyzedAt,
+        }
+      : null,
+    transcript: {
+      contentKey: transcriptSnapshot.identity?.contentKey ?? null,
+      cues: transcriptCues,
+    },
+    knowledge: knowledgeSnapshot.contentKey
+      ? { contentKey: knowledgeSnapshot.contentKey, items: knowledgeSnapshot.items }
+      : null,
+  }
+
+  const markdownExportAvailability = markdownExportIdentity
+    ? resolveMarkdownExportAvailability({
+        identity: markdownExportIdentity,
+        ...markdownExportSources,
+      })
+    : { analysis: false, transcript: false, knowledge: false }
+
   const buildMarkdownExportPayload = useCallback(() => {
     if (!markdownExportIdentity) return null
     return buildMarkdownExport({
       identity: markdownExportIdentity,
       title: videoContext.title ?? analysisView?.title ?? markdownExportIdentity.contentKey,
-      canonicalUrl: videoContext.canonicalUrl ?? videoContext.url ?? null,
-      analysis: analysisView
-        ? {
-            contentKey: analysisView.contentKey,
-            analysis: analysisView.analysis,
-            analysisRunId: analysisView.analysisRunId,
-            lastAnalyzedAt: analysisView.lastAnalyzedAt,
-          }
-        : null,
-      transcript: {
-        contentKey: transcriptSnapshot.identity?.contentKey ?? null,
-        cues: transcriptCues,
-      },
-      knowledge: knowledgeSnapshot.contentKey
-        ? { contentKey: knowledgeSnapshot.contentKey, items: knowledgeSnapshot.items }
-        : null,
+      canonicalUrl: videoContext.canonicalUrl ?? null,
+      ...markdownExportSources,
       sections: markdownExportSections,
-      generatedAt: new Date().toISOString(),
     })
   }, [
     analysisView,
@@ -1523,7 +1538,6 @@ function SidepanelWorkspace() {
     transcriptSnapshot.identity,
     videoContext.canonicalUrl,
     videoContext.title,
-    videoContext.url,
   ])
 
   const handleCopyMarkdown = useCallback(async () => {
@@ -1691,6 +1705,7 @@ function SidepanelWorkspace() {
               : null}
             markdownExport={{
               isAvailable: markdownExportIdentity !== null,
+              availability: markdownExportAvailability,
               sections: markdownExportSections,
               onSectionsChange: setMarkdownExportSections,
               onCopy: handleCopyMarkdown,

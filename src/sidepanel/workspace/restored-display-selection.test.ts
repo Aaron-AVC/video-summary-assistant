@@ -322,6 +322,7 @@ describe("stale restore publication race", () => {
       mode: "saved-run",
       snapshot: restoreSnapshot("run-1"),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => controller.isLoadGenerationCurrent(generationA),
       effects: publicationEffects({
         restoreQaConversation: () => gate.promise,
@@ -336,6 +337,7 @@ describe("stale restore publication race", () => {
       mode: "saved-run",
       snapshot: restoreSnapshot("run-2"),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => controller.isLoadGenerationCurrent(generationB),
       effects: publicationEffects(),
     })
@@ -384,6 +386,7 @@ describe("stale restore publication race", () => {
         mode: "saved-run",
         snapshot: restoreSnapshot(input.analysisRunId),
         workspaceEpoch: controller.captureEpoch(),
+        displayGeneration: controller.getDisplayGeneration(),
         isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
         effects: publicationEffects({
           restoreQaConversation: input.analysisRunId === "run-1"
@@ -446,6 +449,7 @@ describe("competing analysis publication", () => {
       mode: "saved-run",
       snapshot: restoreSnapshot("run-1"),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
       effects: publicationEffects({
         restoreQaConversation: () => gate.promise,
@@ -493,6 +497,7 @@ describe("competing analysis publication", () => {
         mode: "saved-run",
         snapshot: restoreSnapshot(input.analysisRunId),
         workspaceEpoch: controller.captureEpoch(),
+        displayGeneration: controller.getDisplayGeneration(),
         isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
         effects: publicationEffects({
           restoreQaConversation: () => gate.promise,

@@ -30,10 +30,11 @@ export type CommitRestoredDisplaySelectionInput = {
  * Publishes a completed history restore as the displayed analysis selection.
  *
  * A restore can finish long after a newer workspace load already began, and
- * `publishHistoryRestore` deliberately does not re-check currentness once it
- * has started (there is no rollback). The restore result alone is therefore not
- * evidence that the request is still current: publishing it would overwrite a
- * newer selection and invalidate the newer Search opening.
+ * `publishHistoryRestore` has no rollback: effects it already applied stay
+ * applied even when a newer owner took the display while the restore was
+ * awaiting. The restore result alone is therefore not evidence that the request
+ * is still current: publishing it would overwrite a newer selection and
+ * invalidate the newer Search opening.
  *
  * Two independent ownership signals are checked:
  * 1. The load generation, which every History load and destructive mutation

@@ -19,6 +19,12 @@ type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<
 type OpenAICompatibleClientOptions = {
   fetchImpl?: FetchLike
   timeoutMs?: number
+  /**
+   * Injected timer implementations. A scheduled handle is opaque (`unknown`) and is only
+   * released by the matching `clearTimeoutImpl`; without one the handle stays owned by the
+   * injected scheduler. When both are omitted the native setTimeout/clearTimeout pair is used
+   * directly, so native handles never need to cross the opaque-handle boundary.
+   */
   setTimeoutImpl?: (callback: () => void, timeoutMs: number) => unknown
   clearTimeoutImpl?: (handle: unknown) => void
 }
@@ -94,9 +100,8 @@ function createRequestSignal(
 ) {
   const controller = new AbortController()
   let timedOut = false
-  let timeoutHandle: unknown
-  const setTimeoutImpl = timers.setTimeoutImpl ?? setTimeout
-  const clearTimeoutImpl = timers.clearTimeoutImpl ?? clearTimeout
+  let cancelTimeout: (() => void) | undefined
+  const { setTimeoutImpl, clearTimeoutImpl } = timers
 
   const abortFromParent = () => controller.abort(parentSignal?.reason)
   if (parentSignal) {
@@ -105,18 +110,33 @@ function createRequestSignal(
   }
 
   if (!controller.signal.aborted && Number.isFinite(timeoutMs) && timeoutMs > 0) {
-    timeoutHandle = setTimeoutImpl(() => {
+    const onTimeout = () => {
       if (controller.signal.aborted) return
       timedOut = true
       controller.abort()
-    }, timeoutMs)
+    }
+    if (setTimeoutImpl) {
+      const handle = setTimeoutImpl(onTimeout, timeoutMs)
+      // 注入的句柄是不透明的：只有配套的 clearTimeoutImpl 才能释放它。
+      // 只注入 setTimeoutImpl 时回退为不清除（把句柄的所有权留给注入的调度器），
+      // 与不把未知句柄交给原生 clearTimeout 的既有语义一致。
+      if (handle !== undefined && clearTimeoutImpl) {
+        cancelTimeout = () => clearTimeoutImpl(handle)
+      }
+    } else {
+      // 原生定时器对各自使用自然类型（Timeout | number），不需要经过 unknown 边界。
+      const handle = setTimeout(onTimeout, timeoutMs)
+      cancelTimeout = clearTimeoutImpl
+        ? () => clearTimeoutImpl(handle)
+        : () => clearTimeout(handle)
+    }
   }
 
   return {
     signal: controller.signal,
     didTimeout: () => timedOut,
     cleanup: () => {
-      if (timeoutHandle !== undefined) clearTimeoutImpl(timeoutHandle)
+      cancelTimeout?.()
       parentSignal?.removeEventListener("abort", abortFromParent)
     },
   }

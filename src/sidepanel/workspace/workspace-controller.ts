@@ -80,10 +80,20 @@ export type WorkspaceHistoryPublicationEffects = {
 
   clearAskWorkspace: () => void
 
+  /**
+   * Restores the QA conversation for the analysis this publication just
+   * displayed.
+   *
+   * `isCurrent` is the publication boundary's own ownership predicate. The
+   * root must consult it immediately before writing Ask state, because the Ask
+   * workspace write cannot be rolled back and this await can outlive the
+   * display ownership it was started under.
+   */
   restoreQaConversation: (input: {
     contentKey: string
     analysisRunId: string | null
     transcriptFingerprint: string | null
+    isCurrent: () => boolean
   }) => Promise<void>
 }
 
@@ -97,6 +107,18 @@ export type WorkspaceHistoryPublicationRequest = {
 
   /** The caller's existing request generation / currentness predicate. */
   isRequestCurrent: () => boolean
+
+  /**
+   * Display generation captured when this restore started.
+   *
+   * `isRequestCurrent` observes workspace loads, but an ordinary analysis
+   * publication replaces the displayed analysis *without* starting a load, so
+   * the load generation cannot see it. The display generation is the only
+   * signal that does. It must be captured at the start of the whole restore
+   * (before the History load awaits), not inside this command, so a competing
+   * publication that lands during the load is still caught.
+   */
+  displayGeneration: number
 
   effects: WorkspaceHistoryPublicationEffects
 }
@@ -192,7 +214,16 @@ export type WorkspaceAnalysisTranscriptPublicationEffects = {
 export type WorkspaceAnalysisResultPublicationEffects = {
   publishAnalysis: () => void
   setAnalysisCompleted: () => void
-  restoreQaConversation: () => Promise<void>
+
+  /**
+   * Restores the QA conversation for the analysis this publication installed.
+   *
+   * `isCurrent` reports whether the analysis this publication displayed still
+   * owns the display. The root must consult it immediately before writing Ask
+   * state: the QA write cannot be rolled back, and a later analysis publication
+   * can replace the display while this await is pending.
+   */
+  restoreQaConversation: (input: { isCurrent: () => boolean }) => Promise<void>
 }
 
 export type WorkspaceAnalysisCancelledPublicationEffects = {
@@ -492,12 +523,24 @@ export class WorkspaceController {
    * Runs the History restore publication/reset sequence for an already-loaded
    * historical snapshot.
    *
-   * The stale decision is made exactly once, before any side effect, from the
-   * captured workspace epoch plus the caller's existing request-generation
-   * predicate. No further currentness check happens once publication starts:
-   * runtime/generation invalidation independently resets feature state if the
-   * workspace changes while `restoreQaConversation` is awaiting, so this
-   * command deliberately has no transactional rollback semantics.
+   * The stale decision is made before any side effect from three signals: the
+   * captured workspace epoch, the caller's request-generation predicate, and
+   * the captured display generation. The display generation is what makes a
+   * competing analysis publication observable: such a publication replaces the
+   * displayed analysis without starting a workspace load, so neither the epoch
+   * nor the load generation can see it.
+   *
+   * The synchronous analysis write is safe to place before the QA await: no
+   * other publication can interleave between the boundary check and that write.
+   * The QA restore is different — it awaits, so display ownership can be lost
+   * while it is pending, and the Ask workspace write it performs cannot be
+   * rolled back. The effect therefore receives the display-ownership predicate
+   * and the root must consult it immediately before writing Ask state. The
+   * command
+   * itself still reports what it published: once publication has started there
+   * is no rollback, so re-checking here would only relabel an already-applied
+   * write. Refusing the stale identity is the display commit's job, which
+   * re-reads the display generation before it hands one back.
    *
    * Historical publication is display selection, not a new authoritative
    * runtime video: `runtimeContent` is never mutated here, and the historical
@@ -513,9 +556,38 @@ export class WorkspaceController {
   async publishHistoryRestore(
     request: WorkspaceHistoryPublicationRequest,
   ): Promise<WorkspaceHistoryPublicationResult> {
-    const { mode, snapshot, workspaceEpoch, isRequestCurrent, effects } = request
+    const {
+      mode,
+      snapshot,
+      workspaceEpoch,
+      isRequestCurrent,
+      displayGeneration,
+      effects,
+    } = request
 
-    if (!this.isEpochCurrent(workspaceEpoch) || !isRequestCurrent()) {
+    const analysis = snapshot.analysis
+
+    // A restore publishes its analysis view synchronously, and the next render
+    // records that same identity through `syncDisplaySelection`, which advances
+    // the display generation for its own write. Treating that as a competing
+    // owner would reject the QA restore of every legitimate History open, so a
+    // display that already shows exactly this analysis still counts as owned.
+    const isDisplayedAnalysis = () => {
+      const displayed = this.displaySelection.analysis
+      return displayed !== null
+        && displayed.contentKey === analysis?.contentKey
+        && displayed.analysisRunId === analysis?.analysisRunId
+    }
+    const isDisplayOwned = () => (
+      this.getDisplayGeneration() === displayGeneration || isDisplayedAnalysis()
+    )
+    const isOwnershipCurrent = () => (
+      this.isEpochCurrent(workspaceEpoch)
+      && isRequestCurrent()
+      && isDisplayOwned()
+    )
+
+    if (!isOwnershipCurrent()) {
       return { kind: "stale" }
     }
 
@@ -531,8 +603,6 @@ export class WorkspaceController {
       effects.clearTranscriptError()
     }
 
-    const analysis = snapshot.analysis
-
     if (!analysis) {
       effects.clearAnalysis()
       effects.setAnalysisIdle()
@@ -547,6 +617,10 @@ export class WorkspaceController {
       contentKey: analysis.contentKey,
       analysisRunId: analysis.analysisRunId,
       transcriptFingerprint: snapshot.transcript.fingerprint,
+      // Display ownership only: the epoch and the caller's request generation
+      // were decided once at the boundary above, and the root already composes
+      // this predicate with its own load-generation check.
+      isCurrent: isDisplayOwned,
     })
 
     return {
@@ -633,7 +707,11 @@ export class WorkspaceController {
    * Publishes a completed analysis result, shared by the cache-hit and the
    * fresh-completion paths because the workspace policy is identical.
    *
-   * The decision is made exactly once, before any effect. A rejection from
+   * The eligibility decision is made once, before any effect. The analysis view
+   * write is synchronous and cannot be interleaved with another publication, so
+   * it always belongs to this publication. The QA restore awaits, so it can
+   * outlive that ownership; the effect receives the display-ownership predicate
+   * and the root must consult it before writing Ask state. A rejection from
    * `restoreQaConversation` propagates unchanged after the earlier effects ran;
    * they are deliberately not rolled back.
    */
@@ -647,7 +725,15 @@ export class WorkspaceController {
 
     effects.publishAnalysis()
     effects.setAnalysisCompleted()
-    await effects.restoreQaConversation()
+
+    // `publishAnalysis` installs this analysis as the displayed one, so the
+    // display generation it leaves behind is this publication's ownership
+    // token. A later publication advances it again, which is how a QA restore
+    // that outlives its own display can detect that it is no longer the owner.
+    const ownedDisplayGeneration = this.getDisplayGeneration()
+    const isCurrent = () => this.getDisplayGeneration() === ownedDisplayGeneration
+
+    await effects.restoreQaConversation({ isCurrent })
 
     return { kind: "published" }
   }

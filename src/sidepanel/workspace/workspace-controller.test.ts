@@ -378,6 +378,7 @@ type QaRestoreInput = {
   contentKey: string
   analysisRunId: string | null
   transcriptFingerprint: string | null
+  isCurrent: () => boolean
 }
 
 type EffectsRecorder = {
@@ -530,6 +531,7 @@ describe("WorkspaceController publishHistoryRestore stale decisions", () => {
       mode: "legacy-video",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: staleEpoch,
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -547,6 +549,7 @@ describe("WorkspaceController publishHistoryRestore stale decisions", () => {
       mode: "saved-run",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => false,
       effects: recorder.effects,
     })
@@ -569,6 +572,7 @@ describe("WorkspaceController publishHistoryRestore stale decisions", () => {
       mode: "saved-run",
       snapshot: historical,
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -578,6 +582,7 @@ describe("WorkspaceController publishHistoryRestore stale decisions", () => {
       contentKey: "bilibili:other-video",
       analysisRunId: "run-9",
       transcriptFingerprint: "fp-other",
+      isCurrent: expect.any(Function),
     }])
     expect(runtimeContentOf(controller).contentKey).toBe("youtube:video-a")
   })
@@ -592,6 +597,7 @@ describe("WorkspaceController publishHistoryRestore stale decisions", () => {
       mode: "current-context",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -610,6 +616,7 @@ describe("WorkspaceController publishHistoryRestore no-analysis publication", ()
       mode: "legacy-video",
       snapshot: restoreSnapshot({ analysis: null }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -636,6 +643,7 @@ describe("WorkspaceController publishHistoryRestore no-analysis publication", ()
       mode: "current-context",
       snapshot: restoreSnapshot({ analysis: null }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -661,6 +669,7 @@ describe("WorkspaceController publishHistoryRestore analysis publication", () =>
       mode: "legacy-video",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -684,6 +693,7 @@ describe("WorkspaceController publishHistoryRestore analysis publication", () =>
       mode: "current-context",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -707,6 +717,7 @@ describe("WorkspaceController publishHistoryRestore analysis publication", () =>
       mode: "saved-run",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -742,6 +753,7 @@ describe("WorkspaceController publishHistoryRestore publication payloads", () =>
       mode: "legacy-video",
       snapshot: restoreSnapshot({ transcript }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -769,6 +781,7 @@ describe("WorkspaceController publishHistoryRestore publication payloads", () =>
         transcript: transcriptSnapshot({ fingerprint: "fp-transcript-authoritative" }),
       }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -777,6 +790,7 @@ describe("WorkspaceController publishHistoryRestore publication payloads", () =>
       contentKey: "youtube:analysis-content-key",
       analysisRunId: "run-analysis",
       transcriptFingerprint: "fp-transcript-authoritative",
+      isCurrent: expect.any(Function),
     }])
   })
 
@@ -790,6 +804,7 @@ describe("WorkspaceController publishHistoryRestore publication payloads", () =>
       mode: "saved-run",
       snapshot: restoreSnapshot({ analysis }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -819,6 +834,7 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
       mode: "saved-run",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: failingEffects,
     })).rejects.toBe(failure)
@@ -842,6 +858,7 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
       mode: "legacy-video",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => {
         requestChecks += 1
         return true
@@ -878,6 +895,7 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
       mode: "legacy-video",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => {
         requestChecks += 1
         return true
@@ -909,6 +927,7 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
       mode: "current-context",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: captured,
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })
@@ -934,6 +953,7 @@ describe("WorkspaceController publishHistoryRestore failure and timing semantics
       mode: "saved-run",
       snapshot: restoreSnapshot({ analysis: analysisSnapshot() }),
       workspaceEpoch: captured,
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => true,
       effects: recorder.effects,
     })

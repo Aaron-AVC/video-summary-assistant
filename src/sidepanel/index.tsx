@@ -364,8 +364,12 @@ function SidepanelWorkspace() {
     analysisRunId: string | null | undefined,
     generation: number,
     transcriptFingerprint?: string | null,
+    isPublicationCurrent?: () => boolean,
   ) => {
-    const isCurrent = () => workspaceController.isLoadGenerationCurrent(generation)
+    const isCurrent = () => (
+      workspaceController.isLoadGenerationCurrent(generation)
+      && (isPublicationCurrent === undefined || isPublicationCurrent())
+    )
     const result = await askController.restoreConversation({
       contentKey,
       analysisRunId,
@@ -386,11 +390,13 @@ function SidepanelWorkspace() {
     snapshot,
     workspaceEpoch,
     generation,
+    displayGeneration,
   }: {
     mode: WorkspaceHistoryRestoreMode
     snapshot: HistoryRestoreSnapshot
     workspaceEpoch: number
     generation: number
+    displayGeneration: number
   }) => {
     const isRequestCurrent = () => workspaceController.isLoadGenerationCurrent(generation)
     return workspaceController.publishHistoryRestore({
@@ -398,6 +404,7 @@ function SidepanelWorkspace() {
       snapshot,
       workspaceEpoch,
       isRequestCurrent,
+      displayGeneration,
       effects: {
         publishTranscript: (publication) => publishTranscript(publication),
         clearTranscriptError: () => transcriptController.setError(null),
@@ -411,6 +418,7 @@ function SidepanelWorkspace() {
           input.analysisRunId,
           generation,
           input.transcriptFingerprint,
+          input.isCurrent,
         ),
       },
     })
@@ -573,7 +581,11 @@ function SidepanelWorkspace() {
     })
   }, [analysisTaskController, askTaskController, applyMutation])
 
-  const loadSavedAnalysis = useCallback(async (videoId: string, generation: number) => {
+  const loadSavedAnalysis = useCallback(async (
+    videoId: string,
+    generation: number,
+    displayGeneration: number,
+  ) => {
     const workspaceEpoch = workspaceController.captureEpoch()
     const isRestoreCurrent = () => (
       workspaceController.isLoadGenerationCurrent(generation)
@@ -591,6 +603,7 @@ function SidepanelWorkspace() {
         snapshot: result.snapshot,
         workspaceEpoch,
         generation,
+        displayGeneration,
       })
       return publication.kind === "published" ? publication.restored : null
     } finally {
@@ -603,6 +616,7 @@ function SidepanelWorkspace() {
   const loadSavedAnalysisForContext = useCallback(async (
     context: ActiveVideoContext,
     generation: number,
+    displayGeneration: number,
   ) => {
     if (!context.contentKey || !context.videoId || !context.platform) return
     const workspaceEpoch = workspaceController.captureEpoch()
@@ -629,6 +643,7 @@ function SidepanelWorkspace() {
         snapshot: result.snapshot,
         workspaceEpoch,
         generation,
+        displayGeneration,
       })
       return publication.kind === "published" ? publication.restored : null
     } finally {
@@ -636,7 +651,11 @@ function SidepanelWorkspace() {
     }
   }, [historyController, publishHistoryRestore, workspaceController])
 
-  const loadSavedAnalysisRun = useCallback(async (analysisRunId: string, generation: number) => {
+  const loadSavedAnalysisRun = useCallback(async (
+    analysisRunId: string,
+    generation: number,
+    displayGeneration: number,
+  ) => {
     const workspaceEpoch = workspaceController.captureEpoch()
     const isRestoreCurrent = () => (
       workspaceController.isLoadGenerationCurrent(generation)
@@ -654,6 +673,7 @@ function SidepanelWorkspace() {
         snapshot: result.snapshot,
         workspaceEpoch,
         generation,
+        displayGeneration,
       })
       return publication.kind === "published" ? publication.restored : null
     } finally {
@@ -663,6 +683,7 @@ function SidepanelWorkspace() {
 
   const loadWorkspace = useCallback(async () => {
     const generation = workspaceController.beginLoadGeneration()
+    const displayGenerationAtLoadStart = workspaceController.getDisplayGeneration()
     setIsBootstrapping(true)
     try {
       const [providerConfigs, recent, persistedPresetId] = await Promise.all([
@@ -677,7 +698,11 @@ function SidepanelWorkspace() {
       setAnalysisPresetId(persistedPresetId)
 
       if (videoContext.platform && videoContext.videoId && videoContext.contentKey) {
-        await loadSavedAnalysisForContext(videoContext, generation)
+        await loadSavedAnalysisForContext(
+          videoContext,
+          generation,
+          displayGenerationAtLoadStart,
+        )
       }
     } finally {
       if (workspaceController.isLoadGenerationCurrent(generation)) {
@@ -965,12 +990,13 @@ function SidepanelWorkspace() {
                 setAnalysisCompleted: () => {
                   setAnalysisPhase("completed")
                 },
-                restoreQaConversation: async () => {
+                restoreQaConversation: async (input) => {
                   await restoreQaConversation(
                     execution.publication.contentKey,
                     execution.publication.analysisRunId,
                     workspaceController.captureLoadGeneration(),
                     execution.publication.transcriptFingerprint,
+                    input.isCurrent,
                   )
                 },
               },
@@ -992,12 +1018,13 @@ function SidepanelWorkspace() {
               setAnalysisCompleted: () => {
                 setAnalysisPhase("completed")
               },
-              restoreQaConversation: async () => {
+              restoreQaConversation: async (input) => {
                 await restoreQaConversation(
                   execution.publication.contentKey,
                   execution.publication.analysisRunId,
                   workspaceController.captureLoadGeneration(),
                   execution.publication.transcriptFingerprint,
+                  input.isCurrent,
                 )
               },
             },
@@ -1077,7 +1104,7 @@ function SidepanelWorkspace() {
     const displayGeneration = workspaceController.getDisplayGeneration()
     let restored: WorkspaceRestoredAnalysisIdentity | null = null
     if (analysisRunId) {
-      restored = await loadSavedAnalysisRun(analysisRunId, generation)
+      restored = await loadSavedAnalysisRun(analysisRunId, generation, displayGeneration)
     } else if (contentKey) {
       const current = videoContextRef.current
       restored = await loadSavedAnalysisForContext({
@@ -1086,9 +1113,9 @@ function SidepanelWorkspace() {
         contentKey,
         platform: contentKey.startsWith("bilibili:") ? "bilibili" : "youtube",
         partId: contentKey.startsWith("bilibili:") ? contentKey.split(":p:")[1] ?? null : null,
-      }, generation)
+      }, generation, displayGeneration)
     } else {
-      restored = await loadSavedAnalysis(videoId, generation)
+      restored = await loadSavedAnalysis(videoId, generation, displayGeneration)
     }
     // A finished restore is not proof that this request is still current: the
     // publication boundary permits a newer load to start while an older one is

@@ -167,6 +167,7 @@ function observe(controller: WorkspaceController): void {
 async function publishProductionAnalysis(
   controller: WorkspaceController,
   publication: AnalysisExecutionPublication,
+  restoreQaConversation: (input: { isCurrent: () => boolean }) => Promise<void> = async () => {},
 ): Promise<(AnalysisExecutionPublication & { errorMessage: null })[]> {
   const published: (AnalysisExecutionPublication & { errorMessage: null })[] = []
   await controller.publishAnalysisResult({
@@ -186,7 +187,7 @@ async function publishProductionAnalysis(
         })
       },
       setAnalysisCompleted: () => {},
-      restoreQaConversation: async () => {},
+      restoreQaConversation,
     },
   })
 
@@ -296,6 +297,7 @@ describe("history restore versus production analysis publication", () => {
       mode: "saved-run",
       snapshot: restoreSnapshot("run-1"),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
       effects: publicationEffects({
         restoreQaConversation: () => gate.promise,
@@ -337,6 +339,7 @@ describe("history restore versus production analysis publication", () => {
       mode: "saved-run",
       snapshot: restoreSnapshot("run-1"),
       workspaceEpoch: controller.captureEpoch(),
+      displayGeneration: controller.getDisplayGeneration(),
       isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
       effects: publicationEffects({
         restoreQaConversation: () => gate.promise,
@@ -382,6 +385,7 @@ describe("history restore versus production analysis publication", () => {
         mode: "saved-run",
         snapshot: restoreSnapshot(input.analysisRunId),
         workspaceEpoch: controller.captureEpoch(),
+        displayGeneration: controller.getDisplayGeneration(),
         isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
         effects: publicationEffects({
           restoreQaConversation: () => gate.promise,
@@ -419,6 +423,260 @@ describe("history restore versus production analysis publication", () => {
     gate.resolve()
 
     expect(await openingA).toEqual({ kind: "rejected", reason: "restored-analysis-unavailable" })
+    expect(publishedThreads).toEqual([])
+    expect(controller.getDisplaySelection().analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-2",
+    })
+  })
+
+  it("reports a restore as stale when a competing publication landed during the history load", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+
+    // The restore captures display ownership before its History load awaits.
+    const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
+
+    // A cached/fresh analysis publication lands while that load is pending. It
+    // replaces the displayed analysis without advancing the load generation.
+    await publishProductionAnalysis(controller, publicationFor("run-2"))
+    expect(controller.isLoadGenerationCurrent(generation)).toBe(true)
+
+    let qaRestores = 0
+    const analysisWrites: string[] = []
+    const result = await controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot("run-1"),
+      workspaceEpoch: controller.captureEpoch(),
+      displayGeneration,
+      isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
+      effects: publicationEffects({
+        publishAnalysis: (analysis) => {
+          analysisWrites.push(analysis.analysisRunId)
+        },
+        restoreQaConversation: async () => {
+          qaRestores += 1
+        },
+      }),
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    // The restore must not write the older analysis view at all: that write is
+    // not rolled back, so it would leave the panel showing run-1 while the
+    // display selection names run-2.
+    expect(analysisWrites).toEqual([])
+    expect(qaRestores).toBe(0)
+    expect(controller.getDisplaySelection().analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-2",
+    })
+  })
+
+  it("does not let a restore commit when a competing publication lands during its QA restore", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const gate = createDeferred()
+
+    const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
+    const publishing = controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot("run-1"),
+      workspaceEpoch: controller.captureEpoch(),
+      displayGeneration,
+      isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
+      effects: publicationEffects({
+        restoreQaConversation: () => gate.promise,
+      }),
+    })
+
+    await flushMicrotasks()
+    await publishProductionAnalysis(controller, publicationFor("run-2"))
+    gate.resolve()
+    const published = await publishing
+
+    // The publication boundary is the pre-publication check, so the restore
+    // itself still reports what it wrote. The display commit is the later
+    // guard: it captured the display generation before the restore started and
+    // must refuse to hand back an identity that a newer publication replaced.
+    const committed = commitRestoredDisplaySelection({
+      generation,
+      displayGeneration,
+      restored: published.kind === "published" ? published.restored : null,
+      effects: {
+        isLoadGenerationCurrent: (value) => controller.isLoadGenerationCurrent(value),
+        readDisplayedAnalysis: () => controller.getDisplaySelection().analysis,
+        readDisplayGeneration: () => controller.getDisplayGeneration(),
+        readSelectedQaThreadId: () => controller.getDisplaySelection().qaThreadId,
+        syncDisplaySelection: (selection) => controller.syncDisplaySelection(selection),
+      },
+    })
+
+    expect(committed).toBeNull()
+    expect(controller.getDisplaySelection().analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-2",
+    })
+  })
+
+  it("keeps the QA restore owned when the render sync records the restored analysis", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const gate = createDeferred()
+    let isCurrentAfterRenderSync: boolean | null = null
+
+    const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
+    const publishing = controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot("run-1"),
+      workspaceEpoch: controller.captureEpoch(),
+      displayGeneration,
+      isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
+      effects: publicationEffects({
+        restoreQaConversation: async (input) => {
+          // The restore published run-1 synchronously; the next render records
+          // that same identity, which advances the display generation for its
+          // own write. That must not be mistaken for a competing owner.
+          controller.syncDisplaySelection({
+            analysis: { contentKey: "youtube:video-a", analysisRunId: "run-1" },
+            qaThreadId: null,
+          })
+          await gate.promise
+          isCurrentAfterRenderSync = input.isCurrent()
+        },
+      }),
+    })
+
+    await flushMicrotasks()
+    gate.resolve()
+    expect(await publishing).toEqual({
+      kind: "published",
+      analysisPublished: true,
+      restored: {
+        contentKey: "youtube:video-a",
+        analysisRunId: "run-1",
+        transcriptFingerprint: "fp-a",
+      },
+    })
+    expect(isCurrentAfterRenderSync).toBe(true)
+  })
+
+  it("lets the root refuse the QA write once display ownership is lost mid-restore", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const gate = createDeferred()
+    let isCurrentAtStart: boolean | null = null
+    let isCurrentAfterCompetingPublication: boolean | null = null
+    let capturedIsCurrent: (() => boolean) | null = null
+
+    const generation = controller.beginLoadGeneration()
+    const displayGeneration = controller.getDisplayGeneration()
+    const publishing = controller.publishHistoryRestore({
+      mode: "saved-run",
+      snapshot: restoreSnapshot("run-1"),
+      workspaceEpoch: controller.captureEpoch(),
+      displayGeneration,
+      isRequestCurrent: () => controller.isLoadGenerationCurrent(generation),
+      effects: publicationEffects({
+        restoreQaConversation: async (input) => {
+          capturedIsCurrent = input.isCurrent
+          isCurrentAtStart = input.isCurrent()
+          await gate.promise
+          isCurrentAfterCompetingPublication = input.isCurrent()
+        },
+      }),
+    })
+
+    await flushMicrotasks()
+    expect(isCurrentAtStart).toBe(true)
+
+    await publishProductionAnalysis(controller, publicationFor("run-2"))
+    gate.resolve()
+    await publishing
+
+    // The Ask workspace write cannot be rolled back, so the root must see the
+    // loss of display ownership at the moment it is about to write.
+    expect(capturedIsCurrent).not.toBeNull()
+    expect(isCurrentAfterCompetingPublication).toBe(false)
+  })
+
+  it("never publishes a QA thread from an older analysis under a newer one", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const gate = createDeferred()
+    const publishedThreads: string[] = []
+
+    // The first completion reaches its QA restore while it still owns the
+    // display, then stalls there.
+    const first = publishProductionAnalysis(
+      controller,
+      publicationFor("run-1"),
+      async (input) => {
+        await gate.promise
+        if (!input.isCurrent()) return
+        publishedThreads.push("thread-run-1")
+      },
+    )
+
+    await flushMicrotasks()
+
+    // A second completion publishes run-2 while run-1's QA restore is pending.
+    await publishProductionAnalysis(
+      controller,
+      publicationFor("run-2"),
+      async (input) => {
+        if (!input.isCurrent()) return
+        publishedThreads.push("thread-run-2")
+      },
+    )
+
+    gate.resolve()
+    await first
+
+    expect(publishedThreads).toEqual(["thread-run-2"])
+    expect(controller.getDisplaySelection().analysis).toEqual({
+      contentKey: "youtube:video-a",
+      analysisRunId: "run-2",
+    })
+  })
+
+  it("refuses the QA write when a later publication took the display during its QA restore", async () => {
+    const controller = new WorkspaceController()
+    observe(controller)
+    const gate = createDeferred()
+    const publishedThreads: string[] = []
+
+    const first = controller.publishAnalysisResult({
+      workspaceEpoch: controller.captureEpoch(),
+      taskContentKey: "youtube:video-a",
+      currentContentKey: "youtube:video-a",
+      effects: {
+        publishAnalysis: () => {
+          publishCompletedAnalysis(publicationFor("run-1"), {
+            publishAnalysisView: () => {},
+            readSelectedQaThreadId: () => controller.getDisplaySelection().qaThreadId,
+            syncDisplaySelection: (selection) => controller.syncDisplaySelection(selection),
+          })
+        },
+        setAnalysisCompleted: () => {},
+        restoreQaConversation: async (input) => {
+          await gate.promise
+          if (!input.isCurrent()) return
+          publishedThreads.push("thread-run-1")
+        },
+      },
+    })
+
+    await flushMicrotasks()
+    await publishProductionAnalysis(controller, publicationFor("run-2"))
+    gate.resolve()
+    await first
+
+    // The publication boundary fired before the race, so the completion itself
+    // is reported as published. What must never happen is the Ask write: run-1's
+    // thread would otherwise sit under run-2's analysis.
     expect(publishedThreads).toEqual([])
     expect(controller.getDisplaySelection().analysis).toEqual({
       contentKey: "youtube:video-a",

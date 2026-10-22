@@ -53,6 +53,7 @@ export const zhCN = {
   "export.copySuccess": "Markdown 已复制到剪贴板。",
   "export.copyFailed": "复制 Markdown 失败，请检查剪贴板权限后重试。",
   "export.downloadFailed": "下载 Markdown 失败。",
+  "export.downloadSuccess": "已开始下载 Markdown。",
   "export.empty": "请至少选择一个有可用内容的分区。",
   "export.noAvailableSections": "所选分区在当前视频中没有可导出的内容。",
   "knowledge.title": "书签与笔记",

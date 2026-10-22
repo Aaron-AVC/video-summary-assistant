@@ -260,6 +260,7 @@ export const en = {
   "export.copySuccess": "Markdown copied to the clipboard.",
   "export.copyFailed": "Could not copy Markdown. Check clipboard access and try again.",
   "export.downloadFailed": "Could not download Markdown.",
+  "export.downloadSuccess": "Markdown download started.",
   "export.empty": "Select at least one section with available data.",
   "export.noAvailableSections": "No selected section has content for this video.",
   "knowledge.title": "Bookmarks and notes",

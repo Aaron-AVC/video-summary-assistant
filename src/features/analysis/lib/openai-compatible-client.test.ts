@@ -526,6 +526,24 @@ describe("provider transport boundaries", () => {
     expect(fetchCount).toBe(1)
   })
 
+  it("leaves an injected timeout handle with its own scheduler when no clearTimeoutImpl is supplied", async () => {
+    const timers = createManualTimers()
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://timeout.example/v1",
+      apiKey: "sk-timeout-sentinel",
+      model: "manual-model",
+    }, {
+      setTimeoutImpl: timers.setTimeoutImpl,
+      fetchImpl: async () => new Response(JSON.stringify({
+        choices: [{ message: { content: "ok" } }]
+      }), { status: 200 })
+    })
+
+    await expect(client.createChatCompletion({ messages: [{ role: "user", content: "hi" }] })).resolves.toBe("ok")
+    // 只注入 setTimeoutImpl 时，句柄所有权留在注入的调度器，不会交给原生 clearTimeout。
+    expect(timers.scheduledTimeouts()).toEqual([DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS])
+  })
+
   it("supports the explicit per-request timeout override", async () => {
     let scheduledTimeoutMs = 0
     const client = createOpenAICompatibleClient({

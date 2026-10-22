@@ -1,6 +1,6 @@
 # Persistence and Cache
 
-This document describes the current V1 persistence contract. It is a behavior
+This document describes the current V1.1 persistence contract. It is a behavior
 guide, not a copy of the implementation.
 
 ## Database and compatibility identifiers
@@ -55,11 +55,20 @@ optimization cache.
 
 `knowledgeItems` stores user-authored bookmarks and notes keyed by `id` and
 indexed by `contentKey`. `contentKey` is the authoritative identity, so a
-Bilibili P1 bookmark and a P2 bookmark never collapse into one collection. A
-bookmark is a point anchor (`startSec === endSec`, no text); a note carries
-trimmed text and either no anchor at all or a complete range. `analysisRunId`
-exists for future analysis-bound annotations and is always `null` in the current
-UI. Knowledge does not require a Provider, an analysis, or a transcript.
+Bilibili P1 bookmark and a P2 bookmark never collapse into one collection.
+
+A bookmark is a point anchor (`startSec === endSec`, no text). The current UI
+creates a note either with no anchor at all or with a point anchor at the
+current playback position; it has no editor for choosing arbitrary start and
+end times. The persisted schema and the Markdown export also accept a complete
+range (`startSec` and `endSec` both set, `endSec >= startSec`), but that is a
+storage and export capability, not something a user can author through the
+current interface. Do not read the range support in the schema as a promise
+that range notes are creatable.
+
+`analysisRunId` exists for future analysis-bound annotations and is always
+`null` in the current UI. Knowledge does not require a Provider, an analysis, or
+a transcript.
 
 ## Analysis cache identity
 
@@ -75,6 +84,11 @@ An analysis cache identity includes:
 It deliberately excludes API keys, Authorization/Bearer values, display
 names, and `generatedAt` timestamps. A cache row is used only after persisted
 schema validation. Corrupt or incomplete rows are cache misses.
+
+The effective prompt version carries the Analysis preset. Standard keeps the
+pre-preset prompt identity, while Concise and Detailed each append their own
+suffix, so two presets never share an analysis cache identity and a cache hit
+written under one preset is never served for another.
 
 ## Generate, Regenerate, and history
 

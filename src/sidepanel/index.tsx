@@ -1774,7 +1774,7 @@ function SidepanelWorkspace() {
     }
     try {
       downloadMarkdownExport(payload, downloadMarkdownFile)
-      toast.success(t("toast.downloadStarted"))
+      toast.success(t("export.downloadSuccess"))
     } catch {
       toast.error(t("export.downloadFailed"))
     }

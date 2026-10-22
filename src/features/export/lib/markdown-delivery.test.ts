@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test"
+import { readFileSync } from "node:fs"
 
 import {
   copyMarkdownExport,
@@ -133,5 +134,39 @@ describe("markdown export delivery", () => {
         throw failure
       })
     ).rejects.toBe(failure)
+  })
+})
+
+/**
+ * Download success copy is per-flow: the Markdown export reports its own
+ * message, while the Transcript/VTT download keeps the transcript wording.
+ * Both handlers are closures inside the side panel component, so the split is
+ * pinned against the production source instead of a rendered panel.
+ */
+describe("download success toast keys", () => {
+  const sidePanelSource = readFileSync(
+    new URL("../../../sidepanel/index.tsx", import.meta.url),
+    "utf8",
+  )
+
+  function callbackBody(handler: string): string {
+    const start = sidePanelSource.indexOf(`const ${handler} = useCallback(`)
+    expect(start).toBeGreaterThanOrEqual(0)
+    const end = sidePanelSource.indexOf("\n  const ", start + 1)
+    return sidePanelSource.slice(start, end === -1 ? undefined : end)
+  }
+
+  it("reports the markdown-specific success key for Markdown download", () => {
+    const body = callbackBody("handleDownloadMarkdown")
+
+    expect(body).toContain('t("export.downloadSuccess")')
+    expect(body).not.toContain('t("toast.downloadStarted")')
+  })
+
+  it("keeps the transcript success key for the VTT download", () => {
+    const body = callbackBody("handleDownload")
+
+    expect(body).toContain('t("toast.downloadStarted")')
+    expect(body).not.toContain('t("export.downloadSuccess")')
   })
 })

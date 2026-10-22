@@ -32,6 +32,21 @@ describe("i18n", () => {
     expect(translate("zh-CN", "data.currentInventory", { count: 3 })).toContain("3")
   })
 
+  it("resolves download success copy for the issuing flow", () => {
+    expect(translate("en", "export.downloadSuccess")).toBe("Markdown download started.")
+    expect(translate("zh-CN", "export.downloadSuccess")).toBe("已开始下载 Markdown。")
+    expect(translate("en", "toast.downloadStarted")).toBe("Transcript download started.")
+    expect(translate("zh-CN", "toast.downloadStarted")).toBe("已开始下载转录。")
+  })
+
+  it("never lets the markdown and transcript success copy collapse together", () => {
+    for (const locale of ["en", "zh-CN"] as const) {
+      expect(translate(locale, "export.downloadSuccess")).not.toBe(
+        translate(locale, "toast.downloadStarted"),
+      )
+    }
+  })
+
   it("applies the normal initial preference load", async () => {
     const updates: string[] = []
     const synchronizer = createI18nPreferenceSynchronizer({

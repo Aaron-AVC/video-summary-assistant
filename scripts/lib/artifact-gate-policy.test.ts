@@ -11,6 +11,7 @@ import {
   classifyTargetType,
   describeTimeout,
   extractExtensionId,
+  findUnsafeManifestPath,
   isApplicationMounted,
   isBenignBrowserNoise,
   isSafeArtifactRelativePath,
@@ -18,6 +19,7 @@ import {
   planCleanup,
   resolveArtifactPath,
   resolveBackgroundScriptPath,
+  resolveExtensionPagePath,
   selectExtensionTargets,
   toExceptionRecord,
   validateChromePath,
@@ -85,21 +87,24 @@ describe("manifest path resolution", () => {
     expect(resolveBackgroundScriptPath(none)).toBeNull()
   })
 
-  it("refuses to resolve an unsafe background path", () => {
-    const manifest = parseArtifactManifest({
-      ...VALID_MANIFEST,
-      background: { service_worker: "../../evil.js" },
-    })!
-    expect(resolveBackgroundScriptPath(manifest)).toBeNull()
+  it("refuses to parse a manifest with an unsafe background path", () => {
+    const raw = { ...VALID_MANIFEST, background: { service_worker: "../../evil.js" } }
+    const manifest = parseArtifactManifest(raw)
+    expect(manifest).toBeNull()
+    expect(findUnsafeManifestPath(raw)).toEqual({
+      field: "background.service_worker",
+      value: "../../evil.js",
+    })
   })
 
-  it("drops unsafe page paths instead of propagating them", () => {
-    const manifest = parseArtifactManifest({
-      ...VALID_MANIFEST,
-      side_panel: { default_path: "../escape.html" },
-    })!
-    expect(manifest.sidePanelPath).toBe("../escape.html")
-    expect(manifest.pages).toEqual(["options.html"])
+  it("refuses to parse a manifest with an unsafe page path instead of propagating it", () => {
+    const raw = { ...VALID_MANIFEST, side_panel: { default_path: "../escape.html" } }
+    const manifest = parseArtifactManifest(raw)
+    expect(manifest).toBeNull()
+    expect(findUnsafeManifestPath(raw)).toEqual({
+      field: "side_panel.default_path",
+      value: "../escape.html",
+    })
   })
 
   it("resolves the artifact path against the workspace root", () => {
@@ -118,6 +123,80 @@ describe("manifest path resolution", () => {
       resolve: (...segments) => segments.join("/"),
     })
     expect(fallback).toBe(`/workspace/${DEFAULT_ARTIFACT_DIR}`)
+  })
+})
+
+describe("page path containment", () => {
+  // Every declared page path is a future `join(artifactDir, path)` argument, so
+  // containment has to be enforced at parse time, not at use time.
+  const unsafePaths = [
+    ["/absolute.html", "absolute POSIX path"],
+    ["\\absolute.html", "absolute backslash path"],
+    ["C:\\Windows\\escape.html", "drive-qualified path"],
+    ["c:/escape.html", "drive-qualified path with forward slashes"],
+    ["../escape.html", "single parent traversal"],
+    ["../../escape.html", "nested parent traversal"],
+    ["nested/../../escape.html", "traversal hidden behind a segment"],
+    ["nested\\..\\..\\escape.html", "traversal with backslashes"],
+  ] as const
+
+  it("accepts valid side panel and options pages", () => {
+    expect(resolveExtensionPagePath("sidepanel.html")).toBe("sidepanel.html")
+    expect(resolveExtensionPagePath("options.html")).toBe("options.html")
+    expect(resolveExtensionPagePath("nested/panel.html")).toBe("nested/panel.html")
+    expect(resolveExtensionPagePath(null)).toBeNull()
+
+    const manifest = parseArtifactManifest(VALID_MANIFEST)
+    expect(manifest).not.toBeNull()
+    expect(manifest!.sidePanelPath).toBe("sidepanel.html")
+    expect(manifest!.optionsPath).toBe("options.html")
+  })
+
+  for (const [path, label] of unsafePaths) {
+    it(`fails the preflight for a ${label} side panel path`, () => {
+      expect(resolveExtensionPagePath(path)).toBeNull()
+      const raw = { ...VALID_MANIFEST, side_panel: { default_path: path } }
+      expect(parseArtifactManifest(raw)).toBeNull()
+      expect(findUnsafeManifestPath(raw)).toEqual({ field: "side_panel.default_path", value: path })
+    })
+
+    it(`fails the preflight for a ${label} options path`, () => {
+      expect(resolveExtensionPagePath(path)).toBeNull()
+      const raw = { ...VALID_MANIFEST, options_ui: { page: path } }
+      expect(parseArtifactManifest(raw)).toBeNull()
+      expect(findUnsafeManifestPath(raw)).toEqual({ field: "options_ui.page", value: path })
+    })
+  }
+
+  it("reports no unsafe path for a fully safe manifest", () => {
+    expect(findUnsafeManifestPath(VALID_MANIFEST)).toBeNull()
+    expect(findUnsafeManifestPath(null)).toBeNull()
+    expect(findUnsafeManifestPath([])).toBeNull()
+  })
+
+  it("treats an empty declared path as unusable rather than as a usable page", () => {
+    // An empty path is rejected by `resolveExtensionPagePath`; the manifest parse
+    // then leaves the field null so the preflight fails with "does not declare".
+    expect(resolveExtensionPagePath("")).toBeNull()
+    expect(resolveExtensionPagePath("   ")).toBeNull()
+
+    const manifest = parseArtifactManifest({
+      ...VALID_MANIFEST,
+      side_panel: { default_path: "" },
+    })
+    expect(manifest).not.toBeNull()
+    expect(manifest!.sidePanelPath).toBeNull()
+    expect(manifest!.pages).toEqual(["options.html"])
+  })
+
+  it("never keeps a raw unsafe path on the parsed manifest", () => {
+    // Regression guard for the reported defect: an unsafe path must not survive
+    // in `sidePanelPath`/`optionsPath` while merely being dropped from `pages`.
+    const manifest = parseArtifactManifest({
+      ...VALID_MANIFEST,
+      side_panel: { default_path: "../escape.html" },
+    })
+    expect(manifest).toBeNull()
   })
 })
 

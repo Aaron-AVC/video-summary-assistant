@@ -27,6 +27,7 @@ import {
   classifyFatalMessage,
   describeTimeout,
   extractExtensionId,
+  findUnsafeManifestPath,
   isApplicationMounted,
   parseArtifactManifest,
   planCleanup,
@@ -141,6 +142,15 @@ function assertArtifactReady(artifactDir: string): ArtifactManifest {
 
   const manifest = parseArtifactManifest(rawManifest)
   if (!manifest) {
+    // Distinguish "escape attempt" from "just not MV3" so the failure is actionable.
+    const unsafePath = findUnsafeManifestPath(rawManifest)
+    if (unsafePath) {
+      fail(
+        "preflight",
+        `Manifest declares an unsafe ${unsafePath.field} path: ${JSON.stringify(unsafePath.value)}`,
+        "Extension page paths must stay inside the artifact directory (no absolute, drive-qualified or `..` traversal paths).",
+      )
+    }
     fail("preflight", `Manifest at ${manifestPath} is not a usable Manifest V3 extension.`)
   }
 
@@ -373,6 +383,10 @@ function printExceptionReport(collector: ExceptionCollector): void {
  * is the real extension URL navigated. Attaching after `Target.createTarget(url)`
  * would race the bundle's first evaluation and could miss the very module
  * evaluation failure this gate exists to catch.
+ *
+ * The returned `stop` detaches this page's listeners from the shared collector.
+ * Callers must invoke it when the stage ends so a later stage cannot inherit the
+ * earlier page's console noise; already-recorded exceptions are kept.
  */
 async function openExtensionPage(
   connection: CdpConnection,
@@ -380,7 +394,7 @@ async function openExtensionPage(
   collector: ExceptionCollector,
   label: string,
   stage: "sidePanel" | "options",
-): Promise<string> {
+): Promise<{ sessionId: string; stop: () => void }> {
   const created = await connection.send("Target.createTarget", { url: "about:blank" })
   const targetId = created.result?.targetId
   if (typeof targetId !== "string") {
@@ -404,7 +418,7 @@ async function openExtensionPage(
     stop()
     fail(stage, `Navigation to ${url} failed: ${errorText}`)
   }
-  return sessionId
+  return { sessionId, stop }
 }
 
 async function drain(stream: ReadableStream<Uint8Array> | number | null | undefined): Promise<void> {
@@ -640,29 +654,38 @@ async function runGate(options: CliOptions): Promise<GateResult> {
     }
 
     // ---- Gate B: Side Panel production page --------------------------------
-    const sidePanelPath = manifest.sidePanelPath!.replace(/^\/+/, "")
+    const sidePanelPath = manifest.sidePanelPath!
     const sidePanelUrl = `chrome-extension://${extensionId}/${sidePanelPath}`
     {
-      const sessionId = await openExtensionPage(connection, sidePanelUrl, collector, "sidepanel", "sidePanel")
-      await waitForMount(connection, sessionId, "sidePanel", "Side Panel", collector)
-      await stabilityWindow()
-      if (collector.hasFatal) {
-        fail("sidePanel", "Side Panel production bundle raised an uncaught runtime exception.")
+      const page = await openExtensionPage(connection, sidePanelUrl, collector, "sidepanel", "sidePanel")
+      try {
+        await waitForMount(connection, page.sessionId, "sidePanel", "Side Panel", collector)
+        await stabilityWindow()
+        if (collector.hasFatal) {
+          fail("sidePanel", "Side Panel production bundle raised an uncaught runtime exception.")
+        }
+        console.log("[PASS] Side Panel production bundle mounted")
+      } finally {
+        // Release this page's listeners: a later stage must not inherit them.
+        page.stop()
       }
-      console.log("[PASS] Side Panel production bundle mounted")
     }
 
     // ---- Gate C: Options production page -----------------------------------
-    const optionsPath = manifest.optionsPath!.replace(/^\/+/, "")
+    const optionsPath = manifest.optionsPath!
     const optionsUrl = `chrome-extension://${extensionId}/${optionsPath}`
     {
-      const sessionId = await openExtensionPage(connection, optionsUrl, collector, "options", "options")
-      await waitForMount(connection, sessionId, "options", "Options", collector)
-      await stabilityWindow()
-      if (collector.hasFatal) {
-        fail("options", "Options production bundle raised an uncaught runtime exception.")
+      const page = await openExtensionPage(connection, optionsUrl, collector, "options", "options")
+      try {
+        await waitForMount(connection, page.sessionId, "options", "Options", collector)
+        await stabilityWindow()
+        if (collector.hasFatal) {
+          fail("options", "Options production bundle raised an uncaught runtime exception.")
+        }
+        console.log("[PASS] Options production bundle mounted")
+      } finally {
+        page.stop()
       }
-      console.log("[PASS] Options production bundle mounted")
     }
 
     if (collector.hasFatal) {

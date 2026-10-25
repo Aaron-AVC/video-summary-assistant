@@ -108,10 +108,66 @@ export function isSafeArtifactRelativePath(value: string): boolean {
 }
 
 /**
+ * Validate one manifest-declared path into a safe artifact-relative path.
+ *
+ * Returns null for anything that could escape the artifact root: empty values,
+ * absolute POSIX paths, Windows drive-qualified paths, and any `..` traversal.
+ * Callers must treat null as a hard preflight failure; they must never fall back
+ * to the raw manifest string, because the only consumer is
+ * `join(artifactDir, path)`.
+ */
+export function resolveExtensionPagePath(value: string | null): string | null {
+  if (value === null) return null
+  const trimmed = value.trim()
+  if (!isSafeArtifactRelativePath(trimmed)) return null
+  return trimmed
+}
+
+export type UnsafeManifestPath = { field: string; value: string }
+
+/**
+ * Locate the first manifest-declared path that cannot be contained inside the
+ * artifact root.
+ *
+ * `parseArtifactManifest` returns null for such manifests; this helper recovers
+ * which field was responsible so the preflight can print an actionable error
+ * instead of a generic "unusable manifest".
+ */
+export function findUnsafeManifestPath(raw: unknown): UnsafeManifestPath | null {
+  if (!isRecord(raw)) return null
+
+  const background = isRecord(raw.background) ? raw.background : null
+  const candidates: UnsafeManifestPath[] = []
+  const declared: Array<[string, string | null]> = [
+    ["background.service_worker", asString(background?.service_worker)],
+    ["background.page", asString(background?.page)],
+    [
+      "side_panel.default_path",
+      isRecord(raw.side_panel) ? asString(raw.side_panel.default_path) : null,
+    ],
+    ["options_ui.page", isRecord(raw.options_ui) ? asString(raw.options_ui.page) : null],
+  ]
+
+  for (const [field, value] of declared) {
+    if (value !== null && resolveExtensionPagePath(value) === null) {
+      candidates.push({ field, value })
+    }
+  }
+
+  return candidates[0] ?? null
+}
+
+/**
  * Parse the parts of a manifest the gate depends on.
  *
  * Returns null for structurally unusable manifests so the caller can fail the
  * preflight with a precise message instead of crashing mid-run.
+ *
+ * Every declared path is validated here, before it is stored. An unsafe page
+ * path makes the whole manifest unusable: retaining the raw string would let a
+ * later `join(artifactDir, path)` escape the artifact root, and dropping it from
+ * `pages` while keeping it in `sidePanelPath`/`optionsPath` only hides the
+ * problem.
  */
 export function parseArtifactManifest(raw: unknown): ArtifactManifest | null {
   if (!isRecord(raw)) return null
@@ -119,15 +175,26 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest | null {
   if (typeof raw.name !== "string" || raw.name.length === 0) return null
 
   const background = isRecord(raw.background) ? raw.background : null
-  const backgroundServiceWorker = asString(background?.service_worker)
-  const backgroundPage = asString(background?.page)
+  const rawServiceWorker = asString(background?.service_worker)
+  const rawBackgroundPage = asString(background?.page)
+  const rawSidePanel = isRecord(raw.side_panel) ? asString(raw.side_panel.default_path) : null
+  const rawOptionsUi = isRecord(raw.options_ui) ? asString(raw.options_ui.page) : null
 
-  const sidePanel = isRecord(raw.side_panel) ? asString(raw.side_panel.default_path) : null
-  const optionsUi = isRecord(raw.options_ui) ? asString(raw.options_ui.page) : null
+  const backgroundServiceWorker = resolveExtensionPagePath(rawServiceWorker)
+  const backgroundPage = resolveExtensionPagePath(rawBackgroundPage)
+  const sidePanel = resolveExtensionPagePath(rawSidePanel)
+  const optionsUi = resolveExtensionPagePath(rawOptionsUi)
+
+  const unsafe =
+    (rawServiceWorker !== null && backgroundServiceWorker === null) ||
+    (rawBackgroundPage !== null && backgroundPage === null) ||
+    (rawSidePanel !== null && sidePanel === null) ||
+    (rawOptionsUi !== null && optionsUi === null)
+  if (unsafe) return null
 
   const pages: string[] = []
   for (const candidate of [sidePanel, optionsUi]) {
-    if (candidate && isSafeArtifactRelativePath(candidate) && !pages.includes(candidate)) {
+    if (candidate && !pages.includes(candidate)) {
       pages.push(candidate)
     }
   }
@@ -143,12 +210,15 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest | null {
   }
 }
 
-/** Resolve the manifest-declared background script to a workspace-relative path. */
+/**
+ * Resolve the manifest-declared background script to a safe relative path.
+ *
+ * Delegates to `resolveExtensionPagePath` so background, Side Panel and Options
+ * pages all go through exactly one containment rule.
+ */
 export function resolveBackgroundScriptPath(manifest: ArtifactManifest): string | null {
   const script = manifest.backgroundServiceWorker ?? manifest.backgroundPage
-  if (!script) return null
-  if (!isSafeArtifactRelativePath(script)) return null
-  return script
+  return resolveExtensionPagePath(script)
 }
 
 /** Classify a CDP target type into the coarse buckets the gate reasons about. */

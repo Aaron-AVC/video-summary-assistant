@@ -6,83 +6,150 @@
  * the verifier against the copy. The gate MUST fail and MUST surface the
  * injected marker. The real artifact is never modified.
  *
+ * Every failure path runs inside `withControlDir`, so the throwaway copy is
+ * removed by a `finally` no matter how the run ends. No helper calls
+ * `process.exit()`: failures propagate as `NegativeControlError` and only `main`
+ * decides the exit code.
+ *
  * Usage: bun scripts/negative-control-artifact-gate.ts
  */
 
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
-const MARKER = "RG01_NEGATIVE_CONTROL"
-const WORKSPACE_ROOT = resolve(import.meta.dir, "..")
-const SOURCE_ARTIFACT = join(WORKSPACE_ROOT, "build", "chrome-mv3-prod")
-const CONTROL_DIR = join(WORKSPACE_ROOT, ".buntmp", "rg01-negative-extension")
+export const MARKER = "RG01_NEGATIVE_CONTROL"
+export const WORKSPACE_ROOT = resolve(import.meta.dir, "..")
+export const SOURCE_ARTIFACT = join(WORKSPACE_ROOT, "build", "chrome-mv3-prod")
+export const CONTROL_DIR = join(WORKSPACE_ROOT, ".buntmp", "rg01-negative-extension")
 
-function fail(message: string): never {
-  console.error(`NEGATIVE CONTROL ERROR: ${message}`)
-  process.exit(2)
+/** Raised for every expected failure so cleanup runs and `main` owns the exit code. */
+export class NegativeControlError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "NegativeControlError"
+  }
 }
 
-if (!existsSync(SOURCE_ARTIFACT)) {
-  fail(`missing ${SOURCE_ARTIFACT}; run \`bun run build\` first`)
+export type ControlDirOptions = {
+  sourceDir?: string
+  controlDir?: string
 }
 
-rmSync(CONTROL_DIR, { recursive: true, force: true })
-cpSync(SOURCE_ARTIFACT, CONTROL_DIR, { recursive: true })
+/**
+ * Copy the production artifact to the throwaway directory and remove it again
+ * whatever the body does.
+ *
+ * A throw in `body` (missing Chrome, spawn crash, unexpected verdict, even an
+ * unrelated exception) still hits the `finally`, so `.buntmp/rg01-negative-extension`
+ * can never be left behind.
+ */
+export function withControlDir<T>(
+  body: (controlDir: string) => T,
+  options: ControlDirOptions = {},
+): T {
+  const sourceDir = options.sourceDir ?? SOURCE_ARTIFACT
+  const controlDir = options.controlDir ?? CONTROL_DIR
 
-// Find the Side Panel bundle the way the browser does: from the built HTML.
-const sidePanelHtml = readFileSync(join(CONTROL_DIR, "sidepanel.html"), "utf8")
-const scriptMatch = sidePanelHtml.match(/<script[^>]+src="([^"]+)"/)
-if (!scriptMatch) fail("sidepanel.html does not reference a script bundle")
+  if (!existsSync(sourceDir)) {
+    throw new NegativeControlError(`missing ${sourceDir}; run \`bun run build\` first`)
+  }
 
-const scriptSrc = scriptMatch[1].replace(/^\//, "")
-const bundlePath = join(CONTROL_DIR, scriptSrc)
-if (!existsSync(bundlePath)) fail(`side panel bundle not found: ${scriptSrc}`)
-
-// Prepend a throw so module evaluation fails before React can mount.
-const original = readFileSync(bundlePath, "utf8")
-writeFileSync(bundlePath, `throw new Error("${MARKER}");\n${original}`, "utf8")
-console.log(`Injected module-evaluation failure into ${scriptSrc}`)
-
-const chromePath = process.env.VSA_CHROME_PATH
-if (!chromePath) {
-  fail("VSA_CHROME_PATH is not set")
+  rmSync(controlDir, { recursive: true, force: true })
+  cpSync(sourceDir, controlDir, { recursive: true })
+  try {
+    return body(controlDir)
+  } finally {
+    rmSync(controlDir, { recursive: true, force: true })
+  }
 }
 
-const result = Bun.spawnSync(
-  [
-    process.execPath,
-    join(WORKSPACE_ROOT, "scripts", "verify-build-artifact.ts"),
-    "--artifact",
-    ".buntmp/rg01-negative-extension",
-  ],
-  {
-    cwd: WORKSPACE_ROOT,
-    env: { ...process.env, VSA_CHROME_PATH: chromePath },
-    stdout: "pipe",
-    stderr: "pipe",
-  },
-)
+/** Prepend a deterministic module-evaluation failure to the Side Panel bundle. */
+export function injectSidePanelFailure(controlDir: string): string {
+  const htmlPath = join(controlDir, "sidepanel.html")
+  if (!existsSync(htmlPath)) {
+    throw new NegativeControlError(`missing ${htmlPath}`)
+  }
 
-const stdout = result.stdout.toString()
-const stderr = result.stderr.toString()
-const combined = `${stdout}\n${stderr}`
+  // Find the bundle the way the browser does: from the built HTML.
+  const scriptMatch = readFileSync(htmlPath, "utf8").match(/<script[^>]+src="([^"]+)"/)
+  if (!scriptMatch) {
+    throw new NegativeControlError("sidepanel.html does not reference a script bundle")
+  }
 
-console.log("--- verifier output ---")
-console.log(combined.trim())
-console.log("--- end ---")
-console.log(`exit code: ${result.exitCode}`)
+  const scriptSrc = scriptMatch[1].replace(/^\//, "")
+  const bundlePath = join(controlDir, scriptSrc)
+  if (!existsSync(bundlePath)) {
+    throw new NegativeControlError(`side panel bundle not found: ${scriptSrc}`)
+  }
 
-let failed = false
-if (result.exitCode === 0) {
-  console.error("NEGATIVE CONTROL FAIL: verifier exited 0 on a broken artifact")
-  failed = true
-}
-if (!combined.includes(MARKER)) {
-  console.error(`NEGATIVE CONTROL FAIL: verifier output did not surface ${MARKER}`)
-  failed = true
+  const original = readFileSync(bundlePath, "utf8")
+  writeFileSync(bundlePath, `throw new Error("${MARKER}");\n${original}`, "utf8")
+  return scriptSrc
 }
 
-rmSync(CONTROL_DIR, { recursive: true, force: true })
+/** The two ways the control fails: the gate passed, or the marker stayed hidden. */
+export function assessVerifierResult(exitCode: number, combined: string): string[] {
+  const problems: string[] = []
+  if (exitCode === 0) problems.push("verifier exited 0 on a broken artifact")
+  if (!combined.includes(MARKER)) problems.push(`verifier output did not surface ${MARKER}`)
+  return problems
+}
 
-if (failed) process.exit(1)
-console.log("NEGATIVE CONTROL PASS: broken artifact was rejected with the injected failure surfaced")
+function main(): number {
+  const chromePath = process.env.VSA_CHROME_PATH
+
+  try {
+    return withControlDir((controlDir) => {
+      const scriptSrc = injectSidePanelFailure(controlDir)
+      console.log(`Injected module-evaluation failure into ${scriptSrc}`)
+
+      // Deliberately after the copy and the injection: a missing executable is
+      // one of the mid-run failures that must still clean up.
+      if (!chromePath) {
+        throw new NegativeControlError("VSA_CHROME_PATH is not set")
+      }
+
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          join(WORKSPACE_ROOT, "scripts", "verify-build-artifact.ts"),
+          "--artifact",
+          ".buntmp/rg01-negative-extension",
+        ],
+        {
+          cwd: WORKSPACE_ROOT,
+          env: { ...process.env, VSA_CHROME_PATH: chromePath },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      )
+
+      const combined = `${result.stdout.toString()}\n${result.stderr.toString()}`
+      console.log("--- verifier output ---")
+      console.log(combined.trim())
+      console.log("--- end ---")
+      console.log(`exit code: ${result.exitCode}`)
+
+      const problems = assessVerifierResult(result.exitCode, combined)
+      if (problems.length > 0) {
+        for (const problem of problems) {
+          console.error(`NEGATIVE CONTROL FAIL: ${problem}`)
+        }
+        return 1
+      }
+
+      console.log(
+        "NEGATIVE CONTROL PASS: broken artifact was rejected with the injected failure surfaced",
+      )
+      return 0
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`NEGATIVE CONTROL ERROR: ${message}`)
+    return 2
+  }
+}
+
+if (import.meta.main) {
+  process.exit(main())
+}

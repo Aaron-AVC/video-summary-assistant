@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import {
   persistedKeyPointSchema,
@@ -11,6 +11,15 @@ import {
   MAX_PROVIDER_GENERATION_TIMEOUT_SEC,
   MIN_PROVIDER_GENERATION_TIMEOUT_SEC,
 } from "@/features/settings/lib/provider-schema"
+import {
+  MAX_ASK_CITATIONS,
+  MAX_ASK_FOLLOW_UPS,
+  MAX_ASK_SUGGESTED_JUMPS,
+  MAX_EXPORTED_ROWS_PER_TABLE,
+  MAX_PERSISTED_KEY_POINTS,
+  MAX_PERSISTED_TOPICS,
+  MAX_TRANSCRIPT_CUES
+} from "@/lib/schemas/container-limits"
 
 export const persistedRunStatusSchema = z.enum([
   "queued",
@@ -61,7 +70,7 @@ export const transcriptSnapshotSchema = z.object({
   language: z.string().trim().min(1).nullable(),
   sourceUrl: z.string().trim().url().nullable(),
   rawVtt: z.string().nullable(),
-  cues: z.array(transcriptCueSchema),
+  cues: z.array(transcriptCueSchema).max(MAX_TRANSCRIPT_CUES),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema
 })
@@ -100,8 +109,8 @@ export const analysisRunSchema = z.object({
   providerModel: z.string().trim().min(1).nullable().optional(),
   status: persistedRunStatusSchema,
   summary: z.string(),
-  keyPoints: z.array(persistedKeyPointSchema),
-  topics: z.array(persistedTopicSchema),
+  keyPoints: z.array(persistedKeyPointSchema).max(MAX_PERSISTED_KEY_POINTS),
+  topics: z.array(persistedTopicSchema).max(MAX_PERSISTED_TOPICS),
   errorMessage: z.string().nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
@@ -149,7 +158,7 @@ export const transcriptCacheSchema = z.object({
   language: z.string().trim().min(1).nullable(),
   sourceUrl: z.string().trim().url().nullable(),
   rawVtt: z.string().nullable(),
-  cues: z.array(transcriptCueSchema),
+  cues: z.array(transcriptCueSchema).max(MAX_TRANSCRIPT_CUES),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema
 })
@@ -229,9 +238,9 @@ export const qaMessageSchema = z.object({
   sequence: z.number().int().nonnegative(),
   role: z.enum(["user", "assistant"]),
   content: z.string().trim().min(1),
-  citations: z.array(qaMessageCitationSchema).optional(),
-  suggestedJumps: z.array(qaMessageSuggestedJumpSchema).optional(),
-  followUps: z.array(z.string().trim().min(1)).optional(),
+  citations: z.array(qaMessageCitationSchema).max(MAX_ASK_CITATIONS).optional(),
+  suggestedJumps: z.array(qaMessageSuggestedJumpSchema).max(MAX_ASK_SUGGESTED_JUMPS).optional(),
+  followUps: z.array(z.string().trim().min(1)).max(MAX_ASK_FOLLOW_UPS).optional(),
   createdAt: isoDateTimeSchema
 })
 
@@ -324,19 +333,19 @@ export const knowledgeItemSchema = z.object({
 })
 
 export const persistenceExportSchema = z.object({
-  providerConfigs: z.array(providerConfigExportSchema),
-  transcriptSnapshots: z.array(transcriptSnapshotSchema),
-  analysisRuns: z.array(analysisRunSchema),
-  segmentSummaries: z.array(segmentSummarySchema),
-  recentVideos: z.array(recentVideoSchema),
-  videoRecords: z.array(videoRecordSchema).optional(),
-  transcriptCache: z.array(transcriptCacheSchema).optional(),
-  analysisCache: z.array(analysisCacheSchema).optional(),
-  qaAnswers: z.array(qaAnswerSchema).optional(),
-  qaThreads: z.array(qaThreadSchema).optional(),
-  qaMessages: z.array(qaMessageSchema).optional(),
+  providerConfigs: z.array(providerConfigExportSchema).max(MAX_EXPORTED_ROWS_PER_TABLE),
+  transcriptSnapshots: z.array(transcriptSnapshotSchema).max(MAX_EXPORTED_ROWS_PER_TABLE),
+  analysisRuns: z.array(analysisRunSchema).max(MAX_EXPORTED_ROWS_PER_TABLE),
+  segmentSummaries: z.array(segmentSummarySchema).max(MAX_EXPORTED_ROWS_PER_TABLE),
+  recentVideos: z.array(recentVideoSchema).max(MAX_EXPORTED_ROWS_PER_TABLE),
+  videoRecords: z.array(videoRecordSchema).max(MAX_EXPORTED_ROWS_PER_TABLE).optional(),
+  transcriptCache: z.array(transcriptCacheSchema).max(MAX_EXPORTED_ROWS_PER_TABLE).optional(),
+  analysisCache: z.array(analysisCacheSchema).max(MAX_EXPORTED_ROWS_PER_TABLE).optional(),
+  qaAnswers: z.array(qaAnswerSchema).max(MAX_EXPORTED_ROWS_PER_TABLE).optional(),
+  qaThreads: z.array(qaThreadSchema).max(MAX_EXPORTED_ROWS_PER_TABLE).optional(),
+  qaMessages: z.array(qaMessageSchema).max(MAX_EXPORTED_ROWS_PER_TABLE).optional(),
   // Optional so exports produced before V1.1 Bookmark + Notes still validate.
-  knowledgeItems: z.array(knowledgeItemSchema).optional()
+  knowledgeItems: z.array(knowledgeItemSchema).max(MAX_EXPORTED_ROWS_PER_TABLE).optional()
 })
 
 export type PersistedRunStatus = z.infer<typeof persistedRunStatusSchema>

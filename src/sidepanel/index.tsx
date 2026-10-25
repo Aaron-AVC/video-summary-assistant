@@ -1573,8 +1573,14 @@ function SidepanelWorkspace() {
 
   useEffect(() => {
     if (activeTab !== "search") return
+    // The active content identity is part of this effect's inputs: a video or
+    // Bilibili part switch must recompute the current-video row for the new
+    // exact contentKey instead of leaving the previous runtime's hit visible.
+    // A null identity is a real state (navigation, unsupported page) and must
+    // also refresh, so it drops the stale current-video row while keeping the
+    // query and the global results.
     void searchController.refresh(searchRuntimeRef.current)
-  }, [activeTab, searchController])
+  }, [activeTab, searchController, videoContext.contentKey])
 
   const handleAnalysisJump = useCallback((timestampSeconds: number) => {
     const identity = analysisView

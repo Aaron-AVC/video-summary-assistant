@@ -662,3 +662,161 @@ describe("search controller QA cross-table gating", () => {
     expect(result?.analysisRunId).toBe("run-a")
   })
 })
+
+describe("search controller active content refresh", () => {
+  const YOUTUBE_A = "youtube:video-a"
+  const YOUTUBE_B = "youtube:video-b"
+  const BILIBILI_BVID = "BV1xx411c7mD"
+  const BILIBILI_P1 = `bilibili:${BILIBILI_BVID}:p:1`
+  const BILIBILI_P2 = `bilibili:${BILIBILI_BVID}:p:2`
+
+  function youtubeRuntime(videoId: string): SearchRuntimeProjection {
+    const contentKey = `youtube:${videoId}`
+    return buildRuntime({
+      identity: { platform: "youtube", videoId, contentKey },
+      transcript: {
+        contentKey,
+        cues: [{ startSec: 5, endSec: 9, text: "deployment window" }],
+      },
+    })
+  }
+
+  function bilibiliRuntime(pageIndex: number): SearchRuntimeProjection {
+    const contentKey = `bilibili:${BILIBILI_BVID}:p:${pageIndex}`
+    return buildRuntime({
+      identity: {
+        platform: "bilibili",
+        videoId: BILIBILI_BVID,
+        partId: String(pageIndex),
+        contentKey,
+      },
+      transcript: {
+        contentKey,
+        cues: [{ startSec: 5, endSec: 9, text: "deployment window" }],
+      },
+    })
+  }
+
+  function currentRuntimeRows(controller: ReturnType<typeof createSearchController>) {
+    return controller
+      .getSnapshot()
+      .results.filter((entry) => entry.kind === "current-runtime-content")
+  }
+
+  it("replaces the current runtime row with the new exact content key", async () => {
+    const candidates = emptyCandidates()
+    candidates.knowledgeItems = [
+      buildKnowledgeItem({ id: "note-a", contentKey: YOUTUBE_A, videoId: "video-a" }),
+    ]
+    const repository = fixedRepository(candidates)
+    const controller = createSearchController({ repository: repository.repository })
+
+    controller.setQuery("deployment")
+    await controller.refresh(youtubeRuntime("video-a"))
+
+    expect(currentRuntimeRows(controller).map((entry) => entry.contentKey)).toEqual([YOUTUBE_A])
+
+    await controller.refresh(youtubeRuntime("video-b"))
+
+    const snapshot = controller.getSnapshot()
+    const current = currentRuntimeRows(controller)
+
+    expect(snapshot.query).toBe("deployment")
+    expect(current.map((entry) => entry.contentKey)).toEqual([YOUTUBE_B])
+    expect(current.map((entry) => entry.identity.contentKey)).toEqual([YOUTUBE_B])
+    expect(current.some((entry) => entry.contentKey === YOUTUBE_A)).toBe(false)
+    // The global row survives the refresh: a content switch is not a reset.
+    expect(
+      snapshot.results
+        .filter((entry) => entry.kind === "knowledge")
+        .map((entry) => entry.contentKey),
+    ).toEqual([YOUTUBE_A])
+  })
+
+  it("swaps the Bilibili part row without leaking the previous part", async () => {
+    const candidates = emptyCandidates()
+    candidates.knowledgeItems = [
+      buildKnowledgeItem({
+        id: "note-p1",
+        contentKey: BILIBILI_P1,
+        platform: "bilibili",
+        videoId: BILIBILI_BVID,
+        partId: "1",
+      }),
+    ]
+    const repository = fixedRepository(candidates)
+    const controller = createSearchController({ repository: repository.repository })
+
+    controller.setQuery("deployment")
+    await controller.refresh(bilibiliRuntime(1))
+    expect(currentRuntimeRows(controller).map((entry) => entry.contentKey)).toEqual([BILIBILI_P1])
+
+    await controller.refresh(bilibiliRuntime(2))
+
+    const current = currentRuntimeRows(controller)
+    expect(current).toHaveLength(1)
+    expect(current[0]?.contentKey).toBe(BILIBILI_P2)
+    expect(current[0]?.partId).toBe("2")
+    expect(current[0]?.identity.partId).toBe("2")
+    expect(current.some((entry) => entry.contentKey === BILIBILI_P1)).toBe(false)
+    // The same BVID at another part stays searchable in the global rows.
+    expect(
+      controller
+        .getSnapshot()
+        .results.filter((entry) => entry.kind === "knowledge")
+        .map((entry) => entry.contentKey),
+    ).toContain(BILIBILI_P1)
+  })
+
+  it("drops an in-flight scan for the previous runtime once a refresh starts", async () => {
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let calls = 0
+    const controller = createSearchController({
+      repository: {
+        loadCandidates: async () => {
+          calls += 1
+          if (calls === 1) await gate
+          return emptyCandidates()
+        },
+      },
+    })
+
+    controller.setQuery("deployment")
+    const pendingOldScan = controller.refresh(youtubeRuntime("video-a"))
+    await controller.refresh(youtubeRuntime("video-b"))
+
+    expect(currentRuntimeRows(controller).map((entry) => entry.contentKey)).toEqual([YOUTUBE_B])
+
+    release?.()
+    await pendingOldScan
+
+    // The generation alone invalidates the older scan; no second token exists.
+    expect(currentRuntimeRows(controller).map((entry) => entry.contentKey)).toEqual([YOUTUBE_B])
+  })
+
+  it("keeps the query and the global rows while the identity is unavailable", async () => {
+    const candidates = emptyCandidates()
+    candidates.knowledgeItems = [
+      buildKnowledgeItem({ id: "note-a", contentKey: YOUTUBE_A, videoId: "video-a" }),
+    ]
+    const repository = fixedRepository(candidates)
+    const controller = createSearchController({ repository: repository.repository })
+
+    controller.setQuery("deployment")
+    await controller.refresh(youtubeRuntime("video-a"))
+    expect(currentRuntimeRows(controller)).toHaveLength(1)
+
+    await controller.refresh(null)
+
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.query).toBe("deployment")
+    expect(currentRuntimeRows(controller)).toEqual([])
+    expect(snapshot.results.filter((entry) => entry.kind === "knowledge")).toHaveLength(1)
+
+    await controller.refresh(youtubeRuntime("video-b"))
+    expect(currentRuntimeRows(controller).map((entry) => entry.contentKey)).toEqual([YOUTUBE_B])
+  })
+})

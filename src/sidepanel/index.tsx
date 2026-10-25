@@ -1235,7 +1235,6 @@ function SidepanelWorkspace() {
     const requestedContentKey = analysisView.contentKey
     const requestedAnalysisRunId = analysisView.analysisRunId ?? "legacy"
     const requestedTranscriptFingerprint = actualTranscriptFingerprint
-    const requestedWorkspaceEpoch = workspaceController.captureEpoch()
     if (askStartLockRef.current || activeAskTask) {
       toast.message(t("toast.anotherAsk"))
       return
@@ -1346,9 +1345,12 @@ function SidepanelWorkspace() {
           isTaskCurrent: () => askTaskController.isCurrent(taskId),
           setPhase,
         })
+        // Read the live displayed identity at completion time, never the
+        // startup-time state: the user may have switched away from this video
+        // and back. The exact immutable task identity (not the workspace epoch)
+        // decides whether this result may touch the current Ask UI.
         const currentSelection = workspaceController.getDisplaySelection()
         workspaceController.publishAskResult({
-          workspaceEpoch: requestedWorkspaceEpoch,
           requested: {
             contentKey: taskSnapshot.contentKey,
             analysisRunId: taskSnapshot.analysisRunId,

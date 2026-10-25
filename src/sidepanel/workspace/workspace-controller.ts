@@ -176,10 +176,17 @@ export type WorkspaceAskPublicationEffects = {
   publishAnswer: () => void
 }
 
+/**
+ * A completed Ask task's terminal UI publication request.
+ *
+ * There is deliberately no `workspaceEpoch` here. A started Ask task owns its
+ * lifecycle in `AskTaskController`, so its terminal publication is decided by
+ * the immutable task identity against the displayed Ask identity only. The
+ * runtime-content epoch tracks runtime `contentKey` transitions and would
+ * otherwise veto a legitimate A -> B -> A re-entry whose displayed
+ * analysis/thread/transcript identity exactly matches the completed task.
+ */
 export type WorkspaceAskPublicationRequest = {
-  /** Captured before thread/provider preparation; never recaptured after the await. */
-  workspaceEpoch: number
-
   requested: WorkspaceAskRequestedIdentity
 
   current: WorkspaceAskCurrentIdentity
@@ -639,10 +646,18 @@ export class WorkspaceController {
    *
    * This is the final successful-result publication guard only: preparation
    * currentness, the transcript load epoch, and the task lifecycle stay in the
-   * root. The stale decision is made exactly once, before any effect, from the
-   * captured workspace epoch plus the existing Ask requested/current identity
-   * matcher. Once publication starts there is no second epoch check, no second
-   * identity match, and no rollback.
+   * root. Once a task has entered `AskTaskController.start()` the task owns its
+   * own lifecycle, so the stale decision here is made exactly once, before any
+   * effect, from the immutable completed task identity alone.
+   *
+   * Ask terminal publication deliberately permits an A -> B -> A re-entry when
+   * the currently displayed analysis/thread/transcript identity exactly matches
+   * the immutable completed task. Runtime-content epoch is not part of terminal
+   * Ask identity: the task's `analysisRunId`, `threadId`, and
+   * `transcriptFingerprint` are a stronger publication identity than the runtime
+   * `contentKey`, so the epoch must not independently veto an exact re-entry.
+   * Any mismatch in those four fields is still rejected, which is what keeps one
+   * video's answer out of another video, analysis run, or QA thread.
    *
    * The runtime content key is deliberately not compared against
    * `requested.contentKey`: publishing into a historical display selection is
@@ -651,12 +666,9 @@ export class WorkspaceController {
   publishAskResult(
     request: WorkspaceAskPublicationRequest,
   ): WorkspaceAskPublicationResult {
-    const { workspaceEpoch, requested, current, effects } = request
+    const { requested, current, effects } = request
 
-    if (
-      !this.isEpochCurrent(workspaceEpoch)
-      || !matchesAskRequestWorkspaceIdentity(requested, current)
-    ) {
+    if (!matchesAskRequestWorkspaceIdentity(requested, current)) {
       return { kind: "stale" }
     }
 

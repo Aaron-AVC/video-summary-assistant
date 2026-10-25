@@ -395,13 +395,15 @@ async function openExtensionPage(
   let currentUrl = "about:blank"
   const stop = collector.watch(connection, sessionId, label, () => currentUrl)
 
+  // Record the destination before navigating: the bundle can throw during the
+  // very first evaluation, and that report must name the real page URL.
+  currentUrl = url
   const navigation = await connection.send("Page.navigate", { url }, sessionId, 15_000)
   const errorText = navigation.result?.errorText
   if (typeof errorText === "string" && errorText.length > 0) {
     stop()
     fail(stage, `Navigation to ${url} failed: ${errorText}`)
   }
-  currentUrl = url
   return sessionId
 }
 

@@ -1,6 +1,6 @@
 import { Loader2, PlusCircle, Save, Sparkles, Star, Trash2 } from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useState } from "react"
-import { z } from "zod"
+import * as z from "zod"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"

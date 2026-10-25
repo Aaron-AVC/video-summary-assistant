@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import type {
   ActiveVideoContext,
@@ -11,6 +11,7 @@ import type {
   YouTubeTimedtextCandidate,
 } from "@/features/platform/youtube/youtube-live-state"
 import { isAllowedBilibiliResourceUrl } from "@/features/platform/bilibili/bilibili-transport-policy"
+import { MAX_TRANSCRIPT_CUES } from "@/lib/schemas/container-limits"
 
 export const RUNTIME_MESSAGE_NAMESPACE = "video-summary-assistant/runtime"
 
@@ -297,7 +298,7 @@ const youtubeTimedtextCandidateSchema = z.object({
   startTime: z.number().finite().nonnegative(),
 })
 const videoTranscriptSchema = z.object({
-  segments: z.array(transcriptSegmentSchema),
+  segments: z.array(transcriptSegmentSchema).max(MAX_TRANSCRIPT_CUES),
   language: z.string().nullable().optional(),
   source: z.enum(["manual", "auto", "unknown"]),
   raw: z.object({

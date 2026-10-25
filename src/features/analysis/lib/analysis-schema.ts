@@ -1,4 +1,15 @@
-import { z } from "zod"
+import * as z from "zod"
+
+import {
+  MAX_ANALYSIS_CHAPTERS,
+  MAX_ANALYSIS_KEY_POINTS,
+  MAX_ASK_CITATIONS,
+  MAX_ASK_FOLLOW_UPS,
+  MAX_ASK_SUGGESTED_JUMPS,
+  MAX_LEGACY_ANALYSIS_KEY_POINTS,
+  MAX_LEGACY_ANALYSIS_SEGMENTS,
+  MAX_LEGACY_ANALYSIS_TOPICS
+} from "@/lib/schemas/container-limits"
 
 /** Bumped whenever the persisted/model-facing analysis contract changes. */
 export const VIDEO_ANALYSIS_SCHEMA_VERSION = 1
@@ -52,8 +63,8 @@ export const videoAnalysisChapterSchema = z.object({
 
 export const videoAnalysisSchema = z.object({
   summary: z.string().trim().min(1),
-  keyPoints: z.array(videoAnalysisKeyPointSchema).min(1),
-  chapters: z.array(videoAnalysisChapterSchema).min(1)
+  keyPoints: z.array(videoAnalysisKeyPointSchema).min(1).max(MAX_ANALYSIS_KEY_POINTS),
+  chapters: z.array(videoAnalysisChapterSchema).min(1).max(MAX_ANALYSIS_CHAPTERS)
 }).strict()
 
 export type VideoAnalysisKeyPoint = z.infer<typeof videoAnalysisKeyPointSchema>
@@ -76,9 +87,9 @@ export const suggestedJumpSchema = timestampRangeSchema.extend({
 
 export const askVideoAnswerSchema = z.object({
   answer: z.string().trim().min(1),
-  citations: z.array(askVideoCitationSchema).min(1),
-  suggestedJumps: z.array(suggestedJumpSchema).default([]),
-  followUps: z.array(z.string().trim().min(1)).default([])
+  citations: z.array(askVideoCitationSchema).min(1).max(MAX_ASK_CITATIONS),
+  suggestedJumps: z.array(suggestedJumpSchema).max(MAX_ASK_SUGGESTED_JUMPS).default([]),
+  followUps: z.array(z.string().trim().min(1)).max(MAX_ASK_FOLLOW_UPS).default([])
 }).strict()
 
 export type TimestampRange = z.infer<typeof timestampRangeSchema>
@@ -132,10 +143,10 @@ export const persistedSegmentSchema = z.object({
 
 export const legacyAnalysisSchema = z.object({
   summary: z.string().trim().min(1),
-  keyPoints: z.array(persistedKeyPointSchema).min(1),
-  topics: z.array(persistedTopicSchema).default([]),
-  segments: z.array(persistedSegmentSchema).min(1).optional(),
-  moments: z.array(persistedSegmentSchema).min(1).optional()
+  keyPoints: z.array(persistedKeyPointSchema).min(1).max(MAX_LEGACY_ANALYSIS_KEY_POINTS),
+  topics: z.array(persistedTopicSchema).max(MAX_LEGACY_ANALYSIS_TOPICS).default([]),
+  segments: z.array(persistedSegmentSchema).min(1).max(MAX_LEGACY_ANALYSIS_SEGMENTS).optional(),
+  moments: z.array(persistedSegmentSchema).min(1).max(MAX_LEGACY_ANALYSIS_SEGMENTS).optional()
 }).strict()
 
 export type LegacyAnalysis = z.infer<typeof legacyAnalysisSchema>

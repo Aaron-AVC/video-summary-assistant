@@ -2,6 +2,10 @@ import {
   hasProviderHostPermission
 } from "@/features/settings/lib/provider-permissions"
 import {
+  readJsonBodyWithLimit,
+  ProviderResponseTooLargeError
+} from "@/features/analysis/lib/provider-response-body"
+import {
   normalizeProviderBaseUrl,
   parseProviderConnectionInput,
   parseProviderModelDiscoveryInput,
@@ -175,8 +179,10 @@ export async function fetchProviderModels(
     })
     let payload: unknown = null
     try {
-      payload = await response.json()
-    } catch {
+      payload = await readJsonBodyWithLimit(response)
+    } catch (error) {
+      // 体积超限是独立的失败语义，不能被伪装成「JSON 不合法」。
+      if (error instanceof ProviderResponseTooLargeError) throw error
       throw new Error("Model list response was not valid JSON.")
     }
     if (!response.ok) {
@@ -249,7 +255,7 @@ export function createOpenAICompatibleClient(
         }),
         signal: request.signal
       })
-      payload = (await response.json()) as OpenAICompatibleResponse
+      payload = (await readJsonBodyWithLimit(response)) as OpenAICompatibleResponse
     } catch (error) {
       if (signal?.aborted) {
         throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))

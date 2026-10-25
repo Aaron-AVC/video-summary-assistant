@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 export const DEFAULT_PROVIDER_GENERATION_TIMEOUT_SEC = 600
 export const MIN_PROVIDER_GENERATION_TIMEOUT_SEC = 60

@@ -5,6 +5,7 @@ import {
   isAllowedBilibiliTransport,
   normalizeBilibiliSubtitleUrl,
   readBilibiliResponseBytes,
+  readBilibiliResponseText,
 } from "@/features/platform/bilibili/bilibili-transport"
 
 const VIDEO_URL = "https://www.bilibili.com/video/BV1xx411c7mD/?p=2"
@@ -22,6 +23,42 @@ describe("Bilibili background transport allowlist", () => {
       new Response(new Uint8Array([1]), { headers: { "content-length": "5" } }),
       4,
     )).rejects.toThrow("size limit")
+  })
+
+  it("reads text endpoint bodies within the same strict byte limit", async () => {
+    await expect(readBilibiliResponseText(new Response("abc"), 3)).resolves.toBe("abc")
+    await expect(readBilibiliResponseText(new Response("{}"))).resolves.toBe("{}")
+
+    // The ceiling is counted in bytes, not in UTF-16 code units.
+    await expect(readBilibiliResponseText(new Response("é"), 1)).rejects.toThrow("size limit")
+  })
+
+  it("rejects a declared oversized text body before reading the stream", async () => {
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        pull() {
+          throw new Error("the body must not be read once the declared length is too large")
+        },
+      }),
+      { headers: { "content-length": "5" } },
+    )
+
+    await expect(readBilibiliResponseText(response, 4)).rejects.toThrow("size limit")
+  })
+
+  it("aborts a streaming text body that exceeds the limit without a content-length header", async () => {
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("abc"))
+          controller.enqueue(new TextEncoder().encode("de"))
+          controller.close()
+        },
+      }),
+    )
+    expect(response.headers.get("content-length")).toBeNull()
+
+    await expect(readBilibiliResponseText(response, 4)).rejects.toThrow("size limit")
   })
 
   it("allows only the required HTTPS Bilibili API endpoints and subtitle CDN hosts", () => {

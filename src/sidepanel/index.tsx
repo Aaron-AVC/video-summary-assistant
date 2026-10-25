@@ -80,8 +80,10 @@ import {
 } from "@/sidepanel/lib/sidepanel-ux"
 import {
   formatTimestamp,
+  historyContextIdentityFromContentKey,
   identityFromAnalysis,
   identityFromContext,
+  type ContentKeyHistoryIdentity,
 } from "@/sidepanel/lib/sidepanel-pure-helpers"
 import { getAnalysisHeaderPresentation } from "@/sidepanel/lib/task-presentation"
 import { navigateToTimestamp } from "@/sidepanel/navigation/timestamp-navigation"
@@ -1091,6 +1093,17 @@ function SidepanelWorkspace() {
     contentKey?: string,
     analysisRunId?: string,
   ) => {
+    // Resolve the saved content identity before any workspace side effect.
+    // The content-key restore clears the displayed analysis before it can
+    // report that nothing matched, so an unparsable key has to be rejected
+    // here: returning now leaves the current analysis, transcript and Ask
+    // workspace exactly as they were. A run id always wins, mirroring the
+    // branch priority below, so a malformed key never blocks that restore.
+    let savedIdentity: ContentKeyHistoryIdentity | null = null
+    if (!analysisRunId && contentKey) {
+      savedIdentity = historyContextIdentityFromContentKey(contentKey)
+      if (!savedIdentity) return null
+    }
     askController.invalidateExecutionGeneration()
     transcriptController.invalidateLoadEpoch()
     setAskQuestion("")
@@ -1105,14 +1118,14 @@ function SidepanelWorkspace() {
     let restored: WorkspaceRestoredAnalysisIdentity | null = null
     if (analysisRunId) {
       restored = await loadSavedAnalysisRun(analysisRunId, generation, displayGeneration)
-    } else if (contentKey) {
+    } else if (contentKey && savedIdentity) {
       const current = videoContextRef.current
       restored = await loadSavedAnalysisForContext({
         ...current,
         videoId,
         contentKey,
-        platform: contentKey.startsWith("bilibili:") ? "bilibili" : "youtube",
-        partId: contentKey.startsWith("bilibili:") ? contentKey.split(":p:")[1] ?? null : null,
+        platform: savedIdentity.platform,
+        partId: savedIdentity.partId,
       }, generation, displayGeneration)
     } else {
       restored = await loadSavedAnalysis(videoId, generation, displayGeneration)

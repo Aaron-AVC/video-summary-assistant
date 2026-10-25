@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test"
 
+import { parseContentKey } from "@/features/platform/content-key"
 import type { ActiveVideoContext } from "@/features/platform/types"
 import {
   formatTimestamp,
+  historyContextIdentityFromContentKey,
   identityFromAnalysis,
   identityFromContext,
 } from "@/sidepanel/lib/sidepanel-pure-helpers"
@@ -100,5 +102,82 @@ describe("Side Panel pure helpers", () => {
       partId: "2",
       contentKey: "bilibili:BV-test:p:2",
     })
+  })
+})
+
+describe("historyContextIdentityFromContentKey", () => {
+  const validBvid = "BV1xx411c7mD"
+
+  it("projects a canonical YouTube key without a part", () => {
+    expect(historyContextIdentityFromContentKey("youtube:dQw4w9WgXcQ")).toEqual({
+      platform: "youtube",
+      partId: null,
+    })
+  })
+
+  it("projects a canonical Bilibili key onto its canonical part id", () => {
+    expect(historyContextIdentityFromContentKey(`bilibili:${validBvid}:p:1`)).toEqual({
+      platform: "bilibili",
+      partId: "1",
+    })
+    expect(historyContextIdentityFromContentKey(`bilibili:${validBvid}:p:42`)).toEqual({
+      platform: "bilibili",
+      partId: "42",
+    })
+  })
+
+  it("keeps the projected part id identical to the parsed page index", () => {
+    const contentKey = `bilibili:${validBvid}:p:7`
+    const parsed = parseContentKey(contentKey)
+    if (!parsed || parsed.platform !== "bilibili") {
+      throw new Error(`expected a canonical Bilibili parse for ${contentKey}`)
+    }
+    expect(historyContextIdentityFromContentKey(contentKey)).toEqual({
+      platform: parsed.platform,
+      partId: parsed.partId,
+    })
+    expect(parsed.partId).toBe(String(parsed.pageIndex))
+  })
+
+  it("rejects unknown providers and malformed keys instead of guessing a platform", () => {
+    const rejected = [
+      "",
+      "dQw4w9WgXcQ",
+      "vimeo:12345",
+      "youtube:",
+      "youtube:id:extra",
+      `bilibili:${validBvid}`,
+      `bilibili:${validBvid}:p`,
+      `bilibili:${validBvid}:p:`,
+      `bilibili:${validBvid}:p:0`,
+      `bilibili:${validBvid}:p:-1`,
+      `bilibili:${validBvid}:p:01`,
+      `bilibili:${validBvid}:p:1.0`,
+      `bilibili:${validBvid}:p:abc`,
+      `bilibili:${validBvid}:q:1`,
+      `bilibili:${validBvid}:p:1:extra`,
+      "bilibili:not-a-bvid:p:1",
+    ]
+
+    for (const contentKey of rejected) {
+      expect(historyContextIdentityFromContentKey(contentKey)).toBeNull()
+    }
+  })
+
+  it("rejects keys whose identity is only valid after trimming", () => {
+    const padded = [
+      " youtube:dQw4w9WgXcQ",
+      "youtube:dQw4w9WgXcQ ",
+      "youtube: dQw4w9WgXcQ",
+      "youtube:dQw4w9WgXcQ\t",
+      ` bilibili:${validBvid}:p:1`,
+      `bilibili:${validBvid}:p:1 `,
+      `bilibili:${validBvid}:p: 1`,
+      `bilibili: ${validBvid}:p:1`,
+    ]
+
+    for (const contentKey of padded) {
+      expect(historyContextIdentityFromContentKey(contentKey)).toBeNull()
+    }
   })
 })

@@ -999,30 +999,93 @@ const ASK_REQUESTED: WorkspaceAskRequestedIdentity = {
   transcriptFingerprint: "fp-transcript",
 }
 
+const OTHER_VIDEO_CONTEXT = context({
+  videoId: "video-b",
+  contentKey: "youtube:video-b",
+  canonicalUrl: "https://www.youtube.com/watch?v=video-b",
+  title: "Video B",
+})
+
+/**
+ * Mirrors the root at Ask completion: the displayed analysis/thread reference
+ * comes from the live display selection and the transcript fingerprint from the
+ * current transcript ref. The workspace epoch is never read.
+ */
+function readDisplayedAskIdentity(
+  controller: WorkspaceController,
+  transcriptFingerprint: string | null,
+): WorkspaceAskCurrentIdentity {
+  const selection = controller.getDisplaySelection()
+  return {
+    contentKey: selection.analysis?.contentKey ?? null,
+    analysisRunId: selection.analysis?.analysisRunId ?? "legacy",
+    threadId: selection.qaThreadId,
+    transcriptFingerprint,
+  }
+}
+
+function displayAskIdentity(
+  controller: WorkspaceController,
+  identity: WorkspaceAskRequestedIdentity,
+): void {
+  controller.syncDisplaySelection({
+    analysis: {
+      contentKey: identity.contentKey,
+      analysisRunId: identity.analysisRunId === "legacy" ? null : identity.analysisRunId,
+    },
+    qaThreadId: identity.threadId,
+  })
+}
+
+/** An Ask task started on video A with the A/run-1/thread-1 identity displayed. */
+function askScenario(): WorkspaceController {
+  const controller = new WorkspaceController()
+  observe(controller, context())
+  displayAskIdentity(controller, ASK_REQUESTED)
+  return controller
+}
+
+/** A -> B: the runtime identity moves and the A display is replaced. */
+function switchToOtherVideo(controller: WorkspaceController): void {
+  observe(controller, OTHER_VIDEO_CONTEXT)
+  controller.syncDisplaySelection({ analysis: null, qaThreadId: null })
+}
+
+function publishCompletedAsk({
+  controller,
+  requested,
+  currentFingerprint,
+}: {
+  controller: WorkspaceController
+  requested: WorkspaceAskRequestedIdentity
+  currentFingerprint?: string | null
+}) {
+  const recorder = createAskEffectsRecorder()
+  const result = controller.publishAskResult({
+    requested,
+    current: readDisplayedAskIdentity(
+      controller,
+      currentFingerprint === undefined ? requested.transcriptFingerprint : currentFingerprint,
+    ),
+    effects: recorder.effects,
+  })
+
+  return { result, recorder }
+}
+
 function askRequested(
   overrides: Partial<WorkspaceAskRequestedIdentity> = {},
 ): WorkspaceAskRequestedIdentity {
   return { ...ASK_REQUESTED, ...overrides }
 }
 
-function askCurrent(
-  overrides: Partial<WorkspaceAskCurrentIdentity> = {},
-): WorkspaceAskCurrentIdentity {
-  return { ...ASK_REQUESTED, ...overrides }
-}
-
 describe("WorkspaceController publishAskResult publication", () => {
   it("publishes a matching identity in the assistant-message then answer order", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested(),
-      current: askCurrent(),
-      effects: recorder.effects,
     })
 
     expect(result).toEqual({ kind: "published" })
@@ -1031,19 +1094,44 @@ describe("WorkspaceController publishAskResult publication", () => {
     expect(recorder.publishAnswer).toBe(1)
   })
 
-  it("returns stale with zero effects when the captured workspace epoch is no longer current", () => {
-    const controller = new WorkspaceController()
+  it("publishes an exact A -> B -> A re-entry even though the workspace epoch moved twice", () => {
+    const controller = askScenario()
+    const epochAtStart = controller.captureEpoch()
+
+    switchToOtherVideo(controller)
     observe(controller, context())
-    const captured = controller.captureEpoch()
 
-    observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+    // The user is back on the very same analysis/thread/transcript, but the
+    // runtime identity transitioned twice, so the epoch is no longer the one
+    // captured when the task started.
+    displayAskIdentity(controller, ASK_REQUESTED)
+    expect(controller.captureEpoch()).toBe(epochAtStart + 2)
+    expect(controller.isEpochCurrent(epochAtStart)).toBe(false)
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested(),
-      current: askCurrent(),
-      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual(["publishAssistantMessage", "publishAnswer"])
+  })
+
+  it("returns stale with zero effects when the completion happens while another video is displayed", () => {
+    const controller = askScenario()
+
+    switchToOtherVideo(controller)
+    displayAskIdentity(controller, {
+      contentKey: "youtube:video-b",
+      analysisRunId: "run-b",
+      threadId: "thread-b",
+      transcriptFingerprint: "fp-b",
+    })
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
+      requested: askRequested(),
+      currentFingerprint: "fp-b",
     })
 
     expect(result).toEqual({ kind: "stale" })
@@ -1051,16 +1139,34 @@ describe("WorkspaceController publishAskResult publication", () => {
   })
 
   it("returns stale with zero effects when the Ask contentKey no longer matches", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
-      requested: askRequested({ contentKey: "youtube:video-a" }),
-      current: askCurrent({ contentKey: "youtube:video-b" }),
-      effects: recorder.effects,
+    displayAskIdentity(controller, {
+      contentKey: "youtube:video-b",
+      analysisRunId: "run-1",
+      threadId: "thread-1",
+      transcriptFingerprint: "fp-transcript",
+    })
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
+      requested: askRequested(),
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when a returned video displays a different analysis run", () => {
+    const controller = askScenario()
+
+    switchToOtherVideo(controller)
+    observe(controller, context())
+    displayAskIdentity(controller, askRequested({ analysisRunId: "run-2" }))
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
+      requested: askRequested({ analysisRunId: "run-1" }),
     })
 
     expect(result).toEqual({ kind: "stale" })
@@ -1068,16 +1174,29 @@ describe("WorkspaceController publishAskResult publication", () => {
   })
 
   it("returns stale with zero effects when the analysisRunId no longer matches", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    displayAskIdentity(controller, askRequested({ analysisRunId: "run-2" }))
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested({ analysisRunId: "run-1" }),
-      current: askCurrent({ analysisRunId: "run-2" }),
-      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when a returned video displays a different QA thread", () => {
+    const controller = askScenario()
+
+    switchToOtherVideo(controller)
+    observe(controller, context())
+    displayAskIdentity(controller, askRequested({ threadId: "thread-2" }))
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
+      requested: askRequested({ threadId: "thread-1" }),
     })
 
     expect(result).toEqual({ kind: "stale" })
@@ -1085,16 +1204,13 @@ describe("WorkspaceController publishAskResult publication", () => {
   })
 
   it("returns stale with zero effects when the threadId no longer matches", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    displayAskIdentity(controller, askRequested({ threadId: "thread-2" }))
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested({ threadId: "thread-1" }),
-      current: askCurrent({ threadId: "thread-2" }),
-      effects: recorder.effects,
     })
 
     expect(result).toEqual({ kind: "stale" })
@@ -1102,16 +1218,30 @@ describe("WorkspaceController publishAskResult publication", () => {
   })
 
   it("returns stale with zero effects when the threadId became null", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    displayAskIdentity(controller, askRequested({ threadId: null }))
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested({ threadId: "thread-1" }),
-      current: askCurrent({ threadId: null }),
-      effects: recorder.effects,
+    })
+
+    expect(result).toEqual({ kind: "stale" })
+    expect(recorder.order).toEqual([])
+  })
+
+  it("returns stale with zero effects when a returned video's transcript changed", () => {
+    const controller = askScenario()
+
+    switchToOtherVideo(controller)
+    observe(controller, context())
+    displayAskIdentity(controller, askRequested())
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
+      requested: askRequested({ transcriptFingerprint: "fp-transcript" }),
+      currentFingerprint: "fp-other",
     })
 
     expect(result).toEqual({ kind: "stale" })
@@ -1119,16 +1249,12 @@ describe("WorkspaceController publishAskResult publication", () => {
   })
 
   it("returns stale with zero effects when the transcriptFingerprint no longer matches", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested({ transcriptFingerprint: "fp-transcript" }),
-      current: askCurrent({ transcriptFingerprint: "fp-other" }),
-      effects: recorder.effects,
+      currentFingerprint: "fp-other",
     })
 
     expect(result).toEqual({ kind: "stale" })
@@ -1136,16 +1262,12 @@ describe("WorkspaceController publishAskResult publication", () => {
   })
 
   it("returns stale with zero effects when the transcriptFingerprint became null", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested({ transcriptFingerprint: "fp-transcript" }),
-      current: askCurrent({ transcriptFingerprint: null }),
-      effects: recorder.effects,
+      currentFingerprint: null,
     })
 
     expect(result).toEqual({ kind: "stale" })
@@ -1157,7 +1279,6 @@ describe("WorkspaceController publishAskResult workspace semantics", () => {
   it("publishes into a historical display selection that differs from the runtime content", () => {
     const controller = new WorkspaceController()
     observe(controller, context())
-    const captured = controller.captureEpoch()
 
     const historical = {
       contentKey: "bilibili:historical-video:p:2",
@@ -1166,47 +1287,47 @@ describe("WorkspaceController publishAskResult workspace semantics", () => {
       transcriptFingerprint: "fp-historical",
     }
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    // The runtime content stays on video A while the user restored a historical
+    // analysis of another Bilibili part.
+    displayAskIdentity(controller, historical)
+
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: historical,
-      current: historical,
-      effects: recorder.effects,
     })
 
     expect(result).toEqual({ kind: "published" })
     expect(recorder.order).toEqual(["publishAssistantMessage", "publishAnswer"])
   })
 
-  it("returns stale when a runtime contentKey transition invalidates the captured epoch even though the Ask identity still matches", () => {
-    const controller = new WorkspaceController()
+  it("publishes into a historical display selection recovered after two runtime identity transitions", () => {
+    const controller = askScenario()
+
+    switchToOtherVideo(controller)
     observe(controller, context())
-    const captured = controller.captureEpoch()
-
-    observe(controller, context({
-      platform: "bilibili",
-      videoId: "other-video",
-      partId: "2",
-      contentKey: "bilibili:other-video:p:2",
-      title: "Other video",
-    }))
-
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
-      requested: askRequested(),
-      current: askCurrent(),
-      effects: recorder.effects,
+    displayAskIdentity(controller, {
+      contentKey: "bilibili:historical-video:p:2",
+      analysisRunId: "run-historical",
+      threadId: "thread-historical",
+      transcriptFingerprint: "fp-historical",
     })
 
-    expect(result).toEqual({ kind: "stale" })
-    expect(recorder.order).toEqual([])
+    const { result, recorder } = publishCompletedAsk({
+      controller,
+      requested: {
+        contentKey: "bilibili:historical-video:p:2",
+        analysisRunId: "run-historical",
+        threadId: "thread-historical",
+        transcriptFingerprint: "fp-historical",
+      },
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(recorder.order).toEqual(["publishAssistantMessage", "publishAnswer"])
   })
 
   it("keeps publishing across a same-content metadata refresh", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
 
     observe(controller, context({
       title: "Renamed video",
@@ -1215,32 +1336,28 @@ describe("WorkspaceController publishAskResult workspace semantics", () => {
       isReady: false,
     }))
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch: captured,
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested(),
-      current: askCurrent(),
-      effects: recorder.effects,
     })
 
     expect(result).toEqual({ kind: "published" })
     expect(recorder.order).toEqual(["publishAssistantMessage", "publishAnswer"])
   })
 
-  it("does not re-check the epoch or the identity once publication has started", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+  it("does not re-check the identity once publication has started", () => {
+    const controller = askScenario()
 
     const order: string[] = []
     const result = controller.publishAskResult({
-      workspaceEpoch: captured,
       requested: askRequested(),
-      current: askCurrent(),
+      current: readDisplayedAskIdentity(controller, "fp-transcript"),
       effects: {
         publishAssistantMessage: () => {
           order.push("publishAssistantMessage")
-          observe(controller, context({ videoId: "video-b", contentKey: "youtube:video-b" }))
+          // A competing display change landing during publication must not be
+          // re-consulted: the stale decision was already made.
+          switchToOtherVideo(controller)
         },
         publishAnswer: () => {
           order.push("publishAnswer")
@@ -1250,36 +1367,25 @@ describe("WorkspaceController publishAskResult workspace semantics", () => {
 
     expect(result).toEqual({ kind: "published" })
     expect(order).toEqual(["publishAssistantMessage", "publishAnswer"])
-    expect(controller.isEpochCurrent(captured)).toBe(false)
+    expect(controller.getDisplaySelection().analysis).toBeNull()
   })
 
   it("never mutates runtime content while publishing an Ask result", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
     const before = controller.getSnapshot()
 
-    controller.publishAskResult({
-      workspaceEpoch: captured,
-      requested: askRequested(),
-      current: askCurrent(),
-      effects: createAskEffectsRecorder().effects,
-    })
+    publishCompletedAsk({ controller, requested: askRequested() })
 
     expect(controller.getSnapshot()).toEqual(before)
   })
 
   it("never mutates runtime content when the Ask result is stale", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
-    const captured = controller.captureEpoch()
+    const controller = askScenario()
     const before = controller.getSnapshot()
 
-    controller.publishAskResult({
-      workspaceEpoch: captured,
+    publishCompletedAsk({
+      controller,
       requested: askRequested({ contentKey: "bilibili:historical-video:p:2" }),
-      current: askCurrent({ contentKey: "bilibili:historical-video:p:2" }),
-      effects: createAskEffectsRecorder().effects,
     })
 
     expect(controller.getSnapshot()).toEqual(before)
@@ -2256,17 +2362,13 @@ describe("WorkspaceController load generation", () => {
   })
 
   it("K. keeps the load token current across a workspace publication", () => {
-    const controller = new WorkspaceController()
-    observe(controller, context())
+    const controller = askScenario()
     const loadGeneration = controller.beginLoadGeneration()
     const workspaceEpoch = controller.captureEpoch()
 
-    const recorder = createAskEffectsRecorder()
-    const result = controller.publishAskResult({
-      workspaceEpoch,
+    const { result, recorder } = publishCompletedAsk({
+      controller,
       requested: askRequested(),
-      current: askCurrent(),
-      effects: recorder.effects,
     })
 
     expect(result.kind).toBe("published")

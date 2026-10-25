@@ -42,6 +42,7 @@ import {
   resolveAskTranscriptFingerprint,
   resolveAskTranscriptRequestIdentity,
 } from "@/sidepanel/lib/ask-transcript-identity"
+import { WorkspaceController } from "@/sidepanel/workspace/workspace-controller"
 
 const CONTENT_KEY = "youtube:video-a"
 const ANALYSIS_RUN_ID = "run-1"
@@ -1533,6 +1534,116 @@ describe("AskController runExecutionTask cache behaviour", () => {
 
     expect(calls.saveQaAnswer).toHaveLength(0)
     expect(calls.runAskVideo).toHaveLength(0)
+  })
+})
+
+describe("AskController runExecutionTask persistence versus terminal UI publication", () => {
+  /**
+   * Mirrors the root at Ask completion: the displayed identity is read live
+   * from the workspace display selection plus the current transcript
+   * fingerprint. Persistence has already happened inside runExecutionTask, so
+   * the publication verdict can only affect React state.
+   */
+  function readDisplayedAskIdentity(
+    workspace: WorkspaceController,
+    transcriptFingerprint: string | null,
+  ) {
+    const selection = workspace.getDisplaySelection()
+    return {
+      contentKey: selection.analysis?.contentKey ?? null,
+      analysisRunId: selection.analysis?.analysisRunId ?? "legacy",
+      threadId: selection.qaThreadId,
+      transcriptFingerprint,
+    }
+  }
+
+  function requestedIdentity(
+    taskSnapshot: Omit<AskTaskSnapshot, "taskId" | "startedAt">,
+  ) {
+    return {
+      contentKey: taskSnapshot.contentKey,
+      analysisRunId: taskSnapshot.analysisRunId,
+      threadId: taskSnapshot.threadId,
+      transcriptFingerprint: taskSnapshot.transcriptFingerprint,
+    }
+  }
+
+  function displayOtherVideo(workspace: WorkspaceController): void {
+    workspace.syncDisplaySelection({
+      analysis: { contentKey: "youtube:video-b", analysisRunId: "run-b" },
+      qaThreadId: "thread-b",
+    })
+  }
+
+  it("persists to the original thread and skips UI publication when another video is displayed", async () => {
+    const { dependencies, calls } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const workspace = new WorkspaceController()
+    const request = createExecutionTaskRequest()
+
+    // The user switched to another video while the task was still running.
+    displayOtherVideo(workspace)
+
+    const { answer, assistantMessage } = await controller.runExecutionTask(request)
+
+    const published: string[] = []
+    const result = workspace.publishAskResult({
+      requested: requestedIdentity(request.taskSnapshot),
+      current: readDisplayedAskIdentity(workspace, "fp-b"),
+      effects: {
+        publishAssistantMessage: () => published.push("publishAssistantMessage"),
+        publishAnswer: () => published.push("publishAnswer"),
+      },
+    })
+
+    // UI publication is rejected, yet both persistence writes already happened
+    // against the frozen task identity.
+    expect(result).toEqual({ kind: "stale" })
+    expect(published).toEqual([])
+    expect(calls.order).toEqual([
+      "getQaAnswer",
+      "runAskVideo",
+      "saveQaAnswer",
+      "appendAssistantMessage",
+    ])
+    expect(calls.saveQaAnswer).toHaveLength(1)
+    expect(calls.saveQaAnswer[0]!.contentKey).toBe(CONTENT_KEY)
+    expect(calls.saveQaAnswer[0]!.analysisRunId).toBe(ANALYSIS_RUN_ID)
+    expect(calls.saveQaAnswer[0]!.transcriptFingerprint).toBe(FINGERPRINT)
+    expect(calls.appendAssistantMessage).toHaveLength(1)
+    expect(calls.appendAssistantMessage[0]!.threadId).toBe("thread-a")
+    expect(assistantMessage.threadId).toBe("thread-a")
+    expect(answer).toEqual(createAskAnswer())
+  })
+
+  it("publishes an A -> B -> A completion once the displayed identity matches again", async () => {
+    const { dependencies } = createFakeDependencies()
+    const controller = createAskController(dependencies)
+    const workspace = new WorkspaceController()
+    const request = createExecutionTaskRequest()
+
+    displayOtherVideo(workspace)
+    await controller.runExecutionTask(request)
+
+    // The user returned to the original analysis and thread before the result
+    // was published.
+    workspace.syncDisplaySelection({
+      analysis: { contentKey: CONTENT_KEY, analysisRunId: ANALYSIS_RUN_ID },
+      qaThreadId: "thread-a",
+    })
+
+    const published: string[] = []
+    const result = workspace.publishAskResult({
+      requested: requestedIdentity(request.taskSnapshot),
+      current: readDisplayedAskIdentity(workspace, FINGERPRINT),
+      effects: {
+        publishAssistantMessage: () => published.push("publishAssistantMessage"),
+        publishAnswer: () => published.push("publishAnswer"),
+      },
+    })
+
+    expect(result).toEqual({ kind: "published" })
+    expect(published).toEqual(["publishAssistantMessage", "publishAnswer"])
   })
 })
 

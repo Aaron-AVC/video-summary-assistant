@@ -15,15 +15,20 @@ import {
   isApplicationMounted,
   isBenignBrowserNoise,
   isSafeArtifactRelativePath,
+  listExtensionServiceWorkerCandidates,
+  matchesArtifactManifest,
   parseArtifactManifest,
+  parseRuntimeManifestSnapshot,
   planCleanup,
   resolveArtifactPath,
   resolveBackgroundScriptPath,
   resolveExtensionPagePath,
-  selectExtensionTargets,
+  selectVerifiedExtensionCandidate,
   toExceptionRecord,
   validateChromePath,
   type CdpTarget,
+  type RuntimeManifestSnapshot,
+  type VerifiedExtensionCandidate,
 } from "../lib/artifact-gate-policy"
 
 const VALID_MANIFEST = {
@@ -200,9 +205,7 @@ describe("page path containment", () => {
   })
 })
 
-describe("target filtering", () => {
-  const background = "static/background/index.js"
-
+describe("extension worker discovery", () => {
   it("classifies target types", () => {
     expect(classifyTargetType("service_worker")).toBe("service_worker")
     expect(classifyTargetType("page")).toBe("page")
@@ -217,55 +220,142 @@ describe("target filtering", () => {
     expect(extractExtensionId("chrome-extension://")).toBeNull()
   })
 
-  it("selects the artifact's own service worker, not a bundled browser extension", () => {
+  it("enumerates every extension service worker as a candidate", () => {
     const targets = [
       target("service_worker", "chrome-extension://nkeimhogjdpnpccoofpliimaahmaaome/thunk.js", "a"),
-      target("service_worker", `chrome-extension://${EXTENSION_ID}/${background}`, "b"),
+      target("service_worker", `chrome-extension://${EXTENSION_ID}/service_worker.js`, "b"),
       target("page", "about:blank", "c"),
     ]
-    const selected = selectExtensionTargets(targets, background, "sidepanel.html", "options.html")
-    expect(selected).not.toBeNull()
-    expect(selected!.extensionId).toBe(EXTENSION_ID)
-    expect(selected!.background!.id).toBe("b")
+    const candidates = listExtensionServiceWorkerCandidates(targets)
+    // RG2-3: the artifact worker is a candidate even though its target URL does
+    // not end with the manifest-declared static/background/index.js.
+    expect(candidates.map((candidate) => candidate.target.id)).toEqual(["a", "b"])
+    expect(candidates[1]!.extensionId).toBe(EXTENSION_ID)
   })
 
-  it("ignores extension service workers whose path does not match the manifest", () => {
+  it("does not treat a non service_worker target as a candidate", () => {
     const targets = [
-      target("service_worker", "chrome-extension://glbjnfimcajjenihimblfaponejbkoph/background.js", "a"),
+      target("page", `chrome-extension://${EXTENSION_ID}/static/background/index.js`, "a"),
     ]
-    expect(selectExtensionTargets(targets, background, "sidepanel.html", "options.html")).toBeNull()
+    expect(listExtensionServiceWorkerCandidates(targets)).toEqual([])
   })
 
-  it("ignores non service_worker targets even with a matching URL", () => {
-    const targets = [target("page", `chrome-extension://${EXTENSION_ID}/${background}`, "a")]
-    expect(selectExtensionTargets(targets, background, "sidepanel.html", "options.html")).toBeNull()
+  it("parses a runtime manifest snapshot into the preflight shape", () => {
+    const snapshot = parseRuntimeManifestSnapshot({
+      id: EXTENSION_ID,
+      manifest: VALID_MANIFEST,
+    })
+    expect(snapshot).not.toBeNull()
+    expect(snapshot!.extensionId).toBe(EXTENSION_ID)
+    expect(snapshot!.manifestVersion).toBe(3)
+    expect(snapshot!.name).toBe("Video Summary Assistant")
+    expect(snapshot!.backgroundServiceWorker).toBe("static/background/index.js")
+    expect(snapshot!.backgroundPage).toBeNull()
+    expect(snapshot!.sidePanelPath).toBe("sidepanel.html")
+    expect(snapshot!.optionsPath).toBe("options.html")
   })
 
-  it("requires a manifest background path before selecting anything", () => {
-    const targets = [target("service_worker", `chrome-extension://${EXTENSION_ID}/${background}`, "a")]
-    expect(selectExtensionTargets(targets, null, "sidepanel.html", "options.html")).toBeNull()
+  it("rejects a payload without a manifest object", () => {
+    expect(parseRuntimeManifestSnapshot({ id: EXTENSION_ID })).toBeNull()
+    expect(parseRuntimeManifestSnapshot({ id: EXTENSION_ID, manifest: "nope" })).toBeNull()
+    expect(parseRuntimeManifestSnapshot(null)).toBeNull()
+    expect(parseRuntimeManifestSnapshot(undefined)).toBeNull()
   })
 
-  it("finds already-open side panel and options page targets", () => {
-    const targets = [
-      target("service_worker", `chrome-extension://${EXTENSION_ID}/${background}`, "sw"),
-      target("page", `chrome-extension://${EXTENSION_ID}/sidepanel.html`, "sp"),
-      target("page", `chrome-extension://${EXTENSION_ID}/options.html`, "opt"),
-      target("page", "chrome-extension://otheridotheridotheridotherid/options.html", "foreign"),
+  it("fails closed on an unsafe manifest path", () => {
+    const snapshot = parseRuntimeManifestSnapshot({
+      id: EXTENSION_ID,
+      manifest: { ...VALID_MANIFEST, background: { service_worker: "../escape.js" } },
+    })
+    expect(snapshot).not.toBeNull()
+    expect(snapshot!.backgroundServiceWorker).toBeNull()
+  })
+
+  function verifiedWorker(
+    overrides: Partial<RuntimeManifestSnapshot> = {},
+    targetExtensionId = EXTENSION_ID,
+  ): VerifiedExtensionCandidate {
+    return {
+      extensionId: targetExtensionId,
+      target: target("service_worker", `chrome-extension://${targetExtensionId}/service_worker.js`, "sw"),
+      manifest: {
+        extensionId: targetExtensionId,
+        manifestVersion: 3,
+        name: "Video Summary Assistant",
+        backgroundServiceWorker: "static/background/index.js",
+        backgroundPage: null,
+        sidePanelPath: "sidepanel.html",
+        optionsPath: "options.html",
+        ...overrides,
+      },
+    }
+  }
+
+  it("accepts a worker whose own manifest matches the artifact", () => {
+    const expected = parseArtifactManifest(VALID_MANIFEST)
+    expect(matchesArtifactManifest(verifiedWorker(), expected)).toBe(true)
+  })
+
+  it("RG2-3: verifies a Chrome 155 worker whose target URL is /service_worker.js", () => {
+    // Chrome 155 exposes the extension's MV3 service worker as
+    // chrome-extension://<id>/service_worker.js even though the manifest declares
+    // static/background/index.js. Identity comes from the worker's own manifest,
+    // so the aliased target URL must not produce a false negative.
+    const expected = parseArtifactManifest(VALID_MANIFEST)
+    const worker = verifiedWorker()
+    expect(worker.target.url).toBe(`chrome-extension://${EXTENSION_ID}/service_worker.js`)
+    expect(worker.manifest.backgroundServiceWorker).toBe("static/background/index.js")
+    expect(matchesArtifactManifest(worker, expected)).toBe(true)
+  })
+
+  it("RG2-6: rejects a worker whose runtime id disagrees with the target URL id", () => {
+    const expected = parseArtifactManifest(VALID_MANIFEST)
+    const otherId = "abcdefghijklmnopabcdefghijklmnop"
+    const candidate = verifiedWorker({ extensionId: otherId })
+    expect(matchesArtifactManifest(candidate, expected)).toBe(false)
+  })
+
+  it("rejects a missing runtime id", () => {
+    const expected = parseArtifactManifest(VALID_MANIFEST)
+    expect(matchesArtifactManifest(verifiedWorker({ extensionId: null }), expected)).toBe(false)
+  })
+
+  it("RG2-5: rejects every identity-field disagreement with the artifact", () => {
+    const expected = parseArtifactManifest(VALID_MANIFEST)
+    const mismatches: RuntimeManifestSnapshot[] = [
+      { ...verifiedWorker().manifest, manifestVersion: 2 },
+      { ...verifiedWorker().manifest, name: "Some Other Extension" },
+      { ...verifiedWorker().manifest, backgroundServiceWorker: "static/other.js" },
+      { ...verifiedWorker().manifest, backgroundServiceWorker: null },
+      { ...verifiedWorker().manifest, sidePanelPath: "other.html" },
+      { ...verifiedWorker().manifest, optionsPath: null },
     ]
-    const selected = selectExtensionTargets(targets, background, "sidepanel.html", "options.html")
-    expect(selected!.sidePanel!.id).toBe("sp")
-    expect(selected!.options!.id).toBe("opt")
+    for (const manifest of mismatches) {
+      expect(matchesArtifactManifest({ ...verifiedWorker(), manifest }, expected)).toBe(false)
+    }
   })
 
-  it("does not attach a foreign extension's page to this artifact", () => {
-    const foreignId = "abcdefghijklmnopabcdefghijklmnop"
-    const targets = [
-      target("service_worker", `chrome-extension://${EXTENSION_ID}/${background}`, "sw"),
-      target("page", `chrome-extension://${foreignId}/options.html`, "foreign"),
-    ]
-    const selected = selectExtensionTargets(targets, background, "sidepanel.html", "options.html")
-    expect(selected!.options).toBeNull()
+  it("selects the only verified candidate", () => {
+    const selection = selectVerifiedExtensionCandidate([verifiedWorker()])
+    expect(selection.kind).toBe("selected")
+    if (selection.kind === "selected") {
+      expect(selection.candidate.extensionId).toBe(EXTENSION_ID)
+    }
+  })
+
+  it("reports none when nothing matches the artifact", () => {
+    expect(selectVerifiedExtensionCandidate([]).kind).toBe("none")
+  })
+
+  it("RG2-7: refuses to guess when two workers report the artifact manifest", () => {
+    const selection = selectVerifiedExtensionCandidate([
+      verifiedWorker({}, EXTENSION_ID),
+      verifiedWorker({}, "abcdefghijklmnopabcdefghijklmnop"),
+    ])
+    expect(selection.kind).toBe("ambiguous")
+    if (selection.kind === "ambiguous") {
+      expect(selection.candidates).toHaveLength(2)
+    }
   })
 })
 

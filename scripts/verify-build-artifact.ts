@@ -29,18 +29,23 @@ import {
   extractExtensionId,
   findUnsafeManifestPath,
   isApplicationMounted,
+  listExtensionServiceWorkerCandidates,
+  matchesArtifactManifest,
   parseArtifactManifest,
+  parseRuntimeManifestSnapshot,
   planCleanup,
   resolveArtifactPath,
   resolveBackgroundScriptPath,
-  selectExtensionTargets,
+  selectVerifiedExtensionCandidate,
   toExceptionRecord,
   validateChromePath,
   type ArtifactManifest,
   type CdpTarget,
   type ExceptionRecord,
   type GateStage,
+  type ServiceWorkerCandidate,
   type SpawnedBrowser,
+  type VerifiedExtensionCandidate,
 } from "./lib/artifact-gate-policy"
 
 type CliOptions = {
@@ -313,6 +318,19 @@ async function evaluate<T>(
   return (remote as Record<string, unknown>).value as T
 }
 
+/**
+ * Read the worker's own manifest. This is the authoritative identity surface:
+ * the target URL is only used to enumerate candidates and is not trusted as the
+ * background-script path.
+ */
+const MANIFEST_PROBE = `(() => {
+  try {
+    return JSON.stringify({ id: chrome.runtime.id, manifest: chrome.runtime.getManifest() })
+  } catch (error) {
+    return JSON.stringify({ id: null, error: String(error) })
+  }
+})()`
+
 type MountSnapshot = {
   readyState: string
   rootChildCount: number
@@ -360,6 +378,95 @@ async function waitForMount(
 async function stabilityWindow(): Promise<void> {
   const deadline = Date.now() + STABILITY_WINDOW_MS
   while (Date.now() < deadline) await Bun.sleep(100)
+}
+
+/**
+ * Read one service worker's own manifest and keep it only if it matches the
+ * artifact under test.
+ *
+ * A worker that cannot be attached to, or that reports a different manifest,
+ * is simply not the artifact: returning null keeps discovery polling instead of
+ * failing the run on a bundled browser extension. Failures are not cached by the
+ * caller so a worker that restarts mid-discovery gets another chance.
+ */
+async function probeServiceWorkerManifest(
+  connection: CdpConnection,
+  candidate: ServiceWorkerCandidate,
+  expected: ArtifactManifest,
+): Promise<VerifiedExtensionCandidate | null> {
+  let sessionId: string | null = null
+  const trace = (message: string): void => {
+    if (process.env.VSA_GATE_DEBUG) console.log(`[discovery-debug] ${candidate.target.id}: ${message}`)
+  }
+  try {
+    const attached = await connection.send("Target.attachToTarget", {
+      targetId: candidate.target.id,
+      flatten: true,
+    })
+    const attachedSession = attached.result?.sessionId
+    if (typeof attachedSession !== "string") {
+      trace(`attach returned no session: ${JSON.stringify(attached)}`)
+      return null
+    }
+    sessionId = attachedSession
+
+    await connection.send("Runtime.enable", {}, sessionId)
+    const response = await connection.send(
+      "Runtime.evaluate",
+      { expression: MANIFEST_PROBE, returnByValue: true },
+      sessionId,
+    )
+    if (response.result?.exceptionDetails) {
+      trace(`evaluate threw: ${JSON.stringify(response.result.exceptionDetails)}`)
+      return null
+    }
+
+    const remote = response.result?.result
+    const value =
+      typeof remote === "object" && remote !== null
+        ? (remote as Record<string, unknown>).value
+        : undefined
+    if (typeof value !== "string") {
+      trace(`evaluate returned non-string: ${JSON.stringify(response)}`)
+      return null
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      trace(`payload is not JSON: ${value.slice(0, 200)}`)
+      return null
+    }
+    const snapshot = parseRuntimeManifestSnapshot(parsed)
+    if (!snapshot) {
+      trace(`payload has no usable manifest: ${value.slice(0, 200)}`)
+      return null
+    }
+
+    const verified: VerifiedExtensionCandidate = {
+      extensionId: candidate.extensionId,
+      target: candidate.target,
+      manifest: snapshot,
+    }
+    const matched = matchesArtifactManifest(verified, expected)
+    if (!matched) {
+      trace(
+        `manifest mismatch: runtime=${JSON.stringify(snapshot)} expected=${JSON.stringify(expected)}`,
+      )
+    }
+    return matched ? verified : null
+  } catch {
+    return null
+  } finally {
+    if (sessionId !== null) {
+      try {
+        await connection.send("Target.detachFromTarget", { sessionId })
+      } catch {
+        // Detach is best effort; the connection is closed during cleanup anyway.
+      }
+    }
+  }
 }
 
 function printExceptionReport(collector: ExceptionCollector): void {
@@ -568,9 +675,18 @@ async function runGate(options: CliOptions): Promise<GateResult> {
     }
 
     // ---- Stage: extension discovery ----------------------------------------
+    // A stock Chromium profile also runs bundled extension service workers, so
+    // a service_worker target alone is not proof that the artifact is loaded.
+    // Each candidate worker is asked for its own manifest, and only an exact
+    // manifest/identity match is selected. The target URL is never compared with
+    // the manifest-declared background script: Chromium may normalize it (for
+    // example `static/background/index.js` in the manifest versus
+    // `/service_worker.js` in the target URL).
     const discoveryDeadline = Date.now() + STAGE_TIMEOUTS_MS.extensionDiscovery
-    let extension: ReturnType<typeof selectExtensionTargets> = null
+    let extension: VerifiedExtensionCandidate | null = null
     let lastTargets: CdpTarget[] = []
+    let lastCandidates: ServiceWorkerCandidate[] = []
+    const verifiedWorkers = new Map<string, VerifiedExtensionCandidate>()
 
     while (Date.now() < discoveryDeadline) {
       try {
@@ -580,13 +696,32 @@ async function runGate(options: CliOptions): Promise<GateResult> {
         // different failure from "extension never loaded".
         fail("extensionDiscovery", `CDP target enumeration failed: ${String(error)}`)
       }
-      extension = selectExtensionTargets(
-        lastTargets,
-        backgroundScript,
-        manifest.sidePanelPath,
-        manifest.optionsPath,
-      )
-      if (extension) break
+      lastCandidates = listExtensionServiceWorkerCandidates(lastTargets)
+
+      const verified: VerifiedExtensionCandidate[] = []
+      for (const candidate of lastCandidates) {
+        let entry = verifiedWorkers.get(candidate.target.id)
+        if (!entry) {
+          entry = (await probeServiceWorkerManifest(connection, candidate, manifest)) ?? undefined
+          if (entry) verifiedWorkers.set(candidate.target.id, entry)
+        }
+        if (entry) verified.push(entry)
+      }
+
+      const selection = selectVerifiedExtensionCandidate(verified)
+      if (selection.kind === "selected") {
+        extension = selection.candidate
+        break
+      }
+      if (selection.kind === "ambiguous") {
+        fail(
+          "extensionDiscovery",
+          "Ambiguous extension discovery: multiple service workers report the artifact manifest.",
+          `Candidates: ${selection.candidates
+            .map((candidate) => `${candidate.target.id}:${candidate.target.url}`)
+            .join(", ")}`,
+        )
+      }
       await Bun.sleep(300)
     }
 
@@ -600,24 +735,35 @@ async function runGate(options: CliOptions): Promise<GateResult> {
             "this Chromium build accepts --load-extension.",
         )
       }
+      if (lastCandidates.length === 0) {
+        fail(
+          "extensionDiscovery",
+          "The extension loaded but no service worker target appeared.",
+          `Expected background service worker path: ${backgroundScript}. Observed extension targets: ` +
+            extensionTargets.map((target) => `${target.type}:${target.url}`).join(", "),
+        )
+      }
       fail(
         "extensionDiscovery",
-        "The extension loaded but its background service worker never started.",
-        `Expected service worker path: ${backgroundScript}. Observed extension targets: ` +
+        "Extension service workers started but none reported the artifact manifest.",
+        `Expected manifest: manifest_version=${manifest.manifestVersion}, name=${manifest.name}, ` +
+          `background.service_worker=${manifest.backgroundServiceWorker}. Observed candidates: ` +
+          lastCandidates.map((candidate) => `${candidate.target.id}:${candidate.target.url}`).join(", ") +
+          `. Observed extension targets: ` +
           extensionTargets.map((target) => `${target.type}:${target.url}`).join(", "),
       )
     }
 
     const extensionId = extension.extensionId
-    if (extractExtensionId(extension.background!.url) !== extensionId) {
+    if (extractExtensionId(extension.target.url) !== extensionId) {
       fail("extensionDiscovery", "Extension id extraction disagreed with the discovered target.")
     }
-    console.log(`Extension ID: ${extensionId} (discovered from CDP targets)`)
+    console.log(`Extension ID: ${extensionId} (verified from the worker manifest)`)
     console.log("[PASS] Extension loaded")
 
     // ---- Gate A: background service worker ---------------------------------
     {
-      const backgroundTarget = extension.background!
+      const backgroundTarget = extension.target
       const sessionId = await attachToTarget(connection, backgroundTarget.id, "background")
       const stop = collector.watch(connection, sessionId, "background", () => backgroundTarget.url)
       try {

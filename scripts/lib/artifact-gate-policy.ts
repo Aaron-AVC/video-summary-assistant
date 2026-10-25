@@ -57,13 +57,6 @@ export type CdpTarget = {
   title?: string
 }
 
-export type ExtensionTargets = {
-  extensionId: string
-  background: CdpTarget | null
-  sidePanel: CdpTarget | null
-  options: CdpTarget | null
-}
-
 export type ExceptionRecord = {
   /** Where the report came from, for actionable failure output. */
   source: "runtime.exceptionThrown" | "runtime.consoleAPICalled" | "log.entryAdded"
@@ -238,54 +231,130 @@ export function extractExtensionId(url: string): string | null {
 }
 
 /**
- * Pick the extension's own targets out of a raw target list.
+ * One `service_worker` CDP target that belongs to some extension.
  *
- * `backgroundScriptPath` is the manifest-declared service worker path; matching
- * it is what prevents a bundled browser extension (Hangouts, PDF viewer, ...)
- * from being mistaken for the artifact under test.
+ * The target URL is only used to obtain a candidate extension id. It is
+ * deliberately NOT treated as the canonical identity of the manifest-declared
+ * background script: Chromium may report a normalized worker URL such as
+ * `chrome-extension://<id>/service_worker.js` even when the manifest declares
+ * `static/background/index.js`. The manifest read inside the worker is the
+ * authority.
  */
-export function selectExtensionTargets(
-  targets: readonly CdpTarget[],
-  backgroundScriptPath: string | null,
-  sidePanelPath: string | null,
-  optionsPath: string | null,
-): ExtensionTargets | null {
-  const normalizedBackground = backgroundScriptPath?.replace(/^\/+/, "") ?? null
-
-  for (const target of targets) {
-    const kind = classifyTargetType(target.type)
-    if (kind !== "service_worker") continue
-    const extensionId = extractExtensionId(target.url)
-    if (!extensionId) continue
-    if (!normalizedBackground) continue
-    if (!target.url.endsWith(`/${normalizedBackground}`)) continue
-
-    return {
-      extensionId,
-      background: target,
-      sidePanel: findPageTarget(targets, extensionId, sidePanelPath),
-      options: findPageTarget(targets, extensionId, optionsPath),
-    }
-  }
-
-  return null
+export type ServiceWorkerCandidate = {
+  extensionId: string
+  target: CdpTarget
 }
 
-function findPageTarget(
+/**
+ * The manifest a service worker reports about itself, normalized exactly like
+ * the artifact manifest so the two can be compared field by field.
+ */
+export type RuntimeManifestSnapshot = {
+  extensionId: string | null
+  manifestVersion: number | null
+  name: string | null
+  backgroundServiceWorker: string | null
+  backgroundPage: string | null
+  sidePanelPath: string | null
+  optionsPath: string | null
+}
+
+export type VerifiedExtensionCandidate = {
+  extensionId: string
+  target: CdpTarget
+  manifest: RuntimeManifestSnapshot
+}
+
+export type VerifiedCandidateSelection =
+  | { kind: "selected"; candidate: VerifiedExtensionCandidate }
+  | { kind: "none" }
+  | { kind: "ambiguous"; candidates: VerifiedExtensionCandidate[] }
+
+/**
+ * Enumerate every extension service worker the browser is running.
+ *
+ * Not every candidate is the artifact under test: a stock Chromium profile also
+ * runs bundled extensions. Verification happens in the runtime gate by reading
+ * each worker's own manifest; this helper only narrows the target list to
+ * well-formed extension service workers.
+ */
+export function listExtensionServiceWorkerCandidates(
   targets: readonly CdpTarget[],
-  extensionId: string,
-  pagePath: string | null,
-): CdpTarget | null {
-  if (!pagePath) return null
-  const normalized = pagePath.replace(/^\/+/, "")
-  const suffix = `/extension-${extensionId}/${normalized}`
+): ServiceWorkerCandidate[] {
+  const candidates: ServiceWorkerCandidate[] = []
   for (const target of targets) {
-    if (classifyTargetType(target.type) !== "page") continue
-    if (!target.url.startsWith("chrome-extension://")) continue
-    if (extractExtensionId(target.url) !== extensionId) continue
-    if (target.url.includes(`/${normalized}`) || target.url.endsWith(suffix)) return target
+    if (classifyTargetType(target.type) !== "service_worker") continue
+    const extensionId = extractExtensionId(target.url)
+    if (!extensionId) continue
+    candidates.push({ extensionId, target })
   }
-  return null
+  return candidates
+}
+
+/**
+ * Normalize the `{ id, manifest }` payload read from inside a service worker.
+ *
+ * Returns null when the payload has no usable manifest object, so the caller
+ * treats the worker as unverified instead of matching against partial data.
+ */
+export function parseRuntimeManifestSnapshot(raw: unknown): RuntimeManifestSnapshot | null {
+  if (!isRecord(raw)) return null
+  const manifest = isRecord(raw.manifest) ? raw.manifest : null
+  if (!manifest) return null
+
+  const background = isRecord(manifest.background) ? manifest.background : null
+  const sidePanel = isRecord(manifest.side_panel) ? manifest.side_panel : null
+  const optionsUi = isRecord(manifest.options_ui) ? manifest.options_ui : null
+
+  return {
+    extensionId: asString(raw.id),
+    manifestVersion:
+      typeof manifest.manifest_version === "number" ? manifest.manifest_version : null,
+    name: asString(manifest.name),
+    backgroundServiceWorker: resolveExtensionPagePath(asString(background?.service_worker)),
+    backgroundPage: resolveExtensionPagePath(asString(background?.page)),
+    sidePanelPath: resolveExtensionPagePath(asString(sidePanel?.default_path)),
+    optionsPath: resolveExtensionPagePath(asString(optionsUi?.page)),
+  }
+}
+
+/**
+ * Decide whether one verified worker really is the production artifact.
+ *
+ * The runtime id must agree with the extension id in the target URL, and the
+ * worker's own manifest must declare the same identity surface the preflight
+ * read from the artifact. Any missing or unsafe path fails closed: a worker
+ * that cannot prove its manifest is never selected.
+ */
+export function matchesArtifactManifest(
+  candidate: { extensionId: string; manifest: RuntimeManifestSnapshot },
+  expected: ArtifactManifest,
+): boolean {
+  const runtime = candidate.manifest
+  if (runtime.extensionId === null) return false
+  if (runtime.extensionId !== candidate.extensionId) return false
+  if (runtime.manifestVersion !== expected.manifestVersion) return false
+  if (runtime.name !== expected.name) return false
+  return (
+    runtime.backgroundServiceWorker === expected.backgroundServiceWorker &&
+    runtime.backgroundPage === expected.backgroundPage &&
+    runtime.sidePanelPath === expected.sidePanelPath &&
+    runtime.optionsPath === expected.optionsPath
+  )
+}
+
+/**
+ * Pick the single verified candidate.
+ *
+ * Zero candidates is a discovery failure and more than one is an ambiguity
+ * failure; neither is resolved by silently taking the first entry.
+ */
+export function selectVerifiedExtensionCandidate(
+  candidates: readonly VerifiedExtensionCandidate[],
+): VerifiedCandidateSelection {
+  if (candidates.length === 0) return { kind: "none" }
+  if (candidates.length > 1) return { kind: "ambiguous", candidates: [...candidates] }
+  return { kind: "selected", candidate: candidates[0]! }
 }
 
 /**

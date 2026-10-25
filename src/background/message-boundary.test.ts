@@ -557,6 +557,15 @@ describe("background inbound boundary: malformed privileged requests", () => {
     contentKey: `youtube:${YOUTUBE_VIDEO_ID}`,
   }
 
+  function jumpMessage(identity: unknown, timestampSeconds: unknown = 5) {
+    return {
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: JUMP_TO_TIMESTAMP,
+      identity,
+      timestampSeconds,
+    }
+  }
+
   it("never opens a tab for a non-finite timestamp", async () => {
     for (const timestampSeconds of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, "5", null]) {
       const result = await settle(
@@ -581,13 +590,44 @@ describe("background inbound boundary: malformed privileged requests", () => {
   })
 
   it("never opens a tab for an invalid or unsupported identity", async () => {
+    const bilibiliVideoId = "BV1xx411c7mD"
+    const canonicalBilibiliKey = `bilibili:${bilibiliVideoId}:p:2`
+
     for (const identity of [
       null,
       undefined,
       {},
+      // A platform alone is not an identity: it must not reach the privileged action.
+      { platform: "youtube" },
+      { platform: "youtube", videoId: "" },
+      { platform: "youtube", videoId: YOUTUBE_VIDEO_ID },
+      { platform: "youtube", videoId: YOUTUBE_VIDEO_ID, contentKey: "youtube:OTHER" },
+      {
+        platform: "youtube",
+        videoId: YOUTUBE_VIDEO_ID,
+        contentKey: `youtube:${YOUTUBE_VIDEO_ID}`,
+        partId: "1",
+      },
+      {
+        platform: "youtube",
+        videoId: YOUTUBE_VIDEO_ID,
+        contentKey: `youtube:${YOUTUBE_VIDEO_ID}`,
+        partId: null,
+      },
+      { platform: "youtube", videoId: "javascript:alert(1)//evil.example", contentKey: "youtube:x" },
       { platform: "vimeo", videoId: YOUTUBE_VIDEO_ID },
-      { platform: "bilibili", videoId: "not-a-bv-id" },
       { platform: "bilibili" },
+      { platform: "bilibili", videoId: "not-a-bv-id" },
+      { platform: "bilibili", videoId: bilibiliVideoId },
+      { platform: "bilibili", videoId: bilibiliVideoId, contentKey: `bilibili:${bilibiliVideoId}` },
+      { platform: "bilibili", videoId: bilibiliVideoId, contentKey: `bilibili:${bilibiliVideoId}:p:0` },
+      {
+        platform: "bilibili",
+        videoId: bilibiliVideoId,
+        contentKey: "bilibili:BV1yy411c7mD:p:2",
+      },
+      { platform: "bilibili", videoId: bilibiliVideoId, contentKey: canonicalBilibiliKey, partId: "1" },
+      { platform: "bilibili", videoId: bilibiliVideoId, contentKey: canonicalBilibiliKey, partId: null },
     ]) {
       const result = await settle(
         {
@@ -602,8 +642,7 @@ describe("background inbound boundary: malformed privileged requests", () => {
       expect(result.responded).toBe(true)
       expect((result.response as { ok: boolean }).ok).toBe(false)
       expect(typeof (result.response as { error: unknown }).error).toBe("string")
-      expect(harness.calls.tabsCreated).toHaveLength(0)
-      expect(harness.calls.injections).toHaveLength(0)
+      expectNoPrivilegedCalls()
     }
   })
 
@@ -617,8 +656,8 @@ describe("background inbound boundary: malformed privileged requests", () => {
     }
   })
 
-  it("keeps identity fields out of the created tab origin", async () => {
-    await settle(
+  it("rejects a forged videoId instead of laundering it into a tab", async () => {
+    const result = await settle(
       {
         channel: RUNTIME_MESSAGE_NAMESPACE,
         type: JUMP_TO_TIMESTAMP,
@@ -632,12 +671,72 @@ describe("background inbound boundary: malformed privileged requests", () => {
       senderFor(YOUTUBE_URL),
     )
 
-    // Whether the request is rejected outright or still opens a tab, the tab origin is
-    // derived from the adapter and can never be steered by identity fields.
-    const created = harness.calls.tabsCreated[0]
-    if (created) expect(new URL(String(created.url)).origin).toBe("https://www.youtube.com")
-    expect(harness.calls.injections).toHaveLength(0)
-    expect(harness.calls.fetches).toHaveLength(0)
+    // The identity itself is refused; no tab is opened at all, so the origin of a tab
+    // is no longer the only thing standing between a forged identity and navigation.
+    expect(result.response).toMatchObject({
+      ok: false,
+      type: JUMP_TO_TIMESTAMP,
+      error: "The target video identity is invalid.",
+    })
+    expect(harness.calls.tabsCreated).toHaveLength(0)
+    expectNoPrivilegedCalls()
+  })
+
+  it("still opens the canonical YouTube timestamp for a valid identity", async () => {
+    const result = await settle(jumpMessage(validIdentity), senderFor(YOUTUBE_URL))
+
+    expect(result.response).toMatchObject({ ok: true, openedNewTab: true })
+    expect(harness.calls.tabsCreated).toHaveLength(1)
+    expect(harness.calls.tabsCreated[0].url).toBe(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5",
+    )
+  })
+
+  it("keeps the canonical bilibili part when the request omits partId", async () => {
+    // The canonical key says p:2 while no partId is supplied: the parser result is
+    // authoritative, so the jump must not silently fall back to the first part.
+    const result = await settle(
+      jumpMessage({
+        platform: "bilibili",
+        videoId: "BV1xx411c7mD",
+        contentKey: "bilibili:BV1xx411c7mD:p:2",
+      }),
+      senderFor(BILIBILI_VIDEO_URL),
+    )
+
+    expect(result.response).toMatchObject({ ok: true, openedNewTab: true })
+    expect(harness.calls.tabsCreated).toHaveLength(1)
+    expect(harness.calls.tabsCreated[0].url).toBe(
+      "https://www.bilibili.com/video/BV1xx411c7mD/?p=2&t=5",
+    )
+  })
+
+  it("still seeks inside the current tab when it shows the same canonical contentKey", async () => {
+    harness.activeTabs = [{ id: 7, url: YOUTUBE_URL } as chrome.tabs.Tab]
+    harness.tabLookup = (tabId) => ({ id: tabId, url: YOUTUBE_URL })
+    harness.tabMessageResponder = async () => ({
+      ok: true,
+      type: JUMP_TO_TIMESTAMP,
+      jumped: true,
+    })
+
+    const result = await settle(jumpMessage(validIdentity), senderFor(YOUTUBE_URL))
+
+    // Identity normalization must not break the in-tab path: the canonical identity is
+    // still recognized by `isTabShowingVideo`, so no tab is created.
+    expect(result.response).toMatchObject({
+      ok: true,
+      tabId: 7,
+      jumped: true,
+      openedNewTab: false,
+    })
+    expect(harness.calls.tabsCreated).toHaveLength(0)
+    expect(harness.calls.tabMessages).toHaveLength(1)
+    expect(harness.calls.tabMessages[0].message).toEqual({
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: JUMP_TO_TIMESTAMP,
+      timestampSeconds: 5,
+    })
   })
 })
 

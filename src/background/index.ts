@@ -1,4 +1,5 @@
 import { resolvePlatformAdapter, resolvePlatformAdapterForIdentity } from "@/features/platform/registry"
+import { parseContentKey } from "@/features/platform/content-key"
 import {
   normalizeYouTubeLivePlayerState,
   normalizeYouTubeTimedtextCandidate,
@@ -233,10 +234,13 @@ async function handleRuntimeMessage(
           throw new Error("Timestamp must be a finite number.")
         }
 
-        const adapter = resolvePlatformAdapterForIdentity(message.identity)
+        const identity = resolveJumpIdentity(message.identity)
+        if (!identity) throw new Error("The target video identity is invalid.")
+
+        const adapter = resolvePlatformAdapterForIdentity(identity)
         if (!adapter) throw new Error("The target video platform is not supported.")
 
-        if (await isTabShowingVideo(tabId, message.identity)) {
+        if (await isTabShowingVideo(tabId, identity)) {
           const jumped = await jumpToTimestamp(tabId, message.timestampSeconds)
           return {
             ok: true,
@@ -249,7 +253,7 @@ async function handleRuntimeMessage(
         }
 
         const newTab = await chrome.tabs.create({
-          url: adapter.buildTimestampUrl(message.identity, message.timestampSeconds),
+          url: adapter.buildTimestampUrl(identity, message.timestampSeconds),
           active: true,
         })
         return {
@@ -417,6 +421,50 @@ function createVideoFallbackContext(tab: chrome.tabs.Tab): ActiveVideoContext {
     author: null,
     timestampSeconds: 0,
     isReady: false,
+  }
+}
+
+/**
+ * The jump request crosses a privileged boundary: its identity decides which page the
+ * background is allowed to navigate a tab to. Only an identity the platform adapters
+ * could have produced themselves is accepted, so `parseContentKey` is used to reverse
+ * the canonical key and every field must agree with it. A malformed identity resolves
+ * to `null` and must never reach `resolvePlatformAdapterForIdentity`, `isTabShowingVideo`
+ * or `chrome.tabs.create`.
+ */
+function resolveJumpIdentity(value: unknown): VideoIdentity | null {
+  if (typeof value !== "object" || value === null) return null
+
+  const candidate = value as {
+    platform?: unknown
+    videoId?: unknown
+    partId?: unknown
+    contentKey?: unknown
+  }
+  if (typeof candidate.platform !== "string") return null
+  if (typeof candidate.videoId !== "string") return null
+  if (typeof candidate.contentKey !== "string") return null
+
+  const parsed = parseContentKey(candidate.contentKey)
+  if (!parsed) return null
+  if (candidate.platform !== parsed.platform) return null
+  if (candidate.videoId !== parsed.videoId) return null
+
+  if (parsed.platform === "youtube") {
+    // A YouTube identity has no part, so an explicit part — including `null` — is a
+    // forged field rather than metadata to drop silently.
+    if (candidate.partId !== undefined) return null
+    return { platform: "youtube", videoId: parsed.videoId, contentKey: parsed.contentKey }
+  }
+
+  // The canonical key is authoritative for the part; an omitted part is filled in from
+  // it, while an explicit part has to match exactly.
+  if (candidate.partId !== undefined && candidate.partId !== parsed.partId) return null
+  return {
+    platform: "bilibili",
+    videoId: parsed.videoId,
+    partId: parsed.partId,
+    contentKey: parsed.contentKey,
   }
 }
 

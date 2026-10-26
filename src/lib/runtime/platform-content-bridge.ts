@@ -1,7 +1,8 @@
 import type { VideoPlatformAdapter, PlatformPageEnvironment } from "@/features/platform/adapter"
+import type { ActiveVideoContext } from "@/features/platform/types"
 import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
 import { getBilibiliVideoUrlError } from "@/features/platform/bilibili/bilibili-url"
-import { ACTIVE_VIDEO_EVENT, createActiveVideoBridge, readActiveVideoContext } from "@/lib/runtime/current-video"
+import { createActiveVideoBridge, readActiveVideoContext } from "@/lib/runtime/current-video"
 import {
   CONTENT_VIDEO_CONTEXT_CHANGED,
   FETCH_VIDEO_TRANSCRIPT,
@@ -80,16 +81,23 @@ export function installPlatformContentBridge({
       return null
     }
   }
-  createActiveVideoBridge({ document, window, fetch: pageFetch, readYouTubeLivePlayerState })
-  const publishRuntimeContext = (event: Event) => {
-    const context = (event as CustomEvent<unknown>).detail
+  // The active video context travels through this direct callback only. It must never
+  // ride on a window event: a page script can dispatch the same event name, which
+  // would let untrusted page state enter the extension as if the content script sent it.
+  const publishRuntimeContext = (context: ActiveVideoContext) => {
     void chrome.runtime.sendMessage({
       channel: RUNTIME_MESSAGE_NAMESPACE,
       type: CONTENT_VIDEO_CONTEXT_CHANGED,
       context,
     }).catch(() => undefined)
   }
-  window.addEventListener(ACTIVE_VIDEO_EVENT, publishRuntimeContext)
+  createActiveVideoBridge({
+    document,
+    window,
+    fetch: pageFetch,
+    readYouTubeLivePlayerState,
+    onContext: publishRuntimeContext,
+  })
 
   chrome.runtime.onMessage.addListener((
     message: ContentScriptRequestMessage,

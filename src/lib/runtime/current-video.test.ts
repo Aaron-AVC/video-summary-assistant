@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
 
+import type { ActiveVideoContext } from "@/features/platform/types"
 import { createActiveVideoBridge, readActiveVideoContext } from "@/lib/runtime/current-video"
 
 function createDocument(title: string, author = "Channel") {
@@ -125,10 +126,14 @@ describe("active video context", () => {
     try {
       const { document, body } = createBridgeDocument()
       const window = new TestWindow()
+      const published: ActiveVideoContext[] = []
       let liveReads = 0
       const cleanup = createActiveVideoBridge({
         document,
         window: window as unknown as Window,
+        onContext: (context) => {
+          published.push(context)
+        },
         readYouTubeLivePlayerState: async () => {
           liveReads += 1
           return {
@@ -148,6 +153,9 @@ describe("active video context", () => {
       await flushPromises()
 
       expect(liveReads).toBe(0)
+      // Positive control: the internal callback is the only publish path, and a
+      // duplicate snapshot is still deduplicated.
+      expect(published).toHaveLength(1)
       cleanup()
     } finally {
       if (previousMutationObserver) {
@@ -190,6 +198,7 @@ describe("active video context", () => {
       const cleanup = createActiveVideoBridge({
         document,
         window: window as unknown as Window,
+        onContext: () => undefined,
         readYouTubeLivePlayerState: async () => {
           liveReads += 1
           return {

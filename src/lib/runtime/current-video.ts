@@ -7,7 +7,6 @@ import type { FetchLike } from "@/features/transcript/lib/transcript-schema"
 import type { YouTubeLivePlayerState } from "@/features/platform/youtube/youtube-live-state"
 
 export const ACTIVE_VIDEO_REQUEST = "VIDEO_SUMMARY_ASSISTANT_REQUEST_ACTIVE_VIDEO"
-export const ACTIVE_VIDEO_EVENT = "video-summary-assistant:active-video"
 export const ACTIVE_VIDEO_RESPONSE = "VIDEO_SUMMARY_ASSISTANT_ACTIVE_VIDEO"
 
 export type ActiveVideoRequestMessage = {
@@ -28,6 +27,13 @@ type ActiveVideoBridgeOptions = {
   window: Window
   fetch?: FetchLike
   readYouTubeLivePlayerState?: (videoId: string) => Promise<YouTubeLivePlayerState | null>
+  /**
+   * Internal delivery path for the active video context. Required on purpose: the
+   * bridge must not publish through a page-visible channel (a `CustomEvent` on
+   * `window`), because any script on the page could then announce a context the
+   * extension trusted as its own.
+   */
+  onContext: (context: ActiveVideoContext) => void
 }
 
 export function createUnsupportedVideoContext(url = ""): ActiveVideoContext {
@@ -107,6 +113,7 @@ export function createActiveVideoBridge({
   window,
   fetch: fetchImpl = globalThis.fetch as FetchLike,
   readYouTubeLivePlayerState,
+  onContext,
 }: ActiveVideoBridgeOptions) {
   let previousSerialized = ""
   let publishGeneration = 0
@@ -124,9 +131,7 @@ export function createActiveVideoBridge({
       const serialized = JSON.stringify(snapshot)
       if (serialized === previousSerialized) return
       previousSerialized = serialized
-      window.dispatchEvent(
-        new CustomEvent<ActiveVideoContext>(ACTIVE_VIDEO_EVENT, { detail: snapshot }),
-      )
+      onContext(snapshot)
     })
   }
 

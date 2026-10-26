@@ -151,6 +151,274 @@ describe("runtime message boundaries", () => {
     })).toBe(false)
   })
 })
+describe("active video context string bounds", () => {
+  const CANONICAL_URL_PREFIX = "https://www.youtube.com/watch?v="
+  const BILIBILI_BVID = "BV1xx411c7mD"
+
+  function asciiText(length: number): string {
+    return "a".repeat(length)
+  }
+
+  function canonicalUrlWithLength(length: number): string {
+    return CANONICAL_URL_PREFIX + "a".repeat(length - CANONICAL_URL_PREFIX.length)
+  }
+
+  // Astral characters are two UTF-16 code units each, so filling with emoji is
+  // what makes a case distinguish the code-unit budget from Zod's code-point
+  // `.max()`. An odd remainder is padded with ASCII to hit the exact length.
+  function utf16Text(length: number): string {
+    const emojiCount = Math.floor(length / 2)
+    return "😀".repeat(emojiCount) + "a".repeat(length - emojiCount * 2)
+  }
+
+  function urlWithUtf16Length(length: number): string {
+    const remaining = length - CANONICAL_URL_PREFIX.length
+    const emojiCount = Math.floor(remaining / 2)
+    return CANONICAL_URL_PREFIX + "😀".repeat(emojiCount) + "a".repeat(remaining - emojiCount * 2)
+  }
+
+  function contentAnnouncement(context: Record<string, unknown>) {
+    return {
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: CONTENT_VIDEO_CONTEXT_CHANGED,
+      context,
+    }
+  }
+
+  function activeAnnouncement(context: Record<string, unknown>) {
+    return {
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: ACTIVE_VIDEO_CONTEXT_CHANGED,
+      tabId: 7,
+      context,
+    }
+  }
+
+  type BoundedFieldCase = {
+    field: string
+    limit: number
+    build: (length: number) => Record<string, unknown>
+  }
+
+  // Each builder keeps every other field legal so a rejection is attributable to
+  // the field under test: YouTube contexts keep contentKey in sync with videoId,
+  // Bilibili contexts keep the derived `bilibili:<bvid>:p:<partId>` key in sync,
+  // and the contentKey case stays platform-neutral so identity rules cannot fire.
+  const boundedFieldCases: BoundedFieldCase[] = [
+    {
+      field: "videoId",
+      limit: 128,
+      build: (length) => {
+        const videoId = asciiText(length)
+        return { ...createNeutralContext(), videoId, contentKey: `youtube:${videoId}` }
+      },
+    },
+    {
+      field: "partId",
+      limit: 16,
+      build: (length) => createBilibiliContext(asciiText(length)),
+    },
+    {
+      field: "contentKey",
+      limit: 256,
+      build: (length) => ({
+        ...createNeutralContext(),
+        platform: null,
+        videoId: null,
+        partId: null,
+        contentKey: asciiText(length),
+      }),
+    },
+    {
+      field: "url",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), url: canonicalUrlWithLength(length) }),
+    },
+    {
+      field: "canonicalUrl",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), canonicalUrl: canonicalUrlWithLength(length) }),
+    },
+    {
+      field: "title",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), title: asciiText(length) }),
+    },
+    {
+      field: "author",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), author: asciiText(length) }),
+    },
+  ]
+
+  for (const { field, limit, build } of boundedFieldCases) {
+    it(`bounds ${field} at ${limit} characters on both relay boundaries`, () => {
+      const atLimit = build(limit)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(atLimit))).toBe(true)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(atLimit))).toBe(true)
+
+      const overLimit = build(limit + 1)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(overLimit))).toBe(false)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(overLimit))).toBe(false)
+    })
+  }
+
+  it("keeps normal YouTube and Bilibili contexts valid", () => {
+    expect(isContentVideoContextChangedMessage(contentAnnouncement(createNeutralContext()))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement(createNeutralContext()))).toBe(true)
+
+    expect(isContentVideoContextChangedMessage(contentAnnouncement(createBilibiliContext()))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement(createBilibiliContext("12")))).toBe(true)
+
+    // Derived Bilibili identity for the real 12-character bvid stays far below the cap.
+    expect(createBilibiliContext("12").contentKey).toBe(`bilibili:${BILIBILI_BVID}:p:12`)
+  })
+
+  // The declared limits are UTF-16 code-unit budgets (`String.prototype.length`),
+  // which is stricter than Zod's code-point `.max()` for astral text. These cases
+  // fill each field with emoji so the two measures disagree, and they would pass
+  // a code-point-only implementation.
+  const utf16FieldCases: BoundedFieldCase[] = [
+    {
+      field: "videoId",
+      limit: 128,
+      build: (length) => {
+        const videoId = utf16Text(length)
+        return { ...createNeutralContext(), videoId, contentKey: `youtube:${videoId}` }
+      },
+    },
+    {
+      field: "partId",
+      limit: 16,
+      build: (length) => createBilibiliContext(utf16Text(length)),
+    },
+    {
+      field: "contentKey",
+      limit: 256,
+      build: (length) => ({
+        ...createNeutralContext(),
+        platform: null,
+        videoId: null,
+        partId: null,
+        contentKey: utf16Text(length),
+      }),
+    },
+    {
+      field: "url",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), url: urlWithUtf16Length(length) }),
+    },
+    {
+      field: "canonicalUrl",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), canonicalUrl: urlWithUtf16Length(length) }),
+    },
+    {
+      field: "title",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), title: utf16Text(length) }),
+    },
+    {
+      field: "author",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), author: utf16Text(length) }),
+    },
+  ]
+
+  for (const { field, limit, build } of utf16FieldCases) {
+    it(`enforces a ${limit} UTF-16 code unit budget for ${field}`, () => {
+      const atLimit = build(limit)
+      expect((atLimit[field] as string).length).toBe(limit)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(atLimit))).toBe(true)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(atLimit))).toBe(true)
+
+      // One extra ASCII character keeps the payload a single code unit over the
+      // budget while staying well inside the code-point ceiling.
+      const overLimit = build(limit + 1)
+      expect((overLimit[field] as string).length).toBe(limit + 1)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(overLimit))).toBe(false)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(overLimit))).toBe(false)
+    })
+  }
+
+  it("counts astral characters as two UTF-16 code units at the title limit", () => {
+    const emojiAtLimit = "😀".repeat(2_048)
+    expect(emojiAtLimit.length).toBe(4_096)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      title: emojiAtLimit,
+    }))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      title: emojiAtLimit,
+    }))).toBe(true)
+
+    const emojiOverLimit = "😀".repeat(2_049)
+    expect(emojiOverLimit.length).toBe(4_098)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      title: emojiOverLimit,
+    }))).toBe(false)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      title: emojiOverLimit,
+    }))).toBe(false)
+  })
+
+  it("counts CJK characters at the author limit", () => {
+    // BMP characters count the same under code points and UTF-16 code units, so
+    // a CJK author exactly at the limit must pass and one over must be rejected.
+    const cjkAtLimit = "中".repeat(4_096)
+    expect(cjkAtLimit.length).toBe(4_096)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      author: cjkAtLimit,
+    }))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      author: cjkAtLimit,
+    }))).toBe(true)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      author: "中".repeat(4_097),
+    }))).toBe(false)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      author: "中".repeat(4_097),
+    }))).toBe(false)
+  })
+
+  it("keeps null identity and empty url semantics for unsupported contexts", () => {
+    const unsupportedContext = {
+      pageType: "unsupported",
+      platform: null,
+      videoId: null,
+      partId: null,
+      contentKey: null,
+      url: "",
+      canonicalUrl: null,
+      title: null,
+      author: null,
+      timestampSeconds: 0,
+      isReady: false,
+    }
+
+    expect(isContentVideoContextChangedMessage(contentAnnouncement(unsupportedContext))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement(unsupportedContext))).toBe(true)
+  })
+
+  it("still rejects inconsistent identities after the bounds were added", () => {
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createBilibiliContext("2"),
+      contentKey: "bilibili:wrong:p:2",
+    }))).toBe(false)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      contentKey: "youtube:someone-else",
+    }))).toBe(false)
+  })
+})
+
 describe("sendRuntimeMessage validation", () => {
   it("accepts a platform-neutral active video context", async () => {
     installChromeRuntime(async () => ({

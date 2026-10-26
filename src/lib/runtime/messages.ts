@@ -183,16 +183,47 @@ export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequest
   return true
 }
 
+// Page-derived display/identity strings cross the runtime message boundary here.
+// These limits bound message size at the earliest shared validator; they are
+// safety ceilings, not platform business rules.
+const MAX_ACTIVE_CONTEXT_VIDEO_ID_LENGTH = 128
+const MAX_ACTIVE_CONTEXT_PART_ID_LENGTH = 16
+const MAX_ACTIVE_CONTEXT_CONTENT_KEY_LENGTH = 256
+const MAX_ACTIVE_CONTEXT_URL_LENGTH = 16_384
+const MAX_ACTIVE_CONTEXT_TEXT_LENGTH = 4_096
+
+// The declared ceiling is a UTF-16 code-unit budget: it has to match
+// `String.prototype.length`, because that is what bounds the serialized payload
+// and what the hardening spec states. `.max(limit)` keeps the schema's maximum
+// length constraint, but on its own it is not enough: Zod measures `.max()` in
+// Unicode code points, so it counts an astral character (for example an emoji
+// surrogate pair) once while `String.prototype.length` reports two. The explicit
+// `.refine(value => value.length <= limit)` additionally enforces the UTF-16
+// code-unit ceiling, which makes the effective limit exact for every input,
+// emoji-heavy page text included. Both checks run for a given value, so a string
+// that exceeds either measure can report a `.max()` issue and a refinement issue
+// at the same time; that duplicated issue is expected, not a short-circuit.
+function boundedString(
+  limit: number,
+  configure: (schema: z.ZodString) => z.ZodString = (schema) => schema,
+): z.ZodString {
+  return configure(z.string())
+    .max(limit)
+    .refine((value) => value.length <= limit, {
+      message: `String must be at most ${limit} UTF-16 code units.`,
+    })
+}
+
 const activeVideoContextSchema = z.object({
   pageType: z.enum(["video", "unsupported"]),
   platform: z.enum(["youtube", "bilibili"]).nullable(),
-  videoId: z.string().min(1).nullable(),
-  partId: z.string().min(1).nullable(),
-  contentKey: z.string().min(1).nullable(),
-  url: z.string(),
-  canonicalUrl: z.string().url().nullable(),
-  title: z.string().min(1).nullable(),
-  author: z.string().nullable(),
+  videoId: boundedString(MAX_ACTIVE_CONTEXT_VIDEO_ID_LENGTH, (schema) => schema.min(1)).nullable(),
+  partId: boundedString(MAX_ACTIVE_CONTEXT_PART_ID_LENGTH, (schema) => schema.min(1)).nullable(),
+  contentKey: boundedString(MAX_ACTIVE_CONTEXT_CONTENT_KEY_LENGTH, (schema) => schema.min(1)).nullable(),
+  url: boundedString(MAX_ACTIVE_CONTEXT_URL_LENGTH),
+  canonicalUrl: boundedString(MAX_ACTIVE_CONTEXT_URL_LENGTH, (schema) => schema.url()).nullable(),
+  title: boundedString(MAX_ACTIVE_CONTEXT_TEXT_LENGTH, (schema) => schema.min(1)).nullable(),
+  author: boundedString(MAX_ACTIVE_CONTEXT_TEXT_LENGTH).nullable(),
   timestampSeconds: z.number().finite().nonnegative(),
   isReady: z.boolean(),
 }).superRefine((context, issueContext) => {

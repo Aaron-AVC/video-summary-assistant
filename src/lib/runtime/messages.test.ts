@@ -163,6 +163,20 @@ describe("active video context string bounds", () => {
     return CANONICAL_URL_PREFIX + "a".repeat(length - CANONICAL_URL_PREFIX.length)
   }
 
+  // Astral characters are two UTF-16 code units each, so filling with emoji is
+  // what makes a case distinguish the code-unit budget from Zod's code-point
+  // `.max()`. An odd remainder is padded with ASCII to hit the exact length.
+  function utf16Text(length: number): string {
+    const emojiCount = Math.floor(length / 2)
+    return "😀".repeat(emojiCount) + "a".repeat(length - emojiCount * 2)
+  }
+
+  function urlWithUtf16Length(length: number): string {
+    const remaining = length - CANONICAL_URL_PREFIX.length
+    const emojiCount = Math.floor(remaining / 2)
+    return CANONICAL_URL_PREFIX + "😀".repeat(emojiCount) + "a".repeat(remaining - emojiCount * 2)
+  }
+
   function contentAnnouncement(context: Record<string, unknown>) {
     return {
       channel: RUNTIME_MESSAGE_NAMESPACE,
@@ -260,12 +274,76 @@ describe("active video context string bounds", () => {
     expect(createBilibiliContext("12").contentKey).toBe(`bilibili:${BILIBILI_BVID}:p:12`)
   })
 
-  it("counts astral characters as one code point at the title limit", () => {
-    // Zod's `.max()` measures Unicode code points, not UTF-16 code units, so a
-    // 4096-character emoji title (8192 code units) is still within the limit
-    // while 4097 code points are rejected. ASCII-only cases cannot show this.
-    const emojiAtLimit = "😀".repeat(4_096)
-    expect(emojiAtLimit.length).toBe(8_192)
+  // The declared limits are UTF-16 code-unit budgets (`String.prototype.length`),
+  // which is stricter than Zod's code-point `.max()` for astral text. These cases
+  // fill each field with emoji so the two measures disagree, and they would pass
+  // a code-point-only implementation.
+  const utf16FieldCases: BoundedFieldCase[] = [
+    {
+      field: "videoId",
+      limit: 128,
+      build: (length) => {
+        const videoId = utf16Text(length)
+        return { ...createNeutralContext(), videoId, contentKey: `youtube:${videoId}` }
+      },
+    },
+    {
+      field: "partId",
+      limit: 16,
+      build: (length) => createBilibiliContext(utf16Text(length)),
+    },
+    {
+      field: "contentKey",
+      limit: 256,
+      build: (length) => ({
+        ...createNeutralContext(),
+        platform: null,
+        videoId: null,
+        partId: null,
+        contentKey: utf16Text(length),
+      }),
+    },
+    {
+      field: "url",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), url: urlWithUtf16Length(length) }),
+    },
+    {
+      field: "canonicalUrl",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), canonicalUrl: urlWithUtf16Length(length) }),
+    },
+    {
+      field: "title",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), title: utf16Text(length) }),
+    },
+    {
+      field: "author",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), author: utf16Text(length) }),
+    },
+  ]
+
+  for (const { field, limit, build } of utf16FieldCases) {
+    it(`enforces a ${limit} UTF-16 code unit budget for ${field}`, () => {
+      const atLimit = build(limit)
+      expect((atLimit[field] as string).length).toBe(limit)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(atLimit))).toBe(true)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(atLimit))).toBe(true)
+
+      // One extra ASCII character keeps the payload a single code unit over the
+      // budget while staying well inside the code-point ceiling.
+      const overLimit = build(limit + 1)
+      expect((overLimit[field] as string).length).toBe(limit + 1)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(overLimit))).toBe(false)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(overLimit))).toBe(false)
+    })
+  }
+
+  it("counts astral characters as two UTF-16 code units at the title limit", () => {
+    const emojiAtLimit = "😀".repeat(2_048)
+    expect(emojiAtLimit.length).toBe(4_096)
     expect(isContentVideoContextChangedMessage(contentAnnouncement({
       ...createNeutralContext(),
       title: emojiAtLimit,
@@ -275,13 +353,15 @@ describe("active video context string bounds", () => {
       title: emojiAtLimit,
     }))).toBe(true)
 
+    const emojiOverLimit = "😀".repeat(2_049)
+    expect(emojiOverLimit.length).toBe(4_098)
     expect(isContentVideoContextChangedMessage(contentAnnouncement({
       ...createNeutralContext(),
-      title: "😀".repeat(4_097),
+      title: emojiOverLimit,
     }))).toBe(false)
     expect(isActiveVideoContextChangedMessage(activeAnnouncement({
       ...createNeutralContext(),
-      title: "😀".repeat(4_097),
+      title: emojiOverLimit,
     }))).toBe(false)
   })
 

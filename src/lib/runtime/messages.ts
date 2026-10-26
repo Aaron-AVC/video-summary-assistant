@@ -183,16 +183,25 @@ export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequest
   return true
 }
 
+// Page-derived display/identity strings cross the runtime message boundary here.
+// These limits bound message size at the earliest shared validator; they are
+// safety ceilings, not platform business rules.
+const MAX_ACTIVE_CONTEXT_VIDEO_ID_LENGTH = 128
+const MAX_ACTIVE_CONTEXT_PART_ID_LENGTH = 16
+const MAX_ACTIVE_CONTEXT_CONTENT_KEY_LENGTH = 256
+const MAX_ACTIVE_CONTEXT_URL_LENGTH = 16_384
+const MAX_ACTIVE_CONTEXT_TEXT_LENGTH = 4_096
+
 const activeVideoContextSchema = z.object({
   pageType: z.enum(["video", "unsupported"]),
   platform: z.enum(["youtube", "bilibili"]).nullable(),
-  videoId: z.string().min(1).nullable(),
-  partId: z.string().min(1).nullable(),
-  contentKey: z.string().min(1).nullable(),
-  url: z.string(),
-  canonicalUrl: z.string().url().nullable(),
-  title: z.string().min(1).nullable(),
-  author: z.string().nullable(),
+  videoId: z.string().min(1).max(MAX_ACTIVE_CONTEXT_VIDEO_ID_LENGTH).nullable(),
+  partId: z.string().min(1).max(MAX_ACTIVE_CONTEXT_PART_ID_LENGTH).nullable(),
+  contentKey: z.string().min(1).max(MAX_ACTIVE_CONTEXT_CONTENT_KEY_LENGTH).nullable(),
+  url: z.string().max(MAX_ACTIVE_CONTEXT_URL_LENGTH),
+  canonicalUrl: z.string().url().max(MAX_ACTIVE_CONTEXT_URL_LENGTH).nullable(),
+  title: z.string().min(1).max(MAX_ACTIVE_CONTEXT_TEXT_LENGTH).nullable(),
+  author: z.string().max(MAX_ACTIVE_CONTEXT_TEXT_LENGTH).nullable(),
   timestampSeconds: z.number().finite().nonnegative(),
   isReady: z.boolean(),
 }).superRefine((context, issueContext) => {

@@ -151,6 +151,146 @@ describe("runtime message boundaries", () => {
     })).toBe(false)
   })
 })
+describe("active video context string bounds", () => {
+  const CANONICAL_URL_PREFIX = "https://www.youtube.com/watch?v="
+  const BILIBILI_BVID = "BV1xx411c7mD"
+
+  function asciiText(length: number): string {
+    return "a".repeat(length)
+  }
+
+  function canonicalUrlWithLength(length: number): string {
+    return CANONICAL_URL_PREFIX + "a".repeat(length - CANONICAL_URL_PREFIX.length)
+  }
+
+  function contentAnnouncement(context: Record<string, unknown>) {
+    return {
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: CONTENT_VIDEO_CONTEXT_CHANGED,
+      context,
+    }
+  }
+
+  function activeAnnouncement(context: Record<string, unknown>) {
+    return {
+      channel: RUNTIME_MESSAGE_NAMESPACE,
+      type: ACTIVE_VIDEO_CONTEXT_CHANGED,
+      tabId: 7,
+      context,
+    }
+  }
+
+  type BoundedFieldCase = {
+    field: string
+    limit: number
+    build: (length: number) => Record<string, unknown>
+  }
+
+  // Each builder keeps every other field legal so a rejection is attributable to
+  // the field under test: YouTube contexts keep contentKey in sync with videoId,
+  // Bilibili contexts keep the derived `bilibili:<bvid>:p:<partId>` key in sync,
+  // and the contentKey case stays platform-neutral so identity rules cannot fire.
+  const boundedFieldCases: BoundedFieldCase[] = [
+    {
+      field: "videoId",
+      limit: 128,
+      build: (length) => {
+        const videoId = asciiText(length)
+        return { ...createNeutralContext(), videoId, contentKey: `youtube:${videoId}` }
+      },
+    },
+    {
+      field: "partId",
+      limit: 16,
+      build: (length) => createBilibiliContext(asciiText(length)),
+    },
+    {
+      field: "contentKey",
+      limit: 256,
+      build: (length) => ({
+        ...createNeutralContext(),
+        platform: null,
+        videoId: null,
+        partId: null,
+        contentKey: asciiText(length),
+      }),
+    },
+    {
+      field: "url",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), url: canonicalUrlWithLength(length) }),
+    },
+    {
+      field: "canonicalUrl",
+      limit: 16_384,
+      build: (length) => ({ ...createNeutralContext(), canonicalUrl: canonicalUrlWithLength(length) }),
+    },
+    {
+      field: "title",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), title: asciiText(length) }),
+    },
+    {
+      field: "author",
+      limit: 4_096,
+      build: (length) => ({ ...createNeutralContext(), author: asciiText(length) }),
+    },
+  ]
+
+  for (const { field, limit, build } of boundedFieldCases) {
+    it(`bounds ${field} at ${limit} characters on both relay boundaries`, () => {
+      const atLimit = build(limit)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(atLimit))).toBe(true)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(atLimit))).toBe(true)
+
+      const overLimit = build(limit + 1)
+      expect(isContentVideoContextChangedMessage(contentAnnouncement(overLimit))).toBe(false)
+      expect(isActiveVideoContextChangedMessage(activeAnnouncement(overLimit))).toBe(false)
+    })
+  }
+
+  it("keeps normal YouTube and Bilibili contexts valid", () => {
+    expect(isContentVideoContextChangedMessage(contentAnnouncement(createNeutralContext()))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement(createNeutralContext()))).toBe(true)
+
+    expect(isContentVideoContextChangedMessage(contentAnnouncement(createBilibiliContext()))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement(createBilibiliContext("12")))).toBe(true)
+
+    // Derived Bilibili identity for the real 12-character bvid stays far below the cap.
+    expect(createBilibiliContext("12").contentKey).toBe(`bilibili:${BILIBILI_BVID}:p:12`)
+  })
+
+  it("keeps null identity and empty url semantics for unsupported contexts", () => {
+    const unsupportedContext = {
+      pageType: "unsupported",
+      platform: null,
+      videoId: null,
+      partId: null,
+      contentKey: null,
+      url: "",
+      canonicalUrl: null,
+      title: null,
+      author: null,
+      timestampSeconds: 0,
+      isReady: false,
+    }
+
+    expect(isContentVideoContextChangedMessage(contentAnnouncement(unsupportedContext))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement(unsupportedContext))).toBe(true)
+  })
+
+  it("still rejects inconsistent identities after the bounds were added", () => {
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createBilibiliContext("2"),
+      contentKey: "bilibili:wrong:p:2",
+    }))).toBe(false)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      contentKey: "youtube:someone-else",
+    }))).toBe(false)
+  })
+})
+
 describe("sendRuntimeMessage validation", () => {
   it("accepts a platform-neutral active video context", async () => {
     installChromeRuntime(async () => ({

@@ -260,6 +260,54 @@ describe("active video context string bounds", () => {
     expect(createBilibiliContext("12").contentKey).toBe(`bilibili:${BILIBILI_BVID}:p:12`)
   })
 
+  it("counts astral characters as one code point at the title limit", () => {
+    // Zod's `.max()` measures Unicode code points, not UTF-16 code units, so a
+    // 4096-character emoji title (8192 code units) is still within the limit
+    // while 4097 code points are rejected. ASCII-only cases cannot show this.
+    const emojiAtLimit = "😀".repeat(4_096)
+    expect(emojiAtLimit.length).toBe(8_192)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      title: emojiAtLimit,
+    }))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      title: emojiAtLimit,
+    }))).toBe(true)
+
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      title: "😀".repeat(4_097),
+    }))).toBe(false)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      title: "😀".repeat(4_097),
+    }))).toBe(false)
+  })
+
+  it("counts CJK characters at the author limit", () => {
+    // BMP characters count the same under code points and UTF-16 code units, so
+    // a CJK author exactly at the limit must pass and one over must be rejected.
+    const cjkAtLimit = "中".repeat(4_096)
+    expect(cjkAtLimit.length).toBe(4_096)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      author: cjkAtLimit,
+    }))).toBe(true)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      author: cjkAtLimit,
+    }))).toBe(true)
+    expect(isContentVideoContextChangedMessage(contentAnnouncement({
+      ...createNeutralContext(),
+      author: "中".repeat(4_097),
+    }))).toBe(false)
+    expect(isActiveVideoContextChangedMessage(activeAnnouncement({
+      ...createNeutralContext(),
+      author: "中".repeat(4_097),
+    }))).toBe(false)
+  })
+
   it("keeps null identity and empty url semantics for unsupported contexts", () => {
     const unsupportedContext = {
       pageType: "unsupported",

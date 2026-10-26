@@ -186,6 +186,11 @@ export function isRuntimeRequestMessage(value: unknown): value is RuntimeRequest
 // Page-derived display/identity strings cross the runtime message boundary here.
 // These limits bound message size at the earliest shared validator; they are
 // safety ceilings, not platform business rules.
+//
+// Zod counts string length in Unicode code points, not UTF-16 code units: an
+// astral character (for example an emoji surrogate pair) counts once here even
+// though `String.prototype.length` reports two. BMP text such as ASCII or CJK
+// counts identically under both measures.
 const MAX_ACTIVE_CONTEXT_VIDEO_ID_LENGTH = 128
 const MAX_ACTIVE_CONTEXT_PART_ID_LENGTH = 16
 const MAX_ACTIVE_CONTEXT_CONTENT_KEY_LENGTH = 256

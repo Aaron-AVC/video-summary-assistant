@@ -211,6 +211,20 @@ async function handleRuntimeMessage(
   message: RuntimeRequestMessage,
   sender?: chrome.runtime.MessageSender,
 ): Promise<RuntimeResponseMessage> {
+  // A jump request is validated before any active-tab resolution. Resolving the
+  // target can call `chrome.tabs.query()`, and an invalid timestamp has no claim
+  // to that privileged lookup. An explicitly requested tab id is still echoed
+  // back, so the failure response keeps the shape it had when this check lived
+  // inside the switch.
+  if (message.type === JUMP_TO_TIMESTAMP && !Number.isFinite(message.timestampSeconds)) {
+    return {
+      ok: false,
+      type: JUMP_TO_TIMESTAMP,
+      tabId: typeof message.tabId === "number" ? message.tabId : null,
+      error: "Timestamp must be a finite number.",
+    }
+  }
+
   const tabId = message.type === FETCH_BILIBILI_RESOURCE
     ? sender?.tab?.id ?? null
     : await resolveTabId(getRequestedTabId(message))
@@ -230,10 +244,6 @@ async function handleRuntimeMessage(
         return { ok: true, type: ANALYZE_VIDEO, tabId, context, accepted: context.isReady }
       }
       case JUMP_TO_TIMESTAMP: {
-        if (!Number.isFinite(message.timestampSeconds)) {
-          throw new Error("Timestamp must be a finite number.")
-        }
-
         const identity = resolveJumpIdentity(message.identity)
         if (!identity) throw new Error("The target video identity is invalid.")
 

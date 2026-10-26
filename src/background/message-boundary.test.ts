@@ -586,7 +586,90 @@ describe("background inbound boundary: malformed privileged requests", () => {
         error: "Timestamp must be a finite number.",
       })
       expectNoPrivilegedCalls()
+      // `chrome.tabs.query()` reads the user's active browsing state. An invalid
+      // timestamp is rejected before that privileged lookup, so it must not run.
+      expect(harness.calls.tabQueries).toHaveLength(0)
     }
+  })
+
+  it("rejects an invalid timestamp before resolving the active tab", async () => {
+    // A valid request in this same harness state would resolve tab 7 from
+    // `chrome.tabs.query()`. The empty query log below is therefore evidence that
+    // the rejection happened before active-tab resolution, not after it.
+    harness.activeTabs = [{ id: 7, url: YOUTUBE_URL } as chrome.tabs.Tab]
+
+    const result = await settle(
+      jumpMessage(validIdentity, Number.NaN),
+      senderFor(YOUTUBE_URL),
+    )
+
+    expect(result.responded).toBe(true)
+    expect(result.response).toMatchObject({
+      ok: false,
+      type: JUMP_TO_TIMESTAMP,
+      tabId: null,
+      error: "Timestamp must be a finite number.",
+    })
+    expect(harness.calls.tabQueries).toHaveLength(0)
+    expectNoPrivilegedCalls()
+  })
+
+  it("keeps an explicit target tab in the invalid-timestamp failure response", async () => {
+    // The failure response contract is unchanged: an explicitly requested tab id is
+    // still echoed, and the request is refused without any privileged side effect.
+    const result = await settle(
+      {
+        channel: RUNTIME_MESSAGE_NAMESPACE,
+        type: JUMP_TO_TIMESTAMP,
+        tabId: 42,
+        identity: validIdentity,
+        timestampSeconds: "5",
+      },
+      senderFor(YOUTUBE_URL),
+    )
+
+    expect(result.response).toMatchObject({
+      ok: false,
+      type: JUMP_TO_TIMESTAMP,
+      tabId: 42,
+      error: "Timestamp must be a finite number.",
+    })
+    expect(harness.calls.tabQueries).toHaveLength(0)
+    expectNoPrivilegedCalls()
+  })
+
+  it("keeps a negative timestamp on the normal jump path and clamps it to zero", async () => {
+    // Negative timestamps are finite, so they must still reach the adapter and keep
+    // the existing clamp-to-zero behaviour rather than being rejected by the preflight.
+    const result = await settle(jumpMessage(validIdentity, -5), senderFor(YOUTUBE_URL))
+
+    expect(result.response).toMatchObject({ ok: true, openedNewTab: true })
+    expect(harness.calls.tabsCreated).toHaveLength(1)
+    expect(harness.calls.tabsCreated[0].url).toBe(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=0",
+    )
+  })
+
+  it("keeps the bilibili part and rounding on the normal jump path", async () => {
+    // Bilibili rounds to the nearest second and keeps the canonical part; the
+    // preflight must not alter either behaviour.
+    const result = await settle(
+      jumpMessage(
+        {
+          platform: "bilibili",
+          videoId: "BV1xx411c7mD",
+          contentKey: "bilibili:BV1xx411c7mD:p:2",
+        },
+        42.6,
+      ),
+      senderFor(BILIBILI_VIDEO_URL),
+    )
+
+    expect(result.response).toMatchObject({ ok: true, openedNewTab: true })
+    expect(harness.calls.tabsCreated).toHaveLength(1)
+    expect(harness.calls.tabsCreated[0].url).toBe(
+      "https://www.bilibili.com/video/BV1xx411c7mD/?p=2&t=43",
+    )
   })
 
   it("never opens a tab for an invalid or unsupported identity", async () => {

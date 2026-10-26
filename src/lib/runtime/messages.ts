@@ -194,12 +194,15 @@ const MAX_ACTIVE_CONTEXT_TEXT_LENGTH = 4_096
 
 // The declared ceiling is a UTF-16 code-unit budget: it has to match
 // `String.prototype.length`, because that is what bounds the serialized payload
-// and what the hardening spec states. Zod's `.max()` alone is not enough, since
-// it measures Unicode code points and therefore counts an astral character (for
-// example an emoji surrogate pair) once while `String.prototype.length` reports
-// two. Keeping `.max(limit)` preserves the declared contract and short-circuits
-// clearly oversized input, and the explicit code-unit refinement makes the
-// effective ceiling exact for every input, emoji-heavy page text included.
+// and what the hardening spec states. `.max(limit)` keeps the schema's maximum
+// length constraint, but on its own it is not enough: Zod measures `.max()` in
+// Unicode code points, so it counts an astral character (for example an emoji
+// surrogate pair) once while `String.prototype.length` reports two. The explicit
+// `.refine(value => value.length <= limit)` additionally enforces the UTF-16
+// code-unit ceiling, which makes the effective limit exact for every input,
+// emoji-heavy page text included. Both checks run for a given value, so a string
+// that exceeds either measure can report a `.max()` issue and a refinement issue
+// at the same time; that duplicated issue is expected, not a short-circuit.
 function boundedString(
   limit: number,
   configure: (schema: z.ZodString) => z.ZodString = (schema) => schema,

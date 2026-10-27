@@ -39,9 +39,11 @@ const DETAILED_STYLE_INSTRUCTIONS = [
 ] as const
 
 /**
- * Standard keeps the pre-preset prompt contract byte-for-byte, so existing
- * `video-analysis-v2` caches stay valid; only the two new strategies get a
- * distinct effective prompt version.
+ * Standard contributes no style instructions of its own, so its effective prompt
+ * version is exactly `VIDEO_ANALYSIS_PROMPT_VERSION`; the two other strategies
+ * append a preset suffix. Every preset therefore inherits the current base
+ * version automatically, and rows written under an older base version are not
+ * reused — the analysis cache treats a prompt-version change as a miss.
  */
 export const ANALYSIS_PRESET_STRATEGIES: Readonly<Record<AnalysisPresetId, AnalysisPresetStrategy>> =
   Object.freeze({

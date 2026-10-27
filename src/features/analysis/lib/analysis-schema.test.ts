@@ -26,7 +26,7 @@ describe("VideoAnalysis schema", () => {
 
   it("keeps schema v1 while versioning the Task 6 prompt/runtime", () => {
     expect(VIDEO_ANALYSIS_SCHEMA_VERSION).toBe(1)
-    expect(VIDEO_ANALYSIS_PROMPT_VERSION).toBe("video-analysis-v2")
+    expect(VIDEO_ANALYSIS_PROMPT_VERSION).toBe("video-analysis-v3")
   })
 
   it("allows untimed key points but requires paired timestamps", () => {

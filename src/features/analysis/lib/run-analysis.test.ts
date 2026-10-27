@@ -449,8 +449,18 @@ describe("runAnalysis", () => {
     expect(result.strategy).toBe("map-reduce")
     expect(result.repairAttempted).toBe(true)
     expect(calls.filter((call) => call.structured)).toHaveLength(2)
-    expect(calls.at(-1)!.system).toContain("<<<PARTIAL_ANALYSES_BEGIN>>>")
-    expect(calls.at(-1)!.system).toContain("untrusted model-derived evidence")
+    // The repair request carries the final prompt as its original-task context.
+    // The evidence fence lives in the user prompt (it is payload, not policy),
+    // and its nonce is chosen at build time, so assert the structure rather
+    // than a fixed nonce.
+    const repairCall = calls.at(-1)!
+    expect(repairCall.user).toMatch(/<<<UNTRUSTED_ORIGINAL_TASK_BEGIN:n\d+>>>/)
+    expect(repairCall.user).toMatch(/<<<UNTRUSTED_PARTIAL_ANALYSES_BEGIN:n\d+>>>/)
+    expect(repairCall.user).toMatch(/<<<UNTRUSTED_PARTIAL_ANALYSES_END:n\d+>>>/)
+    expect(repairCall.user).toContain("untrusted model-derived evidence")
+    // The system layer carries the authoritative repair contract instead.
+    expect(repairCall.system).toContain("authoritative")
+    expect(repairCall.system).not.toContain("<<<UNTRUSTED_PARTIAL_ANALYSES_BEGIN")
   })
 
   it("fails fast when transcript cues are missing", async () => {

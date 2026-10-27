@@ -70,6 +70,12 @@ export function buildAskRepairPrompt(input: {
   originalTask: string
   validationError: unknown
   previousResponse: string
+  /**
+   * Text from other messages in the same provider request, such as retained Ask
+   * history. It is scanned for nonce collisions but is not copied into the repair
+   * prompt, preserving the original message-role boundaries.
+   */
+  additionalScanText?: string
 }) {
   const [originalTask, validationIssues, previousResponse] = createUntrustedBlockGroup(
     [
@@ -77,7 +83,10 @@ export function buildAskRepairPrompt(input: {
       { label: "VALIDATION_ISSUES", body: [conciseStructuredIssues(input.validationError)] },
       { label: "PREVIOUS_INVALID_OUTPUT", body: [input.previousResponse] }
     ],
-    "Return only one valid JSON object."
+    [
+      "Return only one valid JSON object.",
+      input.additionalScanText ?? ""
+    ].filter(Boolean).join("\n")
   )
   return {
     systemPrompt: [

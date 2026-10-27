@@ -344,7 +344,8 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
     const repairPrompt = buildAskRepairPrompt({
       originalTask: prompt.userPrompt,
       validationError: initialError,
-      previousResponse: rawResponse
+      previousResponse: rawResponse,
+      additionalScanText: prompt.boundedHistory.map((message) => message.content).join("\n")
     })
     assertAskRepairFitsBudget(repairPrompt, prompt.boundedHistory, options.budgetPolicy)
     try {
@@ -359,7 +360,9 @@ export async function askVideo(options: AskVideoOptions): Promise<AskVideoResult
       answer = parseAskVideoAnswerPayload(rawResponse, options.transcript.cues)
     } catch (repairError) {
       if (repairError instanceof OpenAICompatibleClientError) throw repairError
-      const issue = repairError instanceof Error ? repairError.message : conciseStructuredIssues(repairError)
+      // Use the same bounded formatter for every failure shape, including raw
+      // ZodError.message values that can contain model-controlled unknown keys.
+      const issue = conciseStructuredIssues(repairError)
       throw new Error(`Provider returned invalid Ask AI response after one repair attempt. ${issue}`)
     }
   }

@@ -8,7 +8,7 @@ import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 /** Bump when the canonical cue serialization changes. */
 export const TRANSCRIPT_FINGERPRINT_VERSION = 2
 export const VIDEO_QA_SCHEMA_VERSION = 1
-export const VIDEO_QA_PROMPT_VERSION = "video-qa-v4"
+export const VIDEO_QA_PROMPT_VERSION = "video-qa-v5"
 
 export type AnalysisCacheIdentityInput = {
   contentKey: string

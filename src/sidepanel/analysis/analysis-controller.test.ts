@@ -134,7 +134,7 @@ function cacheFixture(overrides: Partial<AnalysisCacheEntity> = {}): AnalysisCac
     partId: null,
     transcriptFingerprint: TRANSCRIPT_FINGERPRINT,
     analysisSchemaVersion: 1,
-    analysisPromptVersion: "video-analysis-v2",
+    analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
     providerProfileId: "profile-1",
     providerBaseUrl: "https://api.example.com/v1",
     providerModel: "model-1",
@@ -370,7 +370,7 @@ describe("analysis controller — analysis cache", () => {
       providerBaseUrl: "https://api.example.com/v1",
       providerModel: "model-1",
       analysisSchemaVersion: 1,
-      analysisPromptVersion: "video-analysis-v2",
+      analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
       lastAnalyzedAt: CACHED_AT,
     })
     expect(extras.phases).toEqual(["analyzing"])
@@ -414,7 +414,7 @@ describe("analysis controller — analysis cache", () => {
       providerBaseUrl: "https://api.example.com/v1",
       providerModel: "model-1",
       analysisSchemaVersion: 1,
-      analysisPromptVersion: "video-analysis-v2",
+      analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
       lastAnalyzedAt: CACHED_AT,
     })
     expect(harness.calls.runAnalysis).toHaveLength(0)
@@ -627,7 +627,7 @@ describe("analysis controller — persistence", () => {
         providerConfigId: "profile-1",
         transcriptFingerprint: TRANSCRIPT_FINGERPRINT,
         analysisSchemaVersion: 1,
-        analysisPromptVersion: "video-analysis-v2",
+        analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
         analysisCacheKey: cacheKey,
         providerProfileId: "profile-1",
         providerBaseUrl: "https://api.example.com/v1",
@@ -699,7 +699,7 @@ describe("analysis controller — persistence", () => {
       partId: null,
       transcriptFingerprint: TRANSCRIPT_FINGERPRINT,
       analysisSchemaVersion: 1,
-      analysisPromptVersion: "video-analysis-v2",
+      analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
       providerProfileId: "profile-1",
       providerBaseUrl: "https://api.example.com/v1",
       providerModel: "model-1",
@@ -731,7 +731,7 @@ describe("analysis controller — persistence", () => {
         providerBaseUrl: "https://api.example.com/v1",
         providerModel: "model-1",
         analysisSchemaVersion: 1,
-        analysisPromptVersion: "video-analysis-v2",
+        analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
         lastAnalyzedAt: COMPLETED_AT,
       },
     })
@@ -967,9 +967,33 @@ describe("analysis controller — analysis preset identity", () => {
 })
 
 describe("analysis controller — standard cache compatibility", () => {
-  it("S7. still reuses a Standard cache row written before presets existed", async () => {
+  it("S7. does not reuse a Standard cache row written under the previous prompt contract", async () => {
+    // The row was produced by the pre-hardening prompt identity. Bumping
+    // VIDEO_ANALYSIS_PROMPT_VERSION must invalidate it: a stale prompt contract
+    // may contain prompt-injection boundaries the new one already fixes, so
+    // reusing it would republish output the current contract would not produce.
+    const legacyPromptVersion = "video-analysis-v2"
+    expect(legacyPromptVersion).not.toBe(VIDEO_ANALYSIS_PROMPT_VERSION)
+
     const harness = createHarness({
-      cached: cacheFixture({ analysisPromptVersion: "video-analysis-v2" }),
+      cached: cacheFixture({ analysisPromptVersion: legacyPromptVersion }),
+    })
+    const { request } = createRequest(harness.events)
+
+    const result = await harness.controller.runExecutionTask(request)
+
+    expect(result.kind).toBe("completed")
+    expect(harness.calls.getAnalysisCache[0]).toBe(await expectedCacheKey())
+    expect(harness.calls.runAnalysis).toHaveLength(1)
+    expect(result.publication.analysisPromptVersion).toBe(VIDEO_ANALYSIS_PROMPT_VERSION)
+  })
+
+  it("S7b. still reuses a Standard cache row written under the current prompt contract", async () => {
+    // The compatibility half of S7: a row at the current identity is an exact
+    // hit and must short-circuit the model, so the invalidation above is caused
+    // by the version bump and not by a broken cache path.
+    const harness = createHarness({
+      cached: cacheFixture({ analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION }),
     })
     const { request } = createRequest(harness.events)
 

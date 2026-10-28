@@ -86,7 +86,7 @@ describe("content-aware persistence identities", () => {
     expect(await computeAnalysisCacheKey({ ...base, baseUrl: "https://api.example.com/other" })).not.toBe(first)
     expect(await computeAnalysisCacheKey({ ...base, model: "model-b" })).not.toBe(first)
     expect(await computeAnalysisCacheKey({ ...base, schemaVersion: 2 })).not.toBe(first)
-    expect(await computeAnalysisCacheKey({ ...base, promptVersion: "video-analysis-v3" })).not.toBe(first)
+    expect(await computeAnalysisCacheKey({ ...base, promptVersion: "video-analysis-v2" })).not.toBe(first)
     expect(buildAnalysisCacheIdentity({ ...base, baseUrl: "https://API.EXAMPLE.COM/v1/" })).toEqual(
       buildAnalysisCacheIdentity(base)
     )
@@ -146,7 +146,7 @@ describe("content-aware persistence identities", () => {
       model: "model",
       question: "Why?"
     }
-    expect(VIDEO_QA_PROMPT_VERSION).toBe("video-qa-v4")
+    expect(VIDEO_QA_PROMPT_VERSION).toBe("video-qa-v5")
     expect(buildQaCacheIdentity({ ...base, promptVersion: "video-qa-v2" }).promptVersion)
       .toBe("video-qa-v2")
     expect(await computeQaCacheKey({ ...base, promptVersion: "video-qa-v2" }))

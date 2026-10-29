@@ -49,7 +49,7 @@ Bookmarks anchor the current playback position; a note is trimmed free-form
 text created either without an anchor or with a point anchor at the current
 playback position through an explicit `attach current time` choice. The UI does
 not create start/end range notes: there is no range editor and no way to pick
-arbitrary start and end times. Entries are keyed by canonical `contentKey`, so a
+arbitrary start and end times. Entries are scoped to the canonical `contentKey`, so a
 Bilibili P1 and P2 collection never collapse into one.
 
 Knowledge requires no Provider, analysis, or transcript, and nothing is sent to

@@ -93,11 +93,13 @@ compatibility identifier. Provider metadata and the API-key secret map are
 stored locally in `chrome.storage.local`; API keys are not included in Settings
 exports, IndexedDB exports, combined exports, cache keys, history, or logs.
 
-Requests are sent only to the Provider URL configured and authorized by the
-user. Bilibili requests use the normal browser session for the supported page;
-the extension does not read, copy, store, or log cookies. There is no separate
-account service or cloud backend, and the project does not claim hardware
-security or end-to-end encryption.
+Requests to the configured AI Provider are sent only to the Provider URL
+configured and authorized by the user. Separate platform requests access
+supported video pages and retrieve available captions; Bilibili requests use
+the normal browser session for the supported page. The extension does not read,
+copy, store, or log cookies. There is no separate account service or cloud
+backend, and the project does not claim hardware security or end-to-end
+encryption.
 
 ## Development
 

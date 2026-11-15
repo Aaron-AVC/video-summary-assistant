@@ -1,5 +1,40 @@
 # TASK_STATE
 
+## 当前状态 — RH-01 文档恢复候选审查（2026-10-30）
+
+- 正式 `main` 当前 HEAD：`be93d1ac6a290cfc78bada7e6cef77d5775001e0`（本次修订前只读核验；本次操作未修改 `main`）。
+- 恢复分支：`recovery/rh01-docs-20261029`。
+- 已推送的恢复候选原有提交为 `145ea4e`（V1.1 文档整合）、`782bd76`（发布审计措辞修订）和 `f28c16e`（恢复候选审查修订）；本次状态与网络描述修订作为独立原子提交追加。
+- 现有 PR #12 处于 Open 状态，尚未合并或打 tag；正式 `main` 未被本次操作修改。
+- 五个目标文档仍仅为 `README.md`、`TASK_STATE.md`、`docs/persistence-cache.md`、`docs/reviews/2026-10-22-v1.1-release-readiness.md`、`docs/sidepanel-ux.md`；本次额外文字修订仅涉及前两份。
+- 五文档独立审查：静态文档范围与内部表述总体通过；结论仅为“静态文档自洽，但实现未独立复核”，不构成源码审计或发布批准。
+- RH-02 实站 Browser smoke 仍为 **NOT RUN**；V1.1 尚未获得正式发布批准。
+- 下一步：等待 PR 独立审查与后续授权；不得将 PR 创建或文档审查通过视为合并/发布批准。
+
+## RH-01 原始工作记录（2026-10-23；历史记录，保留原始证据）
+
+- 状态：**文档整合与重新验证完成；本地原子提交已创建；等待独立审查。** RH-01 完成不代表 RH-02 完成，也不代表 V1.1 已可发布。
+- 本地原子提交：`docs: integrate V1.1 documentation after REL-01 and revalidate gates`，父提交 `7f9923c22425e101b336dc7951b0ea01f3ce5399`，仅含下列五份文档。该提交只存在于本地工作分支，未推送、未创建 PR、未打 tag。提交 SHA 用 `git log -1 --format=%H` 在分支 `docs/rh-01-post-rel01-20261023` 上取得（本文件自身也在该提交内，故不内嵌会随提交变化的 SHA）。
+- 新基线：`7f9923c22425e101b336dc7951b0ea01f3ce5399`（`Merge pull request #1 from Aaron-AVC/review/v1.1-release-blockers`）。`git rev-parse HEAD` 与 `git rev-parse origin/main` 在开工时均为该 SHA。
+- 工作分支：`docs/rh-01-post-rel01-20261023`。
+- REL-01 已合并，包含两个实现提交：
+  - `c5127130e1a979e63e6840322afb49eb65a5ec97` — `fix: type the injected timeout scheduler boundary`（TS2769 定时器类型问题）。
+  - `ca5a3152236f365d9db7056f813ab77f85de8aeb` — `fix: keep history restore and QA restore on their own display ownership`（History restore 与 QA restore 的陈旧发布竞态）。
+- 本轮在合并后基线上真实执行的验证（全部在可写克隆 `D:\files\Video Summary Assistant\.rel01-work\repo` 内，`TEMP`/`TMP`/`TMPDIR` 均指向克隆内 `.buntmp`）。文档修改前、修改后、提交树三个阶段各完整执行一次，三次结果一致：
+  - `bun install --frozen-lockfile` → exit 0，`Checked 630 installs across 690 packages (no changes)`。
+  - `bun test` → exit 0，**1035 pass / 0 fail / 3161 expect() calls / 92 files**。
+  - `bun run typecheck` → exit 0，无输出。
+  - `bun run build` → exit 0，Plasmo v0.90.5，`DONE`。
+  - `bun run package` → exit 0，`Zip Package size: 0.97 MB`。
+  - `git diff --check` → exit 0，无输出。
+  - 详细命令、退出码、产物哈希与证据来源见 `docs/reviews/2026-10-22-v1.1-release-readiness.md`。
+- 文档变更范围：`README.md`、`docs/sidepanel-ux.md`、`docs/persistence-cache.md`、`docs/reviews/2026-10-22-v1.1-release-readiness.md`、`TASK_STATE.md`。未修改产品源码、`package.json`、`bun.lock`、Manifest 权限、DB schema 或 migration，未改版本号 `2026.8.22`，未生成 tag、未推送、未创建 PR。
+- 遗留事项：Browser smoke 仍为 **NOT RUN — RH-02 required**；本轮未运行依赖/安全扫描；RH-01 初始审计记录的 P2 事项继续保留；已知残余并发面与未验证行为见审计文档第 7、8 节。下一步为 RH-02。
+
+> 说明：以下 2026-10-19 及更早的条目是历史记录，保留原文以维持可追溯性。其中的测试数量（例如 V1 gate 的 `426 pass`）与发布结论**仅为 V1 历史数据**，不代表当前 V1.1 验证结果，也不得作为本轮证据复用。
+
+## 历史记录（V1 及更早，仅供追溯；不作为当前验证结果）
+
 - 当前任务：V1 Release Readiness；CLOSED / PASS；本次 closure 的基线 HEAD：`874bae094541b0d7fdc8399f21f29a881993b8f4`。发布验收证据已汇总于 `docs/reviews/2026-10-19-v1-release-gate-closure.md`。Codex/automated validation：SEC-01R1 最终报告为 `bun test` 426 pass / 0 fail，项目内 `tsc --noEmit` PASS，项目内 Plasmo production build PASS，`git diff --check` PASS；DEP-03R1 覆盖 45/45 OSV advisories，P0=0、P1=0。User-run real Chromium smoke：extension load、Side Panel、Options、YouTube transcript/search/timestamp、Analysis/Chapters/Ask/citation jump、Bilibili BV 与 multi-P identity isolation、history restore/categorized clear/clear all、i18n auto/zh-CN/en 与 cross-page sync、refresh/video switch/cancel/close side panel stability 全部 PASS；SEC-01 export boundary 与 v4→v5 browser migration smoke PASS。Independent review：原始架构审计及其 RELEASE HOLD / SEC-01 P1 作为历史证据保留且未改写；后续 SEC-01 与 SEC-01R1 修复、依赖安全复审及真实浏览器证据关闭该 blocker。旧任务条目中的 `Browser smoke: NOT RUN` 仅表示当时历史状态，不代表当前 V1 gate。
 - CR-15 / CR-15R1 — i18n initialization and concurrent write ordering：CLOSED / PASS；最终代码提交：`f3388cac3f13bc1190d8eaf760b44988fb62c220`；已通过独立静态代码复审；revision synchronizer 先订阅再读取初始值，且同一 surface 的语言写入串行化；storage events 与用户变更不会被旧的异步操作覆盖，清理时移除监听并吞掉初始化读取失败；自动化测试与 typecheck/build/diff-check 为 Codex 报告结果；Browser smoke：NOT RUN — environment limitation。
 - CR-14 — preserve live task phase when deduplicating Web Locks fallback：CLOSED / PASS；最终 commit：`e561c2aa488c36eb730b88785ca4a91ea9785ee5`。Analysis/Ask destructive task snapshots 与 Web Lock descriptors 共享稳定 `taskId`；合并时优先保留 live Broadcast phase/threadId，仅在没有对应 live snapshot 时保留 `phase = unknown` fail-closed fallback；未修改 DB、manifest permissions、provider、transcript acquisition 或既有 Web Locks admission/reservation 设计；Browser smoke：NOT RUN。

@@ -471,6 +471,14 @@ export function createAskController(dependencies: AskControllerDependencies): As
       }
     } else {
       resolvedProvider = await resolveProvider(selectedProviderId)
+    }
+
+    // Second currentness guard: provider resolution is asynchronous, so the
+    // request can turn stale while it is pending. No new thread may be created
+    // and no reused thread may be reported ready after that point.
+    if (!isCurrent()) return { kind: "stale" }
+
+    if (!canReuseThread || !thread) {
       thread = await createQaThread({
         contentKey,
         platform,

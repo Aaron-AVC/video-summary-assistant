@@ -59,6 +59,18 @@ export async function readJsonBodyWithLimit(
     // A non-numeric Content-Length is malformed; fall through to the streaming
     // guard rather than trusting it.
     if (Number.isFinite(declaredBytes) && declaredBytes >= 0) {
+      if (declaredBytes > maxBytes) {
+        // Rejecting before the first byte is read must still release the
+        // response body: an abandoned stream keeps the underlying connection
+        // held until the runtime garbage collects it. Cancelling is best
+        // effort so the size error stays the error the caller sees.
+        if (response.body) {
+          // Do not await: cancel() can stay pending on a stuck transport, and
+          // the size error must reach the caller immediately. The rejection is
+          // still handled so no unhandled rejection escapes.
+          void response.body.cancel().catch(() => undefined)
+        }
+      }
       assertWithinLimit(declaredBytes, maxBytes)
     }
   }
@@ -77,8 +89,11 @@ export async function readJsonBodyWithLimit(
       if (!value || value.byteLength === 0) continue
       total += value.byteLength
       if (total > maxBytes) {
-        // Cancel before the rest of the body can be pulled into memory.
-        await reader.cancel().catch(() => undefined)
+        // Cancel before the rest of the body can be pulled into memory, but
+        // never await it: a cancel that stays pending must not delay the size
+        // error or hold the reader lock. The rejection is handled so no
+        // unhandled rejection escapes.
+        void reader.cancel().catch(() => undefined)
         throw new ProviderResponseTooLargeError(maxBytes)
       }
       chunks.push(value)

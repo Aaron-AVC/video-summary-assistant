@@ -48,6 +48,22 @@ const CONTENT_KEY = "youtube:video-a"
 const ANALYSIS_RUN_ID = "run-1"
 const FINGERPRINT = "fp-1"
 
+
+type Deferred<T> = {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T | PromiseLike<T>) => void
+
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+
+  return { promise, resolve }
+}
+
 function createThread(overrides: Partial<QaThreadEntity> = {}): QaThreadEntity {
   return {
     id: "thread-a",
@@ -419,6 +435,8 @@ describe("AskController restoreConversation", () => {
 
     expect(result).toEqual({ kind: "stale" })
   })
+
+
 })
 
 describe("AskController answer projection", () => {
@@ -908,7 +926,7 @@ describe("AskController prepareExecutionThread currentness", () => {
     expect(calls.createQaThread).toEqual([])
   })
 
-  it("reads the existing thread before the first currentness check", async () => {
+  it("checks currentness before provider resolution and again after it", async () => {
     const order: string[] = []
     const { dependencies } = createFakeDependencies({
       getQaThread: async () => {
@@ -929,7 +947,12 @@ describe("AskController prepareExecutionThread currentness", () => {
       },
     }))
 
-    expect(order).toEqual(["getQaThread", "isCurrent", "resolveProvider"])
+    expect(order).toEqual([
+      "getQaThread",
+      "isCurrent",
+      "resolveProvider",
+      "isCurrent",
+    ])
   })
 
   it("resolves the provider only when the request is current", async () => {
@@ -942,6 +965,71 @@ describe("AskController prepareExecutionThread currentness", () => {
 
     expect(calls.resolveProvider).toHaveLength(1)
     expect(calls.createQaThread).toHaveLength(1)
+  })
+  it("returns stale without creating a new thread when provider resolution becomes stale", async () => {
+    const providerStarted = deferred<true>()
+    const pendingProvider = deferred<ResolvedProvider>()
+    let current = true
+
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => null,
+      resolveProvider: async () => {
+        providerStarted.resolve(true)
+        return await pendingProvider.promise
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    const pendingResult = controller.prepareExecutionThread(
+      createExecutionRequest({
+        requestedThreadId: null,
+        isCurrent: () => current,
+      }),
+    )
+
+    await providerStarted.promise
+    current = false
+    pendingProvider.resolve(createResolvedProvider())
+
+    const result = await pendingResult
+
+    expect(calls.resolveProvider).toEqual(["provider-selected"])
+    expect(calls.createQaThread).toEqual([])
+    expect(result).toEqual({ kind: "stale" })
+  })
+
+  it("returns stale for a reused thread when provider resolution becomes stale", async () => {
+    const providerStarted = deferred<true>()
+    const pendingProvider = deferred<ResolvedProvider>()
+    let current = true
+
+    const { dependencies, calls } = createFakeDependencies({
+      getQaThread: async () => createThread({
+        providerProfileId: "provider-thread",
+      }),
+      resolveProvider: async () => {
+        providerStarted.resolve(true)
+        return await pendingProvider.promise
+      },
+    })
+    const controller = createAskController(dependencies)
+
+    const pendingResult = controller.prepareExecutionThread(
+      createExecutionRequest({
+        isCurrent: () => current,
+      }),
+    )
+
+    await providerStarted.promise
+    current = false
+    pendingProvider.resolve(createResolvedProvider())
+
+    const result = await pendingResult
+
+    expect(calls.getQaThread).toEqual(["thread-a"])
+    expect(calls.resolveProvider).toEqual(["provider-thread"])
+    expect(calls.createQaThread).toEqual([])
+    expect(result).toEqual({ kind: "stale" })
   })
 })
 

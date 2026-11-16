@@ -235,7 +235,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
 
   return {
     async saveTranscriptSnapshot(snapshot: TranscriptSnapshotEntity) {
-      const sanitized = withoutTranscriptSourceUrl(snapshot)
+      const sanitized = withoutTranscriptSourceUrl(transcriptSnapshotSchema.parse(snapshot))
       return runWriteWithQuotaGuard(async () => {
         await database.transcriptSnapshots.put(sanitized)
         await shedOldRawVtt()

@@ -49,9 +49,11 @@ function streamingResponse(
 }
 
 describe("readJsonBodyWithLimit", () => {
-  it("parses a body that fits under the ceiling", async () => {
-    const payload = await readJsonBodyWithLimit(new Response(JSON.stringify({ ok: true })))
+  it("parses a body that fits under the ceiling and releases the reader lock", async () => {
+    const response = new Response(JSON.stringify({ ok: true }))
+    const payload = await readJsonBodyWithLimit(response)
     expect(payload).toEqual({ ok: true })
+    expect(response.body?.locked).toBe(false)
   })
 
   it("rejects on a declared Content-Length above the ceiling without streaming the body", async () => {
@@ -63,12 +65,141 @@ describe("readJsonBodyWithLimit", () => {
     expect(state.pulled).toBeLessThan(total)
   })
 
+  it("cancels an abandoned body when a declared Content-Length exceeds the ceiling", async () => {
+    const total = 64 * 1024 * 1024
+    const { response, state } = streamingResponse(total, { contentLength: String(total) })
+    await expect(readJsonBodyWithLimit(response)).rejects.toBeInstanceOf(ProviderResponseTooLargeError)
+    // 直接被拒绝的响应体也占着底层连接，必须显式取消而不是留给 GC。
+    expect(state.cancelled).toBe(true)
+  })
+
+  it("keeps the size error when cancelling the abandoned body itself fails", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(16))
+      },
+      cancel() {
+        throw new Error("cancel failed")
+      },
+    })
+    const response = new Response(body, {
+      status: 200,
+      headers: { "content-length": String(64 * 1024 * 1024) },
+    })
+    await expect(readJsonBodyWithLimit(response)).rejects.toBeInstanceOf(ProviderResponseTooLargeError)
+  })
+
+  it("returns the size error without waiting for a cancel that never settles", async () => {
+    let cancelCalled = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(16))
+      },
+      cancel() {
+        cancelCalled = true
+        return new Promise<void>(() => undefined)
+      },
+    })
+    const response = new Response(body, {
+      status: 200,
+      headers: { "content-length": String(64 * 1024 * 1024) },
+    })
+    const outcome = await Promise.race([
+      readJsonBodyWithLimit(response).then(
+        () => "resolved",
+        (error) => (error instanceof ProviderResponseTooLargeError ? "size-error" : "unexpected"),
+      ),
+      new Promise<string>((resolve) => setTimeout(() => resolve("blocked"), 50)),
+    ])
+    expect(outcome).toBe("size-error")
+    expect(cancelCalled).toBe(true)
+  })
+
   it("aborts the stream as soon as the running total crosses the ceiling", async () => {
     const { response, state } = streamingResponse(64 * 1024 * 1024, { contentLength: null })
     await expect(readJsonBodyWithLimit(response, 1024 * 1024)).rejects.toBeInstanceOf(ProviderResponseTooLargeError)
     // 只允许越过一个 chunk 的余量，绝不能把 64 MiB 全部拉进来。
     expect(state.pulled).toBeLessThanOrEqual(1024 * 1024 + 64 * 1024)
     expect(state.pulled).toBeLessThan(64 * 1024 * 1024)
+  })
+
+  it("cancels an oversized streaming body without waiting for a cancel that never settles", async () => {
+    let cancelCalled = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(64 * 1024))
+      },
+      cancel() {
+        cancelCalled = true
+        return new Promise<void>(() => undefined)
+      },
+    })
+    const response = new Response(body, { status: 200 })
+    const outcome = await Promise.race([
+      readJsonBodyWithLimit(response, 1024).then(
+        () => "resolved",
+        (error) => (error instanceof ProviderResponseTooLargeError ? "size-error" : "unexpected"),
+      ),
+      new Promise<string>((resolve) => setTimeout(() => resolve("blocked"), 50)),
+    ])
+    expect(outcome).toBe("size-error")
+    expect(cancelCalled).toBe(true)
+    expect(response.body?.locked).toBe(false)
+  })
+
+  it("keeps the size error when the streaming cancel itself fails", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(64 * 1024))
+      },
+      cancel() {
+        throw new Error("streaming cancel failed")
+      },
+    })
+    const response = new Response(body, { status: 200 })
+    await expect(readJsonBodyWithLimit(response, 1024)).rejects.toBeInstanceOf(ProviderResponseTooLargeError)
+  })
+
+  it("cancels a stream that crosses the ceiling exactly once", async () => {
+    let cancelCount = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(64 * 1024))
+      },
+      cancel() {
+        cancelCount += 1
+      },
+    })
+    const response = new Response(body, { status: 200 })
+    await expect(readJsonBodyWithLimit(response, 1024 * 1024)).rejects.toBeInstanceOf(ProviderResponseTooLargeError)
+    expect(cancelCount).toBe(1)
+  })
+
+  it("propagates a body read failure unchanged and releases the reader lock", async () => {
+    const failure = new Error("network down")
+    let reads = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        reads += 1
+        if (reads === 1) controller.enqueue(new Uint8Array(8))
+        else controller.error(failure)
+      },
+    })
+    const response = new Response(body, { status: 200 })
+    await expect(readJsonBodyWithLimit(response)).rejects.toBe(failure)
+    expect(response.body?.locked).toBe(false)
+  })
+
+  it("propagates an AbortError from the body read unchanged", async () => {
+    const abortError = new DOMException("The operation was aborted.", "AbortError")
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(abortError)
+      },
+    })
+    const response = new Response(body, { status: 200 })
+    await expect(readJsonBodyWithLimit(response)).rejects.toBe(abortError)
+    expect(response.body?.locked).toBe(false)
   })
 
   it("does not trust a non-numeric Content-Length and still enforces the streaming ceiling", async () => {
@@ -78,7 +209,9 @@ describe("readJsonBodyWithLimit", () => {
   })
 
   it("surfaces a JSON syntax error unchanged when the body fits", async () => {
-    await expect(readJsonBodyWithLimit(new Response("not-json"))).rejects.toBeInstanceOf(SyntaxError)
+    const response = new Response("not-json")
+    await expect(readJsonBodyWithLimit(response)).rejects.toBeInstanceOf(SyntaxError)
+    expect(response.body?.locked).toBe(false)
   })
 
   it("keeps the default ceiling large enough for real provider payloads", () => {

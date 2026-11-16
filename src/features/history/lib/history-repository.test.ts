@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test"
 
 import { createHistoryRepository } from "@/features/history/lib/history-repository"
 import { PersistenceError } from "@/lib/db/errors"
+import { MAX_TRANSCRIPT_CUES } from "@/lib/schemas/container-limits"
 import type {
   AnalysisRunEntity,
   RecentVideoEntity,
@@ -1064,5 +1065,50 @@ describe("knowledge destructive semantics", () => {
 
     await repo.clearAll()
     expect(fake.knowledgeItems.rows).toHaveLength(0)
+  })
+})
+
+describe("historyRepository transcript snapshot write validation", () => {
+  function buildSnapshot(overrides: Partial<TranscriptSnapshotEntity> = {}): TranscriptSnapshotEntity {
+    return {
+      id: "snapshot-write-1",
+      videoId: "video-write-1",
+      platform: "youtube",
+      contentKey: "youtube:video-write-1",
+      partId: null,
+      fingerprint: null,
+      language: "en",
+      sourceUrl: null,
+      rawVtt: null,
+      cues: [{ startSec: 0, endSec: 1, text: "Cue" }],
+      createdAt: NOW,
+      updatedAt: NOW,
+      ...overrides
+    }
+  }
+
+  it("rejects a transcript snapshot whose cue count exceeds the persisted ceiling", async () => {
+    const fake = buildFakeDatabase()
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    const snapshot = buildSnapshot({
+      cues: Array.from({ length: MAX_TRANSCRIPT_CUES + 1 }, (_unused, index) => ({
+        startSec: index,
+        endSec: index + 1,
+        text: `Cue ${index}`
+      }))
+    })
+
+    await expect(repo.saveTranscriptSnapshot(snapshot)).rejects.toThrow()
+    expect(fake.transcriptSnapshots.rows).toHaveLength(0)
+  })
+
+  it("still stores a transcript snapshot that fits under the ceiling", async () => {
+    const fake = buildFakeDatabase()
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await repo.saveTranscriptSnapshot(buildSnapshot())
+
+    expect(fake.transcriptSnapshots.rows).toHaveLength(1)
+    expect(fake.transcriptSnapshots.rows[0]?.cues).toHaveLength(1)
   })
 })

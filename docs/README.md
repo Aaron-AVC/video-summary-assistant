@@ -19,6 +19,7 @@
 - [功能路线图](roadmap.md)：单一候选清单、稳定功能 ID、状态和建议优先级。
 - [开发计划维护规则](feature-plans/README.md) 与 [计划模板](feature-plans/TEMPLATE.md)。
 - [F-001 历史字幕搜索候选方案](feature-plans/F-001-history-transcript-search.md)。
+- [竞品定位研究](research/2026-11-17-competitor-landscape.md)、[可复现测试方案](research/video-benchmark-protocol.md)、[结果记录模板](research/video-benchmark-results-template.md)：R-003，当前仅完成桌面研究。
 
 ## 历史资料（原始记录保留）
 

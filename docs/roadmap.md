@@ -35,6 +35,7 @@
 | ID | 候选事项 | 优先级建议 | 状态 | 交付条件 |
 | --- | --- | --- | --- | --- |
 | R-001 | V1.1 对外发布准备 | P1 | `candidate` | 对选定 release SHA 完成实际包验证、依赖/安全检查、隔离浏览器 Smoke 和发布审核 |
+| R-003 | 竞品对比与真实使用基准测试 | P1 | `candidate` | [首轮桌面研究](research/2026-11-17-competitor-landscape.md)已完成；[实测方案](research/video-benchmark-protocol.md)待执行，性能、准确性和稳定性尚无实测评分 |
 
 ## 当前开发承诺
 

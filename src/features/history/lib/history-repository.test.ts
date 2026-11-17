@@ -207,6 +207,70 @@ describe("historyRepository.saveAnalysisRun retention", () => {
   })
 })
 
+describe("historyRepository.saveAnalysisRun recentVideos validation", () => {
+  it("rejects invalid recent video data before any legacy transaction writes", async () => {
+    const fake = buildFakeDatabase()
+    let transactions = 0
+    const repo = createHistoryRepository(fake as never, {
+      runTransaction: async (_mode, _tables, callback) => {
+        transactions += 1
+        return callback()
+      }
+    })
+
+    await expect(repo.saveAnalysisRun({
+      analysisRun: buildAnalysisRun(),
+      segments: [],
+      recentVideo: { ...buildRecentVideoSeed(0), title: "  " }
+    })).rejects.toThrow()
+
+    expect(transactions).toBe(0)
+    expect(fake.analysisRuns.rows).toHaveLength(0)
+    expect(fake.segmentSummaries.rows).toHaveLength(0)
+    expect(fake.recentVideos.rows).toHaveLength(0)
+  })
+
+  it("continues to persist and return valid legacy recent video data", async () => {
+    const fake = buildFakeDatabase()
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    const input = {
+      videoId: "video-current",
+      title: "Current",
+      channelTitle: null,
+      thumbnailUrl: null,
+      status: "completed" as const,
+      openedAt: NOW,
+      analyzedAt: NOW
+    }
+
+    const saved = await repo.saveAnalysisRun({
+      analysisRun: buildAnalysisRun(),
+      segments: [],
+      recentVideo: input
+    })
+
+    expect(fake.analysisRuns.rows).toHaveLength(1)
+    expect(fake.recentVideos.rows).toEqual([{ ...input, updatedAt: NOW }])
+    expect(saved.recentVideo).toEqual({ ...input, updatedAt: NOW })
+  })
+
+  it("does not validate or write recent video data for canonical runs", async () => {
+    const fake = buildFakeDatabase()
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    const recentVideo = { ...buildRecentVideoSeed(0), title: "  " }
+
+    const saved = await repo.saveAnalysisRun({
+      analysisRun: { ...buildAnalysisRun(), contentKey: "youtube:video-current" },
+      segments: [],
+      recentVideo
+    })
+
+    expect(fake.analysisRuns.rows).toHaveLength(1)
+    expect(fake.recentVideos.rows).toHaveLength(0)
+    expect(saved.recentVideo).toEqual(recentVideo)
+  })
+})
+
 describe("historyRepository quota error surfacing", () => {
   it("surfaces QuotaExceededError as a structured PersistenceError on saveAnalysisRun", async () => {
     const fake = buildFakeDatabase()

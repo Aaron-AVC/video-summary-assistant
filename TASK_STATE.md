@@ -1,6 +1,17 @@
 # TASK_STATE
 
-## 当前状态 — RH-01 文档恢复候选审查（2026-10-30）
+## 当前核对快照（2026-11-17）
+
+- 审计基线：`main@859683b482a0b3e1d09a12369ceeb7e2af4e7236`。此 SHA 是本次文档更新**之前**的正式提交；文档候选分支有独立 HEAD。
+- [PR #12](https://github.com/Aaron-AVC/video-summary-assistant/pull/12)（RH-01 文档恢复）、[PR #13](https://github.com/Aaron-AVC/video-summary-assistant/pull/13)（RH-02 集成）和 [PR #18](https://github.com/Aaron-AVC/video-summary-assistant/pull/18)（持久化 Follow-up）已合并。Issue [#14](https://github.com/Aaron-AVC/video-summary-assistant/issues/14)、[#15](https://github.com/Aaron-AVC/video-summary-assistant/issues/15) 已关闭并标记 Completed；各自的 PR #16/#17 已关闭，未单独合并。
+- PR #18 的集成候选在用户 Windows 环境中通过目标测试、History/相关测试、完整 `bun test`（**1,387 pass / 0 fail**）、`bun run typecheck`、`bun run build`、`git diff --check`。正式 `main` 后经 fast-forward 同步，工作树干净；5 个临时 Worktree 已清理，验证资料 SHA256 清单 27/27 匹配。
+- 发布状态：审计时 GitHub 无 Release；本次文档审计未执行新的发布批准、当前发布产物打包、安全/依赖扫描或真实浏览器 Smoke。历史 RH-01 / V1 报告中的门禁仅对应各自代码基线。
+- 当前用户功能边界见 [README](README.md) / [中文 README](README.zh-CN.md)；未来功能的唯一登记表见 [docs/roadmap.md](docs/roadmap.md)，立项和进度规范见 [docs/feature-plans/README.md](docs/feature-plans/README.md)。本次整理**未批准任何候选功能**。
+
+> 以下原有 RH-01、V1 及任务实施条目按历史保留，旧文字中的“当前”“待审核”“NOT RUN”均属于对应日期的历史记录。
+
+
+## 历史快照 — RH-01 文档恢复候选审查（2026-10-30）
 
 - 正式 `main` 当前 HEAD：`be93d1ac6a290cfc78bada7e6cef77d5775001e0`（本次修订前只读核验；本次操作未修改 `main`）。
 - 恢复分支：`recovery/rh01-docs-20261029`。

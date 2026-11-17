@@ -19,6 +19,7 @@
 - [功能路线图](roadmap.md)：单一候选清单、稳定功能 ID、状态和建议优先级。
 - [开发计划维护规则](feature-plans/README.md) 与 [计划模板](feature-plans/TEMPLATE.md)。
 - [F-001 历史字幕搜索候选方案](feature-plans/F-001-history-transcript-search.md)。
+- [许可证偏好、候选条款比较与待核验版权边界](licensing/2026-11-17-license-policy-review.md)：R-002 候选审查，尚非正式授权文本。
 
 ## 历史资料（原始记录保留）
 

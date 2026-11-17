@@ -11,6 +11,7 @@ import {
   segmentSummarySchema,
   analysisCacheSchema,
   knowledgeItemSchema,
+  persistenceExportSchema,
   qaAnswerSchema,
   qaMessageSchema,
   qaThreadSchema,
@@ -845,7 +846,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       const knowledgeItems = (await optionalRows("knowledgeItems")).flatMap((row) => {
         try { return [knowledgeItemSchema.parse(row)] } catch { return [] }
       })
-      return {
+      const exportPayload: PersistenceExport = {
         providerConfigs: providerConfigs.map(sanitizeProviderConfigForExport),
         transcriptSnapshots: transcriptSnapshots.map(withoutTranscriptSourceUrl),
         analysisRuns: analysisRuns.map(normalizeAnalysisRun),
@@ -859,6 +860,10 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         qaMessages,
         knowledgeItems
       }
+      // Validate the completed export before it reaches snapshot serialization.
+      // Keep the original projection to preserve existing JSON shape and values.
+      persistenceExportSchema.parse(exportPayload)
+      return exportPayload
     },
     async clearAll() {
       await runTransaction(

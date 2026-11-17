@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 
 import { createHistoryRepository } from "@/features/history/lib/history-repository"
 import { PersistenceError } from "@/lib/db/errors"
-import { MAX_TRANSCRIPT_CUES } from "@/lib/schemas/container-limits"
+import { MAX_EXPORTED_ROWS_PER_TABLE, MAX_TRANSCRIPT_CUES } from "@/lib/schemas/container-limits"
 import type {
   AnalysisRunEntity,
   RecentVideoEntity,
@@ -1110,5 +1110,37 @@ describe("historyRepository transcript snapshot write validation", () => {
 
     expect(fake.transcriptSnapshots.rows).toHaveLength(1)
     expect(fake.transcriptSnapshots.rows[0]?.cues).toHaveLength(1)
+  })
+})
+
+describe("historyRepository export row boundary", () => {
+  it("exports exactly 100,000 rows without changing the existing payload", async () => {
+    const fake = buildFakeDatabase()
+    const row = buildRecentVideoSeed(0)
+    fake.recentVideos.rows = new Array(MAX_EXPORTED_ROWS_PER_TABLE).fill(row)
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    const exported = await repo.exportLocalData()
+
+    expect(exported.recentVideos).toHaveLength(MAX_EXPORTED_ROWS_PER_TABLE)
+    expect(exported.recentVideos[0]).toBe(row)
+    expect(exported.recentVideos[MAX_EXPORTED_ROWS_PER_TABLE - 1]).toBe(row)
+  })
+
+  it("rejects 100,001 rows from the production export path", async () => {
+    const fake = buildFakeDatabase()
+    fake.recentVideos.rows = new Array(MAX_EXPORTED_ROWS_PER_TABLE + 1)
+      .fill(buildRecentVideoSeed(0))
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await expect(repo.exportLocalData()).rejects.toThrow()
+  })
+
+  it("rejects an invalid required-table row before producing an export", async () => {
+    const fake = buildFakeDatabase()
+    fake.recentVideos.rows.push({ ...buildRecentVideoSeed(0), title: "  " })
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await expect(repo.exportLocalData()).rejects.toThrow()
   })
 })

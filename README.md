@@ -1,5 +1,7 @@
 # Video Summary Assistant
 
+**[简体中文](README.zh-CN.md) | English**
+
 Video Summary Assistant is a local-first Chromium Manifest V3 extension for
 captioned YouTube and Bilibili videos. It turns an available transcript into a
 structured summary with timestamp navigation, then lets you ask questions
@@ -162,11 +164,26 @@ into a daily profile when testing release artifacts.
   environment is available; automated unit, migration, build, and package
   checks do not prove real-site behavior.
 
-## Project status
+## Project status and planning
 
-This repository is at V1.1 release-readiness review. The extension is not
-published to the Chrome Web Store, Edge Add-ons, npm, or another release
-channel by the build or package commands.
+V1.1 capabilities are implemented in `main`. As of 2026-11-17, RH-01
+documentation recovery (PR #12), RH-02 hardening (PR #13), and the persistence
+export/write follow-ups (PR #18, issues #14/#15) have merged. The audited
+pre-documentation `main` commit is
+`859683b482a0b3e1d09a12369ceeb7e2af4e7236`.
+The PR #18 integrated candidate passed the recorded 1,387-test suite,
+typecheck, and production build. Those checks are not a new release approval.
+
+No GitHub Release was listed at this snapshot. `build` and `package` only
+generate local artifacts; they do not publish to Chrome Web Store or Edge
+Add-ons. Before distribution, validate the proposed release artifact,
+packaging, security/dependency checks, and real-browser compatibility
+against that release commit.
+
+See the [feature roadmap](docs/roadmap.md) for proposals and status,
+[feature plan workflow](docs/feature-plans/README.md) for approval and
+progress tracking, [documentation index](docs/README.md) for current versus
+historical references, and [TASK_STATE.md](TASK_STATE.md) for milestones.
 
 ## Third-party notices
 

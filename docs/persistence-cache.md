@@ -138,6 +138,24 @@ except the two whole-video scopes. `deleteAnalysisRun`, `clearAnalysisHistory`,
 `contentKey`, so deleting Bilibili P1 keeps P2. `clearAll` removes every
 knowledge row.
 
+## Production persistence boundaries (as of 2026-11-17)
+
+The production `historyRepository.exportLocalData()` path validates its
+completed, sanitized `PersistenceExport` using `persistenceExportSchema.parse`
+before it is returned to the snapshot/download serializer. Each exported table
+has a ceiling of `MAX_EXPORTED_ROWS_PER_TABLE = 100_000`: exactly 100,000
+rows are accepted, while 100,001 are rejected without silent truncation.
+The already assembled sanitized object is returned for successful exports,
+preserving existing JSON shape.
+
+For non-canonical (legacy) `saveAnalysisRun()` calls,
+`recentVideoSchema.parse` validates the row before the write transaction
+begins, and the validated row is passed to `recentVideos.put`. Invalid
+rows therefore fail before the transaction performs analysis writes.
+Canonical runs do not write `recentVideos` and retain their existing
+behavior. Both follow-ups were merged in
+[PR #18](https://github.com/Aaron-AVC/video-summary-assistant/pull/18).
+
 ## Secrets and exports
 
 Provider metadata and the API-key secret map are separate. Secrets are resolved

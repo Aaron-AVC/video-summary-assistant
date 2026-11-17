@@ -11,6 +11,8 @@ import {
   segmentSummarySchema,
   analysisCacheSchema,
   knowledgeItemSchema,
+  persistenceExportSchema,
+  recentVideoSchema,
   qaAnswerSchema,
   qaMessageSchema,
   qaThreadSchema,
@@ -351,6 +353,12 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         const segments = normalizeSegments(input.segments)
 
         const isCanonical = Boolean(analysisRun.contentKey)
+        const recentVideo = { ...input.recentVideo, updatedAt }
+        // Canonical runs do not write recentVideos. Validate the legacy write
+        // before starting the transaction to avoid any partial persistence.
+        const validatedRecentVideo = isCanonical
+          ? null
+          : recentVideoSchema.parse(recentVideo)
         await runTransaction(
           "rw",
           isCanonical
@@ -359,8 +367,8 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
           async () => {
             await database.analysisRuns.put(analysisRun)
             await database.segmentSummaries.bulkPut(segments)
-            if (!isCanonical) {
-              await database.recentVideos.put({ ...input.recentVideo, updatedAt })
+            if (validatedRecentVideo) {
+              await database.recentVideos.put(validatedRecentVideo)
             }
           }
         )
@@ -370,10 +378,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         return {
           ...analysisRun,
           segments,
-          recentVideo: {
-            ...input.recentVideo,
-            updatedAt
-          }
+          recentVideo: validatedRecentVideo ?? recentVideo
         }
       })
     },
@@ -845,7 +850,7 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
       const knowledgeItems = (await optionalRows("knowledgeItems")).flatMap((row) => {
         try { return [knowledgeItemSchema.parse(row)] } catch { return [] }
       })
-      return {
+      const exportPayload: PersistenceExport = {
         providerConfigs: providerConfigs.map(sanitizeProviderConfigForExport),
         transcriptSnapshots: transcriptSnapshots.map(withoutTranscriptSourceUrl),
         analysisRuns: analysisRuns.map(normalizeAnalysisRun),
@@ -859,6 +864,10 @@ export function createHistoryRepository(database = db, options: HistoryRepositor
         qaMessages,
         knowledgeItems
       }
+      // Validate the completed export before it reaches snapshot serialization.
+      // Keep the original projection to preserve existing JSON shape and values.
+      persistenceExportSchema.parse(exportPayload)
+      return exportPayload
     },
     async clearAll() {
       await runTransaction(

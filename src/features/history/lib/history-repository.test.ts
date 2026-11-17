@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 
 import { createHistoryRepository } from "@/features/history/lib/history-repository"
 import { PersistenceError } from "@/lib/db/errors"
-import { MAX_TRANSCRIPT_CUES } from "@/lib/schemas/container-limits"
+import { MAX_EXPORTED_ROWS_PER_TABLE, MAX_TRANSCRIPT_CUES } from "@/lib/schemas/container-limits"
 import type {
   AnalysisRunEntity,
   RecentVideoEntity,
@@ -204,6 +204,70 @@ describe("historyRepository.saveAnalysisRun retention", () => {
     expect(
       fake.recentVideos.rows.some((row) => row.videoId === "seed-0000")
     ).toBe(false)
+  })
+})
+
+describe("historyRepository.saveAnalysisRun recentVideos validation", () => {
+  it("rejects invalid recent video data before any legacy transaction writes", async () => {
+    const fake = buildFakeDatabase()
+    let transactions = 0
+    const repo = createHistoryRepository(fake as never, {
+      runTransaction: async (_mode, _tables, callback) => {
+        transactions += 1
+        return callback()
+      }
+    })
+
+    await expect(repo.saveAnalysisRun({
+      analysisRun: buildAnalysisRun(),
+      segments: [],
+      recentVideo: { ...buildRecentVideoSeed(0), title: "  " }
+    })).rejects.toThrow()
+
+    expect(transactions).toBe(0)
+    expect(fake.analysisRuns.rows).toHaveLength(0)
+    expect(fake.segmentSummaries.rows).toHaveLength(0)
+    expect(fake.recentVideos.rows).toHaveLength(0)
+  })
+
+  it("continues to persist and return valid legacy recent video data", async () => {
+    const fake = buildFakeDatabase()
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    const input = {
+      videoId: "video-current",
+      title: "Current",
+      channelTitle: null,
+      thumbnailUrl: null,
+      status: "completed" as const,
+      openedAt: NOW,
+      analyzedAt: NOW
+    }
+
+    const saved = await repo.saveAnalysisRun({
+      analysisRun: buildAnalysisRun(),
+      segments: [],
+      recentVideo: input
+    })
+
+    expect(fake.analysisRuns.rows).toHaveLength(1)
+    expect(fake.recentVideos.rows).toEqual([{ ...input, updatedAt: NOW }])
+    expect(saved.recentVideo).toEqual({ ...input, updatedAt: NOW })
+  })
+
+  it("does not validate or write recent video data for canonical runs", async () => {
+    const fake = buildFakeDatabase()
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+    const recentVideo = { ...buildRecentVideoSeed(0), title: "  " }
+
+    const saved = await repo.saveAnalysisRun({
+      analysisRun: { ...buildAnalysisRun(), contentKey: "youtube:video-current" },
+      segments: [],
+      recentVideo
+    })
+
+    expect(fake.analysisRuns.rows).toHaveLength(1)
+    expect(fake.recentVideos.rows).toHaveLength(0)
+    expect(saved.recentVideo).toEqual(recentVideo)
   })
 })
 
@@ -1110,5 +1174,37 @@ describe("historyRepository transcript snapshot write validation", () => {
 
     expect(fake.transcriptSnapshots.rows).toHaveLength(1)
     expect(fake.transcriptSnapshots.rows[0]?.cues).toHaveLength(1)
+  })
+})
+
+describe("historyRepository export row boundary", () => {
+  it("exports exactly 100,000 rows without changing the existing payload", async () => {
+    const fake = buildFakeDatabase()
+    const row = buildRecentVideoSeed(0)
+    fake.recentVideos.rows = new Array(MAX_EXPORTED_ROWS_PER_TABLE).fill(row)
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    const exported = await repo.exportLocalData()
+
+    expect(exported.recentVideos).toHaveLength(MAX_EXPORTED_ROWS_PER_TABLE)
+    expect(exported.recentVideos[0]).toBe(row)
+    expect(exported.recentVideos[MAX_EXPORTED_ROWS_PER_TABLE - 1]).toBe(row)
+  })
+
+  it("rejects 100,001 rows from the production export path", async () => {
+    const fake = buildFakeDatabase()
+    fake.recentVideos.rows = new Array(MAX_EXPORTED_ROWS_PER_TABLE + 1)
+      .fill(buildRecentVideoSeed(0))
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await expect(repo.exportLocalData()).rejects.toThrow()
+  })
+
+  it("rejects an invalid required-table row before producing an export", async () => {
+    const fake = buildFakeDatabase()
+    fake.recentVideos.rows.push({ ...buildRecentVideoSeed(0), title: "  " })
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await expect(repo.exportLocalData()).rejects.toThrow()
   })
 })

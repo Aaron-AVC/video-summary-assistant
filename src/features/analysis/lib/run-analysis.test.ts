@@ -17,7 +17,7 @@ import {
   DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
   OpenAICompatibleClientError
 } from "@/features/analysis/lib/openai-compatible-client"
-import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
+import { AnalysisAbortedError, runAnalysis, type AnalysisProgressEvent } from "@/features/analysis/lib/run-analysis"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
 type Call = {
@@ -83,6 +83,100 @@ function createClient(
 }
 
 describe("runAnalysis", () => {
+
+  it("emits only typed direct/repair progress without source text", async () => {
+    const events: AnalysisProgressEvent[] = []
+    const calls: Call[] = []
+    const responses = ["not json", validResponse()]
+    const result = await runAnalysis({
+      provider, transcript: shortTranscript,
+      client: createClient(calls, () => responses.shift()!) as never,
+      onProgress: (event) => { events.push(event) }
+    })
+    expect(result.repairAttempted).toBe(true)
+    expect(events).toEqual([{ kind: "direct" }, { kind: "repair" }])
+    expect(JSON.stringify(events)).not.toContain("Transcript")
+    expect(JSON.stringify(events)).not.toContain(provider.apiKey)
+    expect(calls).toHaveLength(2)
+  })
+
+  it("emits ordered map completion counts and final before the provider request", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief map summary", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    const events: AnalysisProgressEvent[] = []
+    const calls: Call[] = []
+    await runAnalysis({
+      provider,
+      transcript: { videoId: "long", title: "Long", cues },
+      budgetPolicy: scenario.policy,
+      client: createClient(calls, (call) =>
+        call.structured ? validResponse(cues.at(-1)!.endSec) : "brief map summary"
+      ) as never,
+      onProgress: (event) => events.push(event)
+    })
+    const expectedEvents: AnalysisProgressEvent[] = [
+      ...Array.from({ length: scenario.chunkCount + 1 }, (_, completed) => ({
+        kind: "map" as const, completed, total: scenario.chunkCount
+      })),
+      { kind: "final" }
+    ]
+    expect(events).toEqual(expectedEvents)
+    expect(calls).toHaveLength(scenario.chunkCount + 1)
+  })
+
+  it("counts every reduction group including deterministic pass-through groups", async () => {
+    const cues = longCues(10, 280)
+    const mapSummary = `map ${"m".repeat(260)}`
+    const scenario = findScenario(cues, mapSummary, "condensed reduction", (value) =>
+      value.chunkCount >= 4 && value.reductionLevels === 1
+    )
+    const events: AnalysisProgressEvent[] = []
+    await runAnalysis({
+      provider, transcript: { videoId: "reduce", title: "Reduce", cues },
+      budgetPolicy: scenario.policy,
+      client: createClient([], (call) => {
+        if (call.structured) return validResponse(cues.at(-1)!.endSec)
+        return call.user.includes("Reduction level:") ? "condensed reduction" : mapSummary
+      }) as never,
+      onProgress: (event) => events.push(event)
+    })
+    const reduction = events.filter((event) => event.kind === "reduction")
+    expect(reduction.length).toBeGreaterThan(1)
+    const first = reduction[0]
+    if (!first || first.kind !== "reduction") throw new Error("Missing reduction events")
+    expect(reduction.map((event) => event.kind === "reduction" ? event.completed : -1))
+      .toEqual(Array.from({ length: first.total + 1 }, (_, index) => index))
+    expect(events.at(-1)).toEqual({ kind: "final" })
+  })
+
+  it("emits final exactly once before an upstream HTTP failure; no implicit retry", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief map summary", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    const events: AnalysisProgressEvent[] = []
+    const calls: Call[] = []
+    const error = await runAnalysis({
+      provider,
+      transcript: { videoId: "long", title: "Long", cues },
+      budgetPolicy: scenario.policy,
+      client: createClient(calls, (call) => {
+        if (call.structured) throw new OpenAICompatibleClientError(
+          "Provider request failed with status 502.", { kind: "http", status: 502 }
+        )
+        return "brief map summary"
+      }) as never,
+      onProgress: (event) => events.push(event)
+    }).then(() => null, (reason: unknown) => reason)
+    expect(error).toMatchObject({ kind: "http", status: 502 })
+    expect(events.filter((event) => event.kind === "final")).toHaveLength(1)
+    expect(events.at(-1)).toEqual({ kind: "final" })
+    expect(calls).toHaveLength(scenario.chunkCount + 1)
+  })
+
+
   it("uses one structured request for a valid short transcript", async () => {
     const calls: Call[] = []
     const client = createClient(calls, () => validResponse())

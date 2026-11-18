@@ -13,7 +13,7 @@ import {
   captureAnalysisCompletionTimes,
   type AnalysisTaskExecutionPolicy,
 } from "@/features/analysis/lib/analysis-task-lifecycle"
-import type { RunAnalysisOptions, RunAnalysisResult } from "@/features/analysis/lib/run-analysis"
+import type { RunAnalysisOptions, RunAnalysisResult, AnalysisProgressEvent } from "@/features/analysis/lib/run-analysis"
 import type { SaveAnalysisRunInput } from "@/features/history/lib/history-repository"
 import { persistIfSupportedPlatform } from "@/features/platform/persistence-compat"
 import type { VideoInfo, VideoPlatform, VideoTranscript } from "@/features/platform/types"
@@ -37,6 +37,7 @@ export type AnalysisExecutionRequest = {
   executionPolicy: AnalysisTaskExecutionPolicy
   signal: AbortSignal
   setPhase: (phase: AnalysisTaskPhase) => void
+  onProgress?: (event: AnalysisProgressEvent) => void
   ensureTaskCurrent: () => void
 }
 
@@ -199,6 +200,7 @@ export function createAnalysisController(
       },
       preset,
       signal,
+      ...(request.onProgress ? { onProgress: request.onProgress } : {}),
     })
     ensureTaskCurrent()
     setPhase("finalizing")

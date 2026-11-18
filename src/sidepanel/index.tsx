@@ -928,7 +928,7 @@ function SidepanelWorkspace() {
           analysisRunId: destructiveWorkspaceRef.current.analysisRunId ?? undefined,
           phase: "loading-transcript",
         }, (taskId) => {
-          taskPromise = analysisTaskController.start(taskSnapshot, async ({ taskId, signal, setPhase }) => {
+          taskPromise = analysisTaskController.start(taskSnapshot, async ({ taskId, signal, setPhase, setProgress }) => {
           const task = analysisTaskController.getSnapshot()
           if (!task || task.snapshot.taskId !== taskId) throw new Error("Analysis task is no longer active.")
           const ensureTaskCurrent = () => {
@@ -977,6 +977,7 @@ function SidepanelWorkspace() {
             executionPolicy,
             signal,
             setPhase,
+            onProgress: setProgress,
             ensureTaskCurrent,
           })
 

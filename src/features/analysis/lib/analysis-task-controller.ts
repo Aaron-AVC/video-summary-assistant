@@ -1,4 +1,5 @@
 import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
+import type { AnalysisProgressEvent } from "@/features/analysis/lib/run-analysis"
 import type { VideoPlatform } from "@/features/platform/types"
 
 export type AnalysisTaskPhase = "loading-transcript" | "analyzing" | "finalizing" | "cancelling"
@@ -26,11 +27,14 @@ export type AnalysisTaskSnapshot = {
 export type ActiveAnalysisTask = {
   snapshot: AnalysisTaskSnapshot
   phase: AnalysisTaskPhase
+  /** Ephemeral metadata, never source text or generated content. */
+  progress?: AnalysisProgressEvent
 }
 export type AnalysisTaskRunner = (input: {
   taskId: string
   signal: AbortSignal
   setPhase: (phase: AnalysisTaskPhase) => void
+  setProgress: (event: AnalysisProgressEvent) => void
 }) => Promise<void>
 
 export type AnalysisTaskStartOptions = {
@@ -86,7 +90,17 @@ export class AnalysisTaskController {
           signal: controller.signal,
           setPhase: (phase) => {
             if (!this.isCurrent(taskSnapshot.taskId)) return
-            this.activeTask = { snapshot: taskSnapshot, phase }
+            const progress = phase === "analyzing" ? this.activeTask?.progress : undefined
+            this.activeTask = { snapshot: taskSnapshot, phase, ...(progress ? { progress } : {}) }
+            this.notify()
+          },
+          setProgress: (event) => {
+            const active = this.activeTask
+            if (!this.isCurrent(taskSnapshot.taskId)
+              || controller.signal.aborted
+              || !active
+              || active.phase !== "analyzing") return
+            this.activeTask = { ...active, progress: event }
             this.notify()
           },
         })
@@ -104,7 +118,7 @@ export class AnalysisTaskController {
     if (!this.activeTask || !this.activeAbortController) return false
     if (this.activeTask.phase === "finalizing") return false
     if (this.activeTask.phase !== "cancelling") {
-      this.activeTask = { ...this.activeTask, phase: "cancelling" }
+      this.activeTask = { snapshot: this.activeTask.snapshot, phase: "cancelling" }
       this.notify()
     }
     this.activeAbortController.abort()

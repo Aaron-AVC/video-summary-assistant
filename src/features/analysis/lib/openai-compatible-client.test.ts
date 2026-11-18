@@ -303,6 +303,101 @@ describe("createOpenAICompatibleClient", () => {
   })
 })
 
+
+describe("M1 typed provider failure diagnostics", () => {
+  const settings = { baseUrl: "https://api.example.com/v1", apiKey: "sk-fixture-only", model: "test-model" }
+
+  it("classifies HTML gateway failures by numeric HTTP status without body text", async () => {
+    for (const status of [502, 503, 504]) {
+      let calls = 0
+      const client = createOpenAICompatibleClient(settings, {
+        fetchImpl: async () => {
+          calls += 1
+          return new Response("<!DOCTYPE html>do not echo this payload", {
+            status,
+            headers: { "Content-Type": "text/html", "Retry-After": "60" }
+          })
+        }
+      })
+      const error = await client.createChatCompletion({
+        messages: [{ role: "user", content: "hi" }]
+      }).then(() => null, (reason: unknown) => reason)
+      expect(error).toBeInstanceOf(OpenAICompatibleClientError)
+      expect(error).toMatchObject({ kind: "http", status })
+      expect((error as Error).message).toBe(`Provider request failed with status ${status}.`)
+      expect(calls).toBe(1)
+    }
+  })
+
+  it("classifies structured JSON HTTP errors without losing secret redaction", async () => {
+    const client = createOpenAICompatibleClient(settings, {
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: { message: "invalid api key sk-fixture-only" }
+      }), { status: 401, headers: { "Content-Type": "application/json" } })
+    })
+    const error = await client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }]
+    }).then(() => null, (reason: unknown) => reason)
+    expect(error).toMatchObject({ kind: "http", status: 401 })
+    expect((error as Error).message).not.toContain("sk-fixture-only")
+    expect((error as Error).message).toContain("[REDACTED]")
+  })
+
+  it("distinguishes client timeout from network failure without retrying", async () => {
+    const timedOut = createOpenAICompatibleClient(settings, {
+      setTimeoutImpl: (callback) => { callback(); return 1 },
+      clearTimeoutImpl: () => undefined,
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("aborted")
+        throw new Error("unexpected")
+      }
+    })
+    const timeout = await timedOut.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }]
+    }).then(() => null, (reason: unknown) => reason)
+    expect(timeout).toMatchObject({ kind: "timeout" })
+    expect((timeout as OpenAICompatibleClientError).status).toBeUndefined()
+
+    let calls = 0
+    const offline = createOpenAICompatibleClient(settings, {
+      fetchImpl: async () => { calls += 1; throw new Error("offline") }
+    })
+    const network = await offline.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }]
+    }).then(() => null, (reason: unknown) => reason)
+    expect(network).toMatchObject({ kind: "network" })
+    expect(calls).toBe(1)
+  })
+
+  it("classifies parent cancellation separately from provider timeout", async () => {
+    const controller = new AbortController()
+    controller.abort("user cancelled")
+    const client = createOpenAICompatibleClient(settings, {
+      fetchImpl: async (_input, init) => {
+        if (init?.signal?.aborted) throw new Error("cancelled")
+        throw new Error("unexpected")
+      }
+    })
+    const error = await client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }], signal: controller.signal
+    }).then(() => null, (reason: unknown) => reason)
+    expect(error).toMatchObject({ kind: "cancelled" })
+  })
+
+  it("classifies successful HTTP with invalid JSON as invalid-response", async () => {
+    const client = createOpenAICompatibleClient(settings, {
+      fetchImpl: async () => new Response("<!DOCTYPE html><html>hidden</html>", {
+        status: 200, headers: { "Content-Type": "text/html" }
+      })
+    })
+    const error = await client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }]
+    }).then(() => null, (reason: unknown) => reason)
+    expect(error).toMatchObject({ kind: "invalid-response" })
+    expect((error as Error).message).toBe("Provider response was not valid JSON.")
+  })
+})
+
 describe("provider transport boundaries", () => {
   it("joins endpoints against the configured prefix exactly once", () => {
     expect(buildProviderEndpoint("https://x.example/v1/", "models")).toBe("https://x.example/v1/models")

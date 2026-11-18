@@ -47,6 +47,47 @@ describe("AnalysisTaskController", () => {
     unsubscribe()
   })
 
+
+  it("keeps typed progress private to the active task and clears it before saving", async () => {
+    const controller = new AnalysisTaskController()
+    let finish!: () => void
+    let lateProgress!: (event: { kind: "final" }) => void
+    const promise = controller.start(snapshot, async ({ setPhase, setProgress }) => {
+      lateProgress = setProgress
+      setPhase("analyzing")
+      setProgress({ kind: "map", completed: 0, total: 2 })
+      expect(controller.getSnapshot()?.progress).toEqual({ kind: "map", completed: 0, total: 2 })
+      setProgress({ kind: "final" })
+      expect(controller.getSnapshot()?.phase).toBe("analyzing")
+      expect(controller.cancel()).toBe(true)
+      setProgress({ kind: "repair" })
+      expect(controller.getSnapshot()?.phase).toBe("cancelling")
+      expect(controller.getSnapshot()?.progress).toBeUndefined()
+      await new Promise<void>((resolve) => { finish = resolve })
+    })
+    finish()
+    await promise
+    lateProgress({ kind: "final" })
+    expect(controller.getSnapshot()).toBeNull()
+  })
+
+  it("does not confuse the final provider call with non-cancellable persistence", async () => {
+    const controller = new AnalysisTaskController()
+    let finish!: () => void
+    const promise = controller.start(snapshot, async ({ setPhase, setProgress }) => {
+      setPhase("analyzing")
+      setProgress({ kind: "final" })
+      expect(controller.getSnapshot()?.phase).toBe("analyzing")
+      setPhase("finalizing")
+      expect(controller.getSnapshot()?.progress).toBeUndefined()
+      expect(controller.cancel()).toBe(false)
+      await new Promise<void>((resolve) => { finish = resolve })
+    })
+    finish()
+    await promise
+  })
+
+
   it("freezes the provider generation timeout in the task snapshot", async () => {
     const controller = new AnalysisTaskController()
     let finish!: () => void

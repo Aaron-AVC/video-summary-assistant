@@ -37,6 +37,7 @@
 | R-001 | V1.1 对外发布准备 | P1 | `candidate` | 对选定 release SHA 完成实际包验证、依赖/安全检查、隔离浏览器 Smoke 和发布审核 |
 | R-002 | 授权目标与第三方版权边界审查 | P1 | `candidate` | [候选审查](licensing/2026-11-17-license-policy-review.md)；使用偏好已确认，具体 LICENSE 待定，需完成源码归属和依赖许可核验 |
 | R-003 | 竞品对比与真实使用基准测试 | P1 | `candidate` | [首轮桌面研究](research/2026-11-17-competitor-landscape.md)已完成；[实测方案](research/video-benchmark-protocol.md)待执行，性能、准确性和稳定性尚无实测评分 |
+| R-004 | Y-06 长视频 Final 恢复与阶段进度 | P1 | `candidate` | [设计候选](design/2026-11-18-y06-final-resume-design.md)、[30 条验收用例](design/2026-11-18-y06-final-resume-acceptance.md)；Issue #22；设计草案已提交，产品实现与实际测试尚未批准 |
 
 ## 当前开发承诺
 

@@ -22,6 +22,7 @@
 - [许可证偏好、候选条款比较与待核验版权边界](licensing/2026-11-17-license-policy-review.md)：R-002 候选审查，尚非正式授权文本。
 - [竞品定位研究](research/2026-11-17-competitor-landscape.md)、[可复现测试方案](research/video-benchmark-protocol.md)、[结果记录模板](research/video-benchmark-results-template.md)：R-003，当前仅完成桌面研究。
 - [Y-06 长视频失败的脱敏复核](reviews/2026-11-18-y06-provider-502-diagnostic.md)：Issue #22；原始 HAR 未纳入仓库。
+- [Y-06 最终总结失败后继续分析：设计候选](design/2026-11-18-y06-final-resume-design.md) 与 [验收矩阵](design/2026-11-18-y06-final-resume-acceptance.md)：R-004 / Issue #22，当前尚无实现和实测结果。
 
 ## 历史资料（原始记录保留）
 

@@ -95,10 +95,12 @@ export class AnalysisTaskController {
             this.notify()
           },
           setProgress: (event) => {
+            const active = this.activeTask
             if (!this.isCurrent(taskSnapshot.taskId)
               || controller.signal.aborted
-              || this.activeTask?.phase !== "analyzing") return
-            this.activeTask = { ...this.activeTask, progress: event }
+              || !active
+              || active.phase !== "analyzing") return
+            this.activeTask = { ...active, progress: event }
             this.notify()
           },
         })

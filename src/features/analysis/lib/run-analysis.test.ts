@@ -143,9 +143,10 @@ describe("runAnalysis", () => {
     })
     const reduction = events.filter((event) => event.kind === "reduction")
     expect(reduction.length).toBeGreaterThan(1)
-    if (reduction[0]?.kind !== "reduction") throw new Error("Missing reduction events")
+    const first = reduction[0]
+    if (!first || first.kind !== "reduction") throw new Error("Missing reduction events")
     expect(reduction.map((event) => event.kind === "reduction" ? event.completed : -1))
-      .toEqual(Array.from({ length: reduction[0].total + 1 }, (_, index) => index))
+      .toEqual(Array.from({ length: first.total + 1 }, (_, index) => index))
     expect(events.at(-1)).toEqual({ kind: "final" })
   })
 

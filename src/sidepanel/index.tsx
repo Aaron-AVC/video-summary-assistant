@@ -64,6 +64,11 @@ import {
 } from "@/lib/providers/extension-providers"
 import { AskTab } from "@/sidepanel/components/ask-tab"
 import { createAnalysisController, type AnalysisExecutionPublication } from "@/sidepanel/analysis/analysis-controller"
+import {
+  createFinalResumeCheckpointController,
+  type FinalResumeCheckpointController,
+} from "@/features/analysis/lib/final-resume-checkpoint"
+import { SidePanelFinalCheckpointLifecycle } from "@/sidepanel/analysis/final-checkpoint-lifecycle"
 import { OverviewTab } from "@/sidepanel/components/overview-tab"
 import { SettingsTab } from "@/sidepanel/components/settings-tab"
 import { SidePanelShell } from "@/sidepanel/components/sidepanel-shell"
@@ -239,7 +244,14 @@ function SidepanelWorkspace() {
   const analysisControllerRef = useRef<ReturnType<typeof createAnalysisController> | null>(null)
   if (!analysisControllerRef.current) {
     analysisControllerRef.current = createAnalysisController({
-      resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId),
+      resolveProvider: async (providerId) => {
+        const resolved = await settingsStorage.resolveProvider(providerId)
+        return {
+          apiKey: resolved.apiKey,
+          credentialRevision: resolved.credentialRevision,
+          profileUpdatedAt: resolved.profile.updatedAt,
+        }
+      },
       saveTaskTranscriptCache: (input) => transcriptController.saveTaskCache(input),
       getAnalysisCache: (cacheKey) => historyRepository.getAnalysisCache(cacheKey),
       saveVideoRecord: (input) => historyRepository.saveVideoRecord(input),
@@ -250,6 +262,31 @@ function SidepanelWorkspace() {
     })
   }
   const analysisController = analysisControllerRef.current
+  const finalCheckpointLifecycleRef = useRef<SidePanelFinalCheckpointLifecycle<FinalResumeCheckpointController> | null>(null)
+  if (!finalCheckpointLifecycleRef.current) {
+    const hasChromeEvents = typeof chrome !== "undefined"
+    finalCheckpointLifecycleRef.current = new SidePanelFinalCheckpointLifecycle(
+      createFinalResumeCheckpointController(),
+      hasChromeEvents ? {
+        storage: {
+          addListener: (listener) => chrome.storage.onChanged.addListener(listener),
+          removeListener: (listener) => chrome.storage.onChanged.removeListener(listener),
+        },
+        tabs: {
+          onUpdated: {
+            addListener: (listener) => chrome.tabs.onUpdated.addListener(listener),
+            removeListener: (listener) => chrome.tabs.onUpdated.removeListener(listener),
+          },
+          onRemoved: {
+            addListener: (listener) => chrome.tabs.onRemoved.addListener(listener),
+            removeListener: (listener) => chrome.tabs.onRemoved.removeListener(listener),
+          },
+        },
+      } : {},
+    )
+  }
+  const finalCheckpointLifecycle = finalCheckpointLifecycleRef.current
+  const finalCheckpointDurationRef = useRef<number | null>(null)
   const workspaceControllerRef = useRef<WorkspaceController | null>(null)
   if (!workspaceControllerRef.current) workspaceControllerRef.current = new WorkspaceController()
   const workspaceController = workspaceControllerRef.current
@@ -430,6 +467,36 @@ function SidepanelWorkspace() {
     setActiveAnalysisTask(analysisTaskController.getSnapshot())
   }), [analysisTaskController])
 
+  useEffect(() => () => finalCheckpointLifecycle.destroy(), [finalCheckpointLifecycle])
+
+  useEffect(() => {
+    finalCheckpointLifecycle.syncSource({
+      sourceTabId: activeTabId,
+      platform: videoContext.platform,
+      videoId: videoContext.videoId,
+      partId: videoContext.partId,
+      contentKey: videoContext.contentKey,
+      title: videoContext.title ?? videoContext.videoId,
+      durationSec: finalCheckpointDurationRef.current,
+      workspaceEpoch: workspaceController.captureEpoch(),
+      transcriptFingerprint: currentTranscriptFingerprint,
+      providerProfileId: provider?.id ?? null,
+      analysisPresetId,
+    })
+  }, [
+    activeTabId,
+    analysisPresetId,
+    currentTranscriptFingerprint,
+    finalCheckpointLifecycle,
+    provider?.id,
+    videoContext.contentKey,
+    videoContext.partId,
+    videoContext.platform,
+    videoContext.title,
+    videoContext.videoId,
+    workspaceController,
+  ])
+
   useEffect(() => askTaskController.subscribe(() => {
     setActiveAskTask(askTaskController.getSnapshot())
   }), [askTaskController])
@@ -507,6 +574,7 @@ function SidepanelWorkspace() {
   }, [historyController])
 
   const applyMutation = useCallback(async (mutation: Parameters<typeof applySidepanelDataMutation>[0]) => {
+    finalCheckpointLifecycle.handleMutation(mutation)
     await applySidepanelDataMutation(mutation, destructiveWorkspaceRef.current, {
       invalidateWorkspace: (clearTranscript) => {
         workspaceController.invalidateLoadGeneration()
@@ -544,7 +612,7 @@ function SidepanelWorkspace() {
         setAnalysisPresetId(await settingsStorage.getAnalysisPresetId())
       },
     })
-  }, [askController, clearQaWorkspace, knowledgeController, refreshRecentAnalyses, resetTranscript, transcriptController, workspaceController])
+  }, [askController, clearQaWorkspace, finalCheckpointLifecycle, knowledgeController, refreshRecentAnalyses, resetTranscript, transcriptController, workspaceController])
 
   useEffect(() => {
     const getTasks = () => {
@@ -891,6 +959,7 @@ function SidepanelWorkspace() {
       return
     }
 
+    finalCheckpointLifecycle.invalidate()
     askController.invalidateExecutionGeneration()
     askController.invalidateThreadLoadGeneration()
     clearQaWorkspace()
@@ -969,12 +1038,30 @@ function SidepanelWorkspace() {
             },
           })
 
+          finalCheckpointDurationRef.current = sourceVideo.durationSec ?? null
+          finalCheckpointLifecycle.syncSource({
+            sourceTabId: task.snapshot.sourceTabId,
+            platform: task.snapshot.platform,
+            videoId: task.snapshot.videoId,
+            partId: task.snapshot.partId,
+            contentKey: task.snapshot.contentKey,
+            title: sourceVideo.title,
+            durationSec: finalCheckpointDurationRef.current,
+            workspaceEpoch: requestedWorkspaceEpoch,
+            transcriptFingerprint,
+            providerProfileId: task.snapshot.providerProfileId,
+            analysisPresetId: task.snapshot.analysisPresetId,
+          })
           const execution = await analysisController.runExecutionTask({
             taskSnapshot: task.snapshot,
             sourceVideo,
             transcript,
             transcriptFingerprint,
             executionPolicy,
+            finalCheckpoint: {
+              controller: finalCheckpointLifecycle.controller,
+              workspaceEpoch: requestedWorkspaceEpoch,
+            },
             signal,
             setPhase,
             onProgress: setProgress,
@@ -1040,6 +1127,7 @@ function SidepanelWorkspace() {
         const isAbort = error instanceof AnalysisAbortedError
           || (error instanceof DOMException && error.name === "AbortError")
         if (isAbort) {
+          finalCheckpointLifecycle.invalidate()
           workspaceController.publishAnalysisCancelled({
             workspaceEpoch: requestedWorkspaceEpoch,
             taskContentKey: taskSnapshot.contentKey,
@@ -1083,11 +1171,12 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, askController, clearQaWorkspace, loadTranscriptForTask, provider, publishCompleted, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, askController, clearQaWorkspace, finalCheckpointLifecycle, loadTranscriptForTask, provider, publishCompleted, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
+    finalCheckpointLifecycle.invalidate()
     analysisTaskController.cancel()
-  }, [analysisTaskController])
+  }, [analysisTaskController, finalCheckpointLifecycle])
 
   const handleOpenSavedAnalysis = useCallback(async (
     videoId: string,

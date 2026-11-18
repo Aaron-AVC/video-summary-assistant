@@ -5,10 +5,12 @@ import { ANALYSIS_PRESET_STRATEGIES } from "@/features/analysis/lib/analysis-pre
 import type { VideoAnalysis } from "@/features/analysis/lib/analysis-schema"
 import type { AnalysisTaskPhase, AnalysisTaskSnapshot } from "@/features/analysis/lib/analysis-task-controller"
 import type { AnalysisTaskExecutionPolicy } from "@/features/analysis/lib/analysis-task-lifecycle"
-import type { RunAnalysisOptions, RunAnalysisResult } from "@/features/analysis/lib/run-analysis"
+import type { RunAnalysisOptions, RunAnalysisResult, FinalAnalysisCheckpointCandidate } from "@/features/analysis/lib/run-analysis"
+import { OpenAICompatibleClientError } from "@/features/analysis/lib/openai-compatible-client"
+import { createFinalResumeCheckpointController } from "@/features/analysis/lib/final-resume-checkpoint"
 import type { SaveAnalysisRunInput } from "@/features/history/lib/history-repository"
 import type { VideoInfo, VideoTranscript } from "@/features/platform/types"
-import { computeAnalysisCacheKey } from "@/lib/persistence/cache-identity"
+import { computeAnalysisCacheKey, computeTranscriptFingerprint } from "@/lib/persistence/cache-identity"
 import type {
   AnalysisCacheEntity,
   TranscriptSnapshotEntity,
@@ -125,6 +127,25 @@ function runResultFixture(overrides: Partial<RunAnalysisResult> = {}): RunAnalys
   }
 }
 
+function checkpointCandidateFixture(): FinalAnalysisCheckpointCandidate {
+  const chunkSummaries = [
+    { chunkId: "chunk-1", startSec: 0, endSec: 12, summary: "Map summary one." },
+    { chunkId: "chunk-2", startSec: 12, endSec: 24, summary: "Map summary two." },
+  ]
+  return {
+    strategy: "map-reduce",
+    initialChunkCount: 2,
+    reductionLevels: 0,
+    mapPlan: [
+      { id: "chunk-1", index: 0, startSec: 0, endSec: 12 },
+      { id: "chunk-2", index: 1, startSec: 12, endSec: 24 },
+    ],
+    chunkSummaries,
+    finalInputSummaries: chunkSummaries,
+    finalPrompt: { systemPrompt: "System prompt", userPrompt: "Final prompt" },
+  }
+}
+
 function cacheFixture(overrides: Partial<AnalysisCacheEntity> = {}): AnalysisCacheEntity {
   return {
     cacheKey: "cache-key-1",
@@ -194,7 +215,11 @@ function createHarness(config: HarnessConfig = {}): Harness {
     resolveProvider: async (providerId) => {
       calls.resolveProvider.push(providerId)
       events.push("resolveProvider")
-      return { apiKey: "resolved-secret" }
+      return {
+        apiKey: "resolved-secret",
+        credentialRevision: "credential-revision-1",
+        profileUpdatedAt: "profile-revision-1",
+      }
     },
     saveTaskTranscriptCache: async (input) => {
       calls.saveTaskTranscriptCache.push(input)
@@ -752,6 +777,133 @@ describe("analysis controller — persistence", () => {
     })
     expect("errorMessage" in result.publication).toBe(false)
     expect(Object.values(result.publication)).not.toContain("resolved-secret")
+  })
+})
+
+describe("analysis controller — M2 final checkpoint identity", () => {
+  const finalFailure = new OpenAICompatibleClientError("temporary upstream", { kind: "http", status: 502 })
+
+  async function runFinalFailureScenario(
+    credentialAtCall: (call: number) => {
+      apiKey: string
+      credentialRevision: string
+      profileUpdatedAt?: string
+    } = () => ({
+      apiKey: "resolved-secret",
+      credentialRevision: "credential-revision-1",
+    }),
+  ) {
+    const finalCheckpoint = createFinalResumeCheckpointController()
+    let resolveCall = 0
+    const harness = createHarness({
+      overrides: {
+        resolveProvider: async (providerId) => {
+          resolveCall += 1
+          harness.calls.resolveProvider.push(providerId)
+          return {
+            profileUpdatedAt: "profile-revision-1",
+            ...credentialAtCall(resolveCall),
+          }
+        },
+        runAnalysis: async (options) => {
+          harness.calls.runAnalysis.push(options)
+          if (!options.finalCheckpoint) return runResultFixture()
+          const prepared = await options.finalCheckpoint.prepareFinalCandidate(checkpointCandidateFixture())
+          if (prepared) await options.finalCheckpoint.promoteFinalFailure(finalFailure)
+          throw finalFailure
+        },
+      },
+    })
+    const transcript = transcriptFixture()
+    const { request } = createRequest(harness.events, {
+      transcript,
+      transcriptFingerprint: await computeTranscriptFingerprint(transcript.segments),
+      finalCheckpoint: { controller: finalCheckpoint, workspaceEpoch: 9 },
+    } as RequestOverrides)
+    const error = await harness.controller.runExecutionTask(request).then(
+      () => null,
+      (reason: unknown) => reason,
+    )
+    return { error, finalCheckpoint, harness }
+  }
+
+  it("publishes an eligible Final failure with stable provider identity and no secret metadata", async () => {
+    const { error, finalCheckpoint } = await runFinalFailureScenario()
+
+    expect(error).toBe(finalFailure)
+    expect(finalCheckpoint.getMetadata()).toMatchObject({
+      state: "available",
+      summaryBytes: expect.any(Number),
+      failure: { kind: "http", status: 502 },
+    })
+    expect(JSON.stringify(finalCheckpoint.getMetadata())).not.toContain("resolved-secret")
+  })
+
+  it("rejects a same-profile key replacement during candidate preparation", async () => {
+    const { error, finalCheckpoint, harness } = await runFinalFailureScenario((call) => ({
+      apiKey: call >= 2 ? "replacement-secret" : "resolved-secret",
+      credentialRevision: call >= 2 ? "credential-revision-2" : "credential-revision-1",
+    }))
+
+    expect(error).toBe(finalFailure)
+    expect(finalCheckpoint.getMetadata().state).toBe("empty")
+    expect(harness.calls.resolveProvider).toHaveLength(2)
+  })
+
+  it("rejects a same-key provider metadata replacement during asynchronous preparation", async () => {
+    const { error, finalCheckpoint } = await runFinalFailureScenario((call) => ({
+      apiKey: "resolved-secret",
+      credentialRevision: "credential-revision-1",
+      profileUpdatedAt: call >= 2 ? "profile-revision-2" : "profile-revision-1",
+    }))
+
+    expect(error).toBe(finalFailure)
+    expect(finalCheckpoint.getMetadata().state).toBe("empty")
+  })
+
+  it("rejects a key replacement at the asynchronous promotion boundary", async () => {
+    const { error, finalCheckpoint } = await runFinalFailureScenario((call) => ({
+      apiKey: call >= 4 ? "replacement-secret" : "resolved-secret",
+      credentialRevision: call >= 4 ? "credential-revision-2" : "credential-revision-1",
+    }))
+
+    expect(error).toBe(finalFailure)
+    expect(finalCheckpoint.getMetadata().state).toBe("empty")
+  })
+
+  it("fails closed if the in-memory key differs even when its revision did not rotate", async () => {
+    const { error, finalCheckpoint } = await runFinalFailureScenario((call) => ({
+      apiKey: call >= 2 ? "replacement-secret" : "resolved-secret",
+      credentialRevision: "credential-revision-1",
+    }))
+
+    expect(error).toBe(finalFailure)
+    expect(finalCheckpoint.getMetadata().state).toBe("empty")
+  })
+
+  it("discards before persistence so a later database failure cannot publish", async () => {
+    const finalCheckpoint = createFinalResumeCheckpointController()
+    const databaseFailure = new Error("database failed")
+    const harness = createHarness({
+      overrides: {
+        runAnalysis: async (options) => {
+          if (!options.finalCheckpoint) return runResultFixture()
+          await options.finalCheckpoint.prepareFinalCandidate(checkpointCandidateFixture())
+          options.finalCheckpoint.discardFinalCandidate()
+          return runResultFixture({ strategy: "map-reduce", initialChunkCount: 2 })
+        },
+        saveAnalysisRun: async () => { throw databaseFailure },
+      },
+    })
+    const transcript = transcriptFixture()
+    const { request } = createRequest(harness.events, {
+      transcript,
+      transcriptFingerprint: await computeTranscriptFingerprint(transcript.segments),
+      finalCheckpoint: { controller: finalCheckpoint, workspaceEpoch: 9 },
+    } as RequestOverrides)
+
+    await expect(harness.controller.runExecutionTask(request)).rejects.toBe(databaseFailure)
+    expect(finalCheckpoint.getMetadata().state).toBe("empty")
   })
 })
 

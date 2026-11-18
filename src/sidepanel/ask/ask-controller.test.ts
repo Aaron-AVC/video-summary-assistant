@@ -258,6 +258,7 @@ function createResolvedProvider(overrides: Partial<ResolvedProvider> = {}): Reso
       ...overrides.profile,
     },
     apiKey: "secret-a",
+    credentialRevision: "credential-revision-a",
     ...overrides,
   }
 }

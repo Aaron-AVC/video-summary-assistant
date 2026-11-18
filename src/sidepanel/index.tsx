@@ -250,6 +250,9 @@ function SidepanelWorkspace() {
           apiKey: resolved.apiKey,
           credentialRevision: resolved.credentialRevision,
           profileUpdatedAt: resolved.profile.updatedAt,
+          profileBaseUrl: resolved.profile.baseUrl,
+          profileModel: resolved.profile.model,
+          profileGenerationTimeoutSec: resolved.profile.generationTimeoutSec,
         }
       },
       saveTaskTranscriptCache: (input) => transcriptController.saveTaskCache(input),

@@ -342,13 +342,15 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
   async function writeProfiles(
     profiles: ProviderProfile[],
     defaultProviderId: string | null,
-    secrets: ProviderSecretRecord,
+    secrets?: ProviderSecretRecord,
   ) {
-    await adapter.set({
+    const values: Record<string, StorageValue> = {
       [SETTINGS_KEYS.providerProfiles]: profiles,
       [SETTINGS_KEYS.defaultProviderId]: defaultProviderId,
-      [SETTINGS_KEYS.providerSecrets]: secrets,
-    })
+    }
+    // A metadata-only save must not write a stale whole-map credential snapshot.
+    if (secrets !== undefined) values[SETTINGS_KEYS.providerSecrets] = secrets
+    await adapter.set(values)
   }
 
   return {
@@ -419,7 +421,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
           }
         } else delete secrets[profile.id]
       }
-      await writeProfiles(profiles, defaultProviderId, secrets)
+      await writeProfiles(profiles, defaultProviderId, apiKey === undefined ? undefined : secrets)
       return {
         ...profile,
         isDefault: defaultProviderId === profile.id,

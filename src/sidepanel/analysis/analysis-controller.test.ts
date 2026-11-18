@@ -219,6 +219,9 @@ function createHarness(config: HarnessConfig = {}): Harness {
         apiKey: "resolved-secret",
         credentialRevision: "credential-revision-1",
         profileUpdatedAt: "profile-revision-1",
+        profileBaseUrl: "https://api.example.com/v1",
+        profileModel: "model-1",
+        profileGenerationTimeoutSec: 600,
       }
     },
     saveTaskTranscriptCache: async (input) => {
@@ -788,6 +791,9 @@ describe("analysis controller — M2 final checkpoint identity", () => {
       apiKey: string
       credentialRevision: string
       profileUpdatedAt?: string
+      profileBaseUrl?: string
+      profileModel?: string
+      profileGenerationTimeoutSec?: number
     } = () => ({
       apiKey: "resolved-secret",
       credentialRevision: "credential-revision-1",
@@ -802,6 +808,9 @@ describe("analysis controller — M2 final checkpoint identity", () => {
           harness.calls.resolveProvider.push(providerId)
           return {
             profileUpdatedAt: "profile-revision-1",
+            profileBaseUrl: "https://api.example.com/v1",
+            profileModel: "model-1",
+            profileGenerationTimeoutSec: 600,
             ...credentialAtCall(resolveCall),
           }
         },
@@ -855,6 +864,20 @@ describe("analysis controller — M2 final checkpoint identity", () => {
       apiKey: "resolved-secret",
       credentialRevision: "credential-revision-1",
       profileUpdatedAt: call >= 2 ? "profile-revision-2" : "profile-revision-1",
+    }))
+
+    expect(error).toBe(finalFailure)
+    expect(finalCheckpoint.getMetadata().state).toBe("empty")
+  })
+
+  it("rejects execution metadata replacement even when the profile timestamp is unchanged", async () => {
+    const { error, finalCheckpoint } = await runFinalFailureScenario((call) => ({
+      apiKey: "resolved-secret",
+      credentialRevision: "credential-revision-1",
+      profileUpdatedAt: "same-profile-timestamp",
+      profileBaseUrl: call >= 2 ? "https://replacement.example.com/v1" : "https://api.example.com/v1",
+      profileModel: call >= 2 ? "model-2" : "model-1",
+      profileGenerationTimeoutSec: call >= 2 ? 300 : 600,
     }))
 
     expect(error).toBe(finalFailure)

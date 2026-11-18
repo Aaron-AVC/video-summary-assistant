@@ -87,6 +87,10 @@ export type AnalysisProviderSecret = {
   credentialRevision: string
   /** Non-secret storage revision used to close the metadata-update race. */
   profileUpdatedAt: string
+  /** Execution metadata is compared directly because timestamps may share a millisecond. */
+  profileBaseUrl: string
+  profileModel: string
+  profileGenerationTimeoutSec: number
 }
 
 export type AnalysisControllerDependencies = {
@@ -212,6 +216,9 @@ export function createAnalysisController(
         return current.apiKey === resolvedProvider.apiKey
           && current.credentialRevision === resolvedProvider.credentialRevision
           && current.profileUpdatedAt === resolvedProvider.profileUpdatedAt
+          && current.profileBaseUrl === resolvedProvider.profileBaseUrl
+          && current.profileModel === resolvedProvider.profileModel
+          && current.profileGenerationTimeoutSec === resolvedProvider.profileGenerationTimeoutSec
       }
       const checkpointContext = (): FinalCheckpointContext => ({
         source: {

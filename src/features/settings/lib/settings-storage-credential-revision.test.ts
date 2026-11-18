@@ -105,6 +105,54 @@ describe("provider credential revisions", () => {
     expect(store.has("credentialRevision")).toBe(false)
   })
 
+  it("does not overwrite another panel's key replacement with a stale metadata-only save", async () => {
+    const { adapter, store } = createAdapter()
+    const panelA = createSettingsStorage(adapter)
+    await seedProvider(panelA)
+    const before = await panelA.resolveProvider("provider-a")
+
+    let gateSecretsRead = true
+    let releaseSecretsRead!: () => void
+    let markSecretsReadStarted!: () => void
+    const secretsReadStarted = new Promise<void>((resolve) => { markSecretsReadStarted = resolve })
+    const secretsReadGate = new Promise<void>((resolve) => { releaseSecretsRead = resolve })
+    const gatedAdapter: SettingsStorageAdapter = {
+      async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
+        const snapshot = await adapter.get<T>(keys)
+        if (gateSecretsRead && keys.length === 1 && keys[0] === SETTINGS_KEYS.providerSecrets) {
+          gateSecretsRead = false
+          markSecretsReadStarted()
+          await secretsReadGate
+        }
+        return snapshot
+      },
+      set: (values) => adapter.set(values),
+      remove: (keys) => adapter.remove(keys),
+    }
+    const stalePanel = createSettingsStorage(gatedAdapter)
+    const panelB = createSettingsStorage(adapter)
+    const metadataSave = stalePanel.saveProviderProfile({
+      id: "provider-a",
+      name: "Renamed in panel A",
+      baseUrl: before.profile.baseUrl,
+      model: before.profile.model,
+    })
+    await secretsReadStarted
+    await panelB.setProviderApiKey("provider-a", "sk-from-panel-b")
+    const replacement = await panelB.resolveProvider("provider-a")
+    releaseSecretsRead()
+    await metadataSave
+
+    const after = await panelA.resolveProvider("provider-a")
+    expect(after.profile.name).toBe("Renamed in panel A")
+    expect(after.apiKey).toBe("sk-from-panel-b")
+    expect(after.credentialRevision).toBe(replacement.credentialRevision)
+    expect(after.credentialRevision).not.toBe(before.credentialRevision)
+    expect(store.get(SETTINGS_KEYS.providerSecrets)).toEqual({
+      "provider-a": { apiKey: "sk-from-panel-b", credentialRevision: replacement.credentialRevision },
+    })
+  })
+
   it("observes another panel's key replacement without relying on profile timestamps", async () => {
     const { adapter } = createAdapter()
     const panelA = createSettingsStorage(adapter)

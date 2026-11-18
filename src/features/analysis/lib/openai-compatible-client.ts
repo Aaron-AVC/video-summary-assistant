@@ -76,10 +76,22 @@ type OpenAICompatibleResponse = {
   }>
 }
 
+/** Only trusted diagnostic metadata; no request or response content. */
+export type ProviderFailureKind = "http" | "timeout" | "cancelled" | "network" | "invalid-response" | "other"
+
 export class OpenAICompatibleClientError extends Error {
-  constructor(message: string) {
+  readonly kind: ProviderFailureKind
+  readonly status?: number
+
+  constructor(message: string, diagnostic: { kind?: ProviderFailureKind; status?: number } = {}) {
     super(message)
     this.name = "OpenAICompatibleClientError"
+    this.kind = diagnostic.kind ?? "other"
+    const status = diagnostic.status
+    if (this.kind === "http" && typeof status === "number"
+      && Number.isInteger(status) && status >= 100 && status <= 599) {
+      this.status = status
+    }
   }
 }
 
@@ -277,30 +289,37 @@ export function createOpenAICompatibleClient(
         throw new OpenAICompatibleClientError(redactProviderError(
           providerMessage || fallback,
           provider.apiKey,
-        ))
+        ), { kind: "http", status: response.status })
       }
       try {
         payload = (await readJsonBodyWithLimit(response)) as OpenAICompatibleResponse
       } catch (parseError) {
         if (parseError instanceof SyntaxError) {
-          throw new OpenAICompatibleClientError("Provider response was not valid JSON.")
+          throw new OpenAICompatibleClientError("Provider response was not valid JSON.", { kind: "invalid-response" })
         }
         throw parseError
       }
     } catch (error) {
       if (signal?.aborted) {
-        throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))
+        throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey), { kind: "cancelled" })
       }
       if (request.didTimeout()) {
-        throw new OpenAICompatibleClientError(providerTimeoutMessage(timeoutPurpose, timeoutMs))
+        throw new OpenAICompatibleClientError(providerTimeoutMessage(timeoutPurpose, timeoutMs), { kind: "timeout" })
       }
-      throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))
+      if (error instanceof OpenAICompatibleClientError) throw error
+      if (error instanceof ProviderResponseTooLargeError) {
+        throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey), { kind: "invalid-response" })
+      }
+      throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey), { kind: "network" })
     } finally {
       request.cleanup()
     }
 
     const text = extractMessageText(payload.choices?.[0]?.message?.content)
-    if (!text) throw new OpenAICompatibleClientError("Provider response did not include assistant content.")
+    if (!text) throw new OpenAICompatibleClientError(
+      "Provider response did not include assistant content.",
+      { kind: "invalid-response" }
+    )
     return text
   }
 

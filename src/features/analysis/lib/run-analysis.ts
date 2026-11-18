@@ -38,6 +38,14 @@ import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
 type AnalysisClient = ReturnType<typeof createOpenAICompatibleClient>
 
+/** Content-free progress events for UI and future phase-aware recovery. */
+export type AnalysisProgressEvent =
+  | { kind: "direct" }
+  | { kind: "map"; completed: number; total: number }
+  | { kind: "reduction"; level: number; completed: number; total: number }
+  | { kind: "final" }
+  | { kind: "repair" }
+
 export type RunAnalysisOptions = {
   provider: ProviderConnectionInput
   transcript: {
@@ -51,6 +59,8 @@ export type RunAnalysisOptions = {
   budgetPolicy?: AnalysisBudgetPolicy
   client?: AnalysisClient
   signal?: AbortSignal
+  /** Emits stage names and integer counters only, without provider or transcript text. */
+  onProgress?: (event: AnalysisProgressEvent) => void
 }
 
 export class AnalysisAbortedError extends Error {
@@ -62,6 +72,12 @@ export class AnalysisAbortedError extends Error {
 
 function throwIfAborted(signal: AbortSignal | undefined) {
   if (signal?.aborted) throw new AnalysisAbortedError()
+}
+
+function emitProgress(options: RunAnalysisOptions, event: AnalysisProgressEvent) {
+  throwIfAborted(options.signal)
+  options.onProgress?.(event)
+  throwIfAborted(options.signal)
 }
 
 export type ChunkAnalysisResult = EvidenceSummary
@@ -101,6 +117,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
       cues: options.transcript.cues,
       preset
     })
+    emitProgress(options, { kind: "direct" })
     const structured = await requestStructuredAnalysis({ client, prompt, options })
     return {
       videoId: options.transcript.videoId,
@@ -119,8 +136,9 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     preset
   })
   const chunkSummaries: ChunkAnalysisResult[] = []
+  emitProgress(options, { kind: "map", completed: 0, total: chunks.length })
 
-  for (const chunk of chunks) {
+  for (const [chunkIndex, chunk] of chunks.entries()) {
     throwIfAborted(signal)
     const prompt = buildChunkAnalysisPrompt({
       chunk,
@@ -137,6 +155,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
       endSec: chunk.endSec,
       summary
     })
+    emitProgress(options, { kind: "map", completed: chunkIndex + 1, total: chunks.length })
   }
 
   let survivingSummaries: EvidenceSummary[] = chunkSummaries
@@ -155,10 +174,14 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
       preset
     })
     const reduced: EvidenceSummary[] = []
+    emitProgress(options, { kind: "reduction", level: nextLevel, completed: 0, total: groups.length })
     for (const [groupIndex, group] of groups.entries()) {
       throwIfAborted(signal)
       if (group.length === 1) {
         reduced.push(group[0])
+        emitProgress(options, {
+          kind: "reduction", level: nextLevel, completed: groupIndex + 1, total: groups.length
+        })
         continue
       }
 
@@ -173,6 +196,9 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
         endSec: Math.max(...group.map((node) => node.endSec)),
         summary
       })
+      emitProgress(options, {
+        kind: "reduction", level: nextLevel, completed: groupIndex + 1, total: groups.length
+      })
     }
     if (reduced.length >= survivingSummaries.length) {
       throw new Error("Reduction budget is too small to make progress safely.")
@@ -186,6 +212,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     chunkSummaries: survivingSummaries,
     preset
   })
+  emitProgress(options, { kind: "final" })
   const structured = await requestStructuredAnalysis({ client, prompt: finalPrompt, options })
   return {
     videoId: options.transcript.videoId,
@@ -232,6 +259,7 @@ async function requestStructuredAnalysis(input: {
     }
     try {
       throwIfAborted(signal)
+      emitProgress(input.options, { kind: "repair" })
       rawResponse = await requestCompletion(input.client, {
         messages: promptMessages(repairPrompt),
         signal

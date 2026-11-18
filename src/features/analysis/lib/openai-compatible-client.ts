@@ -255,7 +255,38 @@ export function createOpenAICompatibleClient(
         }),
         signal: request.signal
       })
-      payload = (await readJsonBodyWithLimit(response)) as OpenAICompatibleResponse
+      if (!response.ok) {
+        const fallback = `Provider request failed with status ${response.status}.`
+        let providerMessage: string | null = null
+        if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) {
+          // A gateway HTML error must not be parsed or surfaced as provider text.
+          // Cancel without waiting; the failure should reach the user immediately.
+          if (response.body) void response.body.cancel().catch(() => undefined)
+        } else {
+          try {
+            const errorPayload = (await readJsonBodyWithLimit(response)) as OpenAICompatibleResponse | null
+            providerMessage = typeof errorPayload?.error?.message === "string"
+              ? errorPayload.error.message.trim()
+              : null
+          } catch (readError) {
+            // Preserve the response-size guard; malformed HTTP error bodies
+            // should fall back to the safe status instead of leaking snippets.
+            if (readError instanceof ProviderResponseTooLargeError) throw readError
+          }
+        }
+        throw new OpenAICompatibleClientError(redactProviderError(
+          providerMessage || fallback,
+          provider.apiKey,
+        ))
+      }
+      try {
+        payload = (await readJsonBodyWithLimit(response)) as OpenAICompatibleResponse
+      } catch (parseError) {
+        if (parseError instanceof SyntaxError) {
+          throw new OpenAICompatibleClientError("Provider response was not valid JSON.")
+        }
+        throw parseError
+      }
     } catch (error) {
       if (signal?.aborted) {
         throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))
@@ -266,13 +297,6 @@ export function createOpenAICompatibleClient(
       throw new OpenAICompatibleClientError(redactProviderError(error, provider.apiKey))
     } finally {
       request.cleanup()
-    }
-
-    if (!response.ok) {
-      throw new OpenAICompatibleClientError(redactProviderError(
-        payload.error?.message ?? `Provider request failed with status ${response.status}.`,
-        provider.apiKey,
-      ))
     }
 
     const text = extractMessageText(payload.choices?.[0]?.message?.content)

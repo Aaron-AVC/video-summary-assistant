@@ -178,6 +178,101 @@ describe("createOpenAICompatibleClient", () => {
     )
   })
 
+  it("surfaces HTML gateway 502 as HTTP status without leaking HTML or retry metadata", async () => {
+    let requests = 0
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test-gateway-secret",
+      model: "test-model",
+    }, {
+      fetchImpl: async () => {
+        requests++
+        return new Response("<!DOCTYPE html><html>private upstream text</html>", {
+          status: 502,
+          statusText: "Bad Gateway",
+          headers: {
+            "Content-Type": "text/html; charset=UTF-8",
+            "Retry-After": "60",
+          },
+        })
+      },
+    })
+
+    let caught: unknown
+    try {
+      await client.createChatCompletion({ messages: [{ role: "user", content: "long video" }] })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(OpenAICompatibleClientError)
+    expect((caught as Error).message).toBe("Provider request failed with status 502.")
+    expect((caught as Error).message).not.toContain("DOCTYPE")
+    expect((caught as Error).message).not.toContain("private upstream text")
+    expect((caught as Error).message).not.toContain("Retry-After")
+    expect(requests).toBe(1)
+  })
+
+  it("reports non-JSON server errors by HTTP status when no JSON error is available", async () => {
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test-placeholder",
+      model: "test-model",
+    }, {
+      fetchImpl: async () => new Response("gateway is temporarily unavailable", {
+        status: 500,
+        headers: { "Content-Type": "text/plain" },
+      }),
+    })
+    await expect(client.createChatCompletion({
+      messages: [{ role: "user", content: "hi" }],
+    })).rejects.toThrow("Provider request failed with status 500.")
+  })
+
+  it("preserves structured provider errors and redacts provider-echoed secrets", async () => {
+    const secret = "sk-should-not-appear"
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: secret,
+      model: "test-model",
+    }, {
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: { message: `invalid api key ${secret}` },
+      }), { status: 401, headers: { "Content-Type": "application/json" } }),
+    })
+    let caught: unknown
+    try {
+      await client.createChatCompletion({ messages: [{ role: "user", content: "hi" }] })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(OpenAICompatibleClientError)
+    expect((caught as Error).message).toContain("invalid api key")
+    expect((caught as Error).message).not.toContain(secret)
+    expect((caught as Error).message).toContain("[REDACTED]")
+  })
+
+  it("reports malformed 200 JSON without returning server-controlled fragments", async () => {
+    const client = createOpenAICompatibleClient({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test-placeholder",
+      model: "test-model",
+    }, {
+      fetchImpl: async () => new Response("<!DOCTYPE html><html>internal upstream error</html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      }),
+    })
+    let caught: unknown
+    try {
+      await client.createChatCompletion({ messages: [{ role: "user", content: "hi" }] })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(OpenAICompatibleClientError)
+    expect((caught as Error).message).toBe("Provider response was not valid JSON.")
+    expect((caught as Error).message).not.toContain("internal upstream error")
+  })
+
   it("handles 404, malformed, and network connection failures without exposing request details", async () => {
     const cases = [
       {

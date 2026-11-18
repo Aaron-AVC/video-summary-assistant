@@ -116,12 +116,13 @@ describe("runAnalysis", () => {
       ) as never,
       onProgress: (event) => events.push(event)
     })
-    expect(events).toEqual([
+    const expectedEvents: AnalysisProgressEvent[] = [
       ...Array.from({ length: scenario.chunkCount + 1 }, (_, completed) => ({
-        kind: "map", completed, total: scenario.chunkCount
+        kind: "map" as const, completed, total: scenario.chunkCount
       })),
       { kind: "final" }
-    ])
+    ]
+    expect(events).toEqual(expectedEvents)
     expect(calls).toHaveLength(scenario.chunkCount + 1)
   })
 

@@ -43,11 +43,14 @@ describe("ActiveAnalysisTaskBanner M1 progress", () => {
     const finalMarkup = render({ phase: "analyzing", progress: { kind: "final" } })
     expect(finalMarkup).toContain("Generating final summary")
     expect(finalMarkup).not.toContain("Saving analysis")
-    expect(finalMarkup).not.toMatch(/<button[^>]*disabled/)
+    // Tailwind adds "disabled:*" class names even on enabled buttons.
+    // Match the actual HTML disabled attribute, not class text.
+    const hasDisabledAttribute = /<button\b[^>]*\sdisabled(?:\s|=|>)/
+    expect(finalMarkup).not.toMatch(hasDisabledAttribute)
 
     const saving = render({ phase: "finalizing" })
     expect(saving).toContain("Saving analysis")
-    expect(saving).toMatch(/<button[^>]*disabled/)
+    expect(saving).toMatch(hasDisabledAttribute)
   })
 
   it("suppresses progress detail in cancelling phase", () => {

@@ -500,6 +500,21 @@ describe("analysis controller — model execution", () => {
     expect(harness.calls.runAnalysis[0]?.signal).toBe(controller.signal)
   })
 
+  it("M1. forwards typed progress metadata without changing task phase", async () => {
+    const harness = createHarness()
+    const progress: Array<{ kind: "final" }> = []
+    const { request, extras } = createRequest(harness.events, {
+      onProgress: (event) => {
+        if (event.kind === "final") progress.push(event)
+      },
+    })
+    await harness.controller.runExecutionTask(request)
+    expect(harness.calls.runAnalysis).toHaveLength(1)
+    harness.calls.runAnalysis[0]?.onProgress?.({ kind: "final" })
+    expect(progress).toEqual([{ kind: "final" }])
+    expect(extras.phases).toEqual(["analyzing", "finalizing"])
+  })
+
   it("K. guards task currentness after the model and before finalizing", async () => {
     const harness = createHarness()
     const { request } = createRequest(harness.events)

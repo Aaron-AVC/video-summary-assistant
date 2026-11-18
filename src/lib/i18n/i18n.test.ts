@@ -32,6 +32,18 @@ describe("i18n", () => {
     expect(translate("zh-CN", "data.currentInventory", { count: 3 })).toContain("3")
   })
 
+  it("interpolates analysis progress in both locales without source text", () => {
+    expect(translate("en", "task.analysisMap", { completed: 2, total: 5 }))
+      .toBe("Analyzing transcript segments 2/5…")
+    expect(translate("zh-CN", "task.analysisMap", { completed: 2, total: 5 }))
+      .toBe("分析字幕片段 2/5…")
+    expect(translate("zh-CN", "task.analysisReduction", {
+      level: 1, completed: 1, total: 3
+    })).toBe("归并摘要（第 1 层）1/3…")
+    expect(translate("zh-CN", "task.analysisFinal")).toBe("正在生成最终总结…")
+    expect(translate("zh-CN", "task.analysisRepair")).toBe("正在修复分析结果…")
+  })
+
   it("resolves download success copy for the issuing flow", () => {
     expect(translate("en", "export.downloadSuccess")).toBe("Markdown download started.")
     expect(translate("zh-CN", "export.downloadSuccess")).toBe("已开始下载 Markdown。")

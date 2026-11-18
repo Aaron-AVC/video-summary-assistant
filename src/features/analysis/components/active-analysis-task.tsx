@@ -13,6 +13,20 @@ type ActiveAnalysisTaskBannerProps = {
 export function ActiveAnalysisTaskBanner({ task, onCancel }: ActiveAnalysisTaskBannerProps) {
   const { t } = useI18n()
   const presentation = getAnalysisTaskPresentation(task.phase)
+  const progress = task.phase === "analyzing" ? task.progress : undefined
+  const progressLabel = progress?.kind === "map"
+    ? t("task.analysisMap", { completed: progress.completed, total: progress.total })
+    : progress?.kind === "reduction"
+      ? t("task.analysisReduction", {
+        level: progress.level, completed: progress.completed, total: progress.total
+      })
+      : progress?.kind === "final"
+        ? t("task.analysisFinal")
+        : progress?.kind === "repair"
+          ? t("task.analysisRepair")
+          : progress?.kind === "direct"
+            ? t("task.analysisDirect")
+            : t(presentation.phaseLabelKey)
 
   return (
     <Card className="border-amber-500/40 bg-amber-500/10">
@@ -22,7 +36,7 @@ export function ActiveAnalysisTaskBanner({ task, onCancel }: ActiveAnalysisTaskB
           <div className="min-w-0 text-xs">
             <div className="font-medium [overflow-wrap:anywhere]">{t("task.activeAnalysis", { title: task.snapshot.title })}</div>
             <div className="text-muted-foreground [overflow-wrap:anywhere]">
-              {t(presentation.phaseLabelKey)} · {task.snapshot.providerModel}
+              {progressLabel} · {task.snapshot.providerModel}
             </div>
           </div>
         </div>

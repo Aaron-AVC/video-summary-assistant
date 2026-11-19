@@ -13,6 +13,8 @@ import {
   selectAnalysisStrategy,
   type AnalysisStrategy
 } from "@/features/analysis/lib/analysis-plan"
+import { createTranscriptChunkCueRanges } from "@/features/analysis/lib/chunk-transcript"
+import type { FinalCheckpointExecution } from "@/features/analysis/lib/final-resume-checkpoint"
 import {
   DEFAULT_ANALYSIS_PRESET_STRATEGY,
   type AnalysisPresetStrategy
@@ -46,15 +48,7 @@ export type AnalysisProgressEvent =
   | { kind: "final" }
   | { kind: "repair" }
 
-export type FinalAnalysisCheckpointCandidate = {
-  strategy: AnalysisStrategy
-  initialChunkCount: number
-  reductionLevels: number
-  mapPlan: Array<{ id: string, index: number, startSec: number, endSec: number }>
-  chunkSummaries: ChunkAnalysisResult[]
-  finalInputSummaries: EvidenceSummary[]
-  finalPrompt: AnalysisPrompt
-}
+export type FinalAnalysisCheckpointCandidate = Omit<FinalCheckpointExecution, "videoId">
 
 export type FinalAnalysisCheckpointHooks = {
   prepareFinalCandidate: (candidate: FinalAnalysisCheckpointCandidate) => Promise<boolean>
@@ -177,6 +171,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
   }
 
   let survivingSummaries: EvidenceSummary[] = chunkSummaries
+  let survivingMapChunkIds = chunkSummaries.map((summary) => [summary.chunkId])
   let reductionLevels = 0
   while (!finalAnalysisPromptFits({
     videoTitle: options.transcript.title,
@@ -192,9 +187,14 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
       preset
     })
     const reduced: EvidenceSummary[] = []
+    const reducedMapChunkIds: string[][] = []
+    let groupOffset = 0
     emitProgress(options, { kind: "reduction", level: nextLevel, completed: 0, total: groups.length })
     for (const [groupIndex, group] of groups.entries()) {
       throwIfAborted(signal)
+      const mapChunkIds = survivingMapChunkIds.slice(groupOffset, groupOffset + group.length).flat()
+      groupOffset += group.length
+      reducedMapChunkIds.push(mapChunkIds)
       if (group.length === 1) {
         reduced.push(group[0])
         emitProgress(options, {
@@ -221,7 +221,11 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     if (reduced.length >= survivingSummaries.length) {
       throw new Error("Reduction budget is too small to make progress safely.")
     }
+    if (groupOffset !== survivingSummaries.length) {
+      throw new Error("Reduction groups did not cover the planned summaries.")
+    }
     survivingSummaries = reduced
+    survivingMapChunkIds = reducedMapChunkIds
     reductionLevels = nextLevel
   }
 
@@ -230,6 +234,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     chunkSummaries: survivingSummaries,
     preset
   })
+  const chunkCueRanges = createTranscriptChunkCueRanges(chunks)
   let checkpointPrepared = false
   if (options.finalCheckpoint) {
     try {
@@ -237,9 +242,16 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
         strategy,
         initialChunkCount: chunks.length,
         reductionLevels,
-        mapPlan: chunks.map(({ id, index, startSec, endSec }) => ({ id, index, startSec, endSec })),
+        mapPlan: chunks.map(({ id, index, startSec, endSec }, chunkIndex) => ({
+          id,
+          index,
+          startSec,
+          endSec,
+          ...chunkCueRanges[chunkIndex]!,
+        })),
         chunkSummaries,
         finalInputSummaries: survivingSummaries,
+        finalInputMapChunkIds: survivingMapChunkIds,
         finalPrompt
       })
     } catch {

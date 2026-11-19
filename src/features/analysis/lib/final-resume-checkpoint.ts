@@ -23,6 +23,8 @@ export type FinalCheckpointMapPlanItem = {
   index: number
   startSec: number
   endSec: number
+  cueStartIndex: number
+  cueEndIndex: number
 }
 
 export type FinalCheckpointExecution = {
@@ -33,6 +35,7 @@ export type FinalCheckpointExecution = {
   mapPlan: FinalCheckpointMapPlanItem[]
   chunkSummaries: EvidenceSummary[]
   finalInputSummaries: EvidenceSummary[]
+  finalInputMapChunkIds: string[][]
   finalPrompt: AnalysisPrompt
 }
 
@@ -243,47 +246,48 @@ function validateMapAgainstCues(
 ): boolean {
   if (mapPlan.length === 0 || cues.length === 0) return false
   const ids = new Set<string>()
-  let cueIndex = 0
+  let nextCueIndex = 0
   for (const [index, chunk] of mapPlan.entries()) {
     if (chunk.index !== index || !isNonEmptyString(chunk.id) || ids.has(chunk.id)) return false
     ids.add(chunk.id)
     if (!isValidTime(chunk.startSec) || !isValidTime(chunk.endSec) || chunk.endSec < chunk.startSec) {
       return false
     }
-    const firstCue = cues[cueIndex]
-    if (!firstCue || chunk.startSec !== firstCue.startSec) return false
-    let lastCue: TranscriptCue | undefined
-    while (cueIndex < cues.length) {
-      const cue = cues[cueIndex]!
-      if (cue.startSec < chunk.startSec || cue.endSec > chunk.endSec) break
-      lastCue = cue
-      cueIndex += 1
-    }
-    if (!lastCue || chunk.endSec !== lastCue.endSec) return false
+    if (!Number.isInteger(chunk.cueStartIndex) || !Number.isInteger(chunk.cueEndIndex)) return false
+    if (chunk.cueStartIndex !== nextCueIndex || chunk.cueEndIndex <= chunk.cueStartIndex) return false
+    if (chunk.cueEndIndex > cues.length) return false
+    const chunkCues = cues.slice(chunk.cueStartIndex, chunk.cueEndIndex)
+    const firstCue = chunkCues[0]!
+    const lastCue = chunkCues.at(-1)!
+    if (chunk.startSec !== firstCue.startSec || chunk.endSec !== lastCue.endSec) return false
+    nextCueIndex = chunk.cueEndIndex
   }
-  return cueIndex === cues.length
+  return nextCueIndex === cues.length
 }
 
 function validateFinalInputCoverage(
   finalInput: EvidenceSummary[],
+  finalInputMapChunkIds: string[][],
   mapPlan: FinalCheckpointMapPlanItem[],
 ): boolean {
   if (finalInput.length === 0 || finalInput.length > mapPlan.length) return false
+  if (finalInputMapChunkIds.length !== finalInput.length) return false
   const ids = new Set<string>()
   let mapIndex = 0
-  for (const summary of finalInput) {
+  for (const [index, summary] of finalInput.entries()) {
     if (!validateSummary(summary) || ids.has(summary.chunkId)) return false
     ids.add(summary.chunkId)
-    const first = mapPlan[mapIndex]
-    if (!first || summary.startSec !== first.startSec) return false
-    let last: FinalCheckpointMapPlanItem | undefined
-    while (mapIndex < mapPlan.length) {
-      const chunk = mapPlan[mapIndex]!
-      if (chunk.startSec < summary.startSec || chunk.endSec > summary.endSec) break
-      last = chunk
+    const coverage = finalInputMapChunkIds[index]!
+    if (!Array.isArray(coverage) || coverage.length === 0) return false
+    const coveredChunks: FinalCheckpointMapPlanItem[] = []
+    for (const chunkId of coverage) {
+      const chunk = mapPlan[mapIndex]
+      if (!chunk || chunk.id !== chunkId) return false
+      coveredChunks.push(chunk)
       mapIndex += 1
     }
-    if (!last || summary.endSec !== last.endSec) return false
+    if (summary.startSec !== Math.min(...coveredChunks.map((chunk) => chunk.startSec))) return false
+    if (summary.endSec !== Math.max(...coveredChunks.map((chunk) => chunk.endSec))) return false
   }
   return mapIndex === mapPlan.length
 }
@@ -332,7 +336,7 @@ async function validateCandidateInput(input: FinalCheckpointCandidateInput): Pro
         return false
       }
     }
-    if (!validateFinalInputCoverage(execution.finalInputSummaries, execution.mapPlan)) return false
+    if (!validateFinalInputCoverage(execution.finalInputSummaries, execution.finalInputMapChunkIds, execution.mapPlan)) return false
     if (execution.reductionLevels === 0) {
       if (execution.finalInputSummaries.length !== execution.chunkSummaries.length) return false
       for (const [index, summary] of execution.finalInputSummaries.entries()) {
@@ -364,7 +368,10 @@ async function buildIdentity(
       digest(canonicalJson(context.preset)),
       digest(canonicalJson(execution.mapPlan)),
       digest(canonicalJson(execution.chunkSummaries)),
-      digest(canonicalJson(execution.finalInputSummaries)),
+      digest(canonicalJson({
+        summaries: execution.finalInputSummaries,
+        mapChunkIds: execution.finalInputMapChunkIds,
+      })),
       digest(canonicalJson(execution.finalPrompt)),
     ])
   return cloneFrozen({
@@ -456,7 +463,10 @@ export async function verifyFinalCheckpointRecord(
     if (isFinalCheckpointExecutionOverCapacity(record.payload)) return false
     if (record.identity.mapPlanDigest !== await digest(canonicalJson(record.payload.mapPlan))) return false
     if (record.identity.chunkSummariesDigest !== await digest(canonicalJson(record.payload.chunkSummaries))) return false
-    if (record.identity.finalInputDigest !== await digest(canonicalJson(record.payload.finalInputSummaries))) return false
+    if (record.identity.finalInputDigest !== await digest(canonicalJson({
+      summaries: record.payload.finalInputSummaries,
+      mapChunkIds: record.payload.finalInputMapChunkIds,
+    }))) return false
     if (record.identity.finalPromptDigest !== await digest(canonicalJson(record.payload.finalPrompt))) return false
     return record.integrity === await digest(integrityInput(record))
   } catch {

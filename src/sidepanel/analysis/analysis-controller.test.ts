@@ -137,11 +137,12 @@ function checkpointCandidateFixture(): FinalAnalysisCheckpointCandidate {
     initialChunkCount: 2,
     reductionLevels: 0,
     mapPlan: [
-      { id: "chunk-1", index: 0, startSec: 0, endSec: 12 },
-      { id: "chunk-2", index: 1, startSec: 12, endSec: 24 },
+      { id: "chunk-1", index: 0, startSec: 0, endSec: 12, cueStartIndex: 0, cueEndIndex: 1 },
+      { id: "chunk-2", index: 1, startSec: 12, endSec: 24, cueStartIndex: 1, cueEndIndex: 2 },
     ],
     chunkSummaries,
     finalInputSummaries: chunkSummaries,
+    finalInputMapChunkIds: [["chunk-1"], ["chunk-2"]],
     finalPrompt: { systemPrompt: "System prompt", userPrompt: "Final prompt" },
   }
 }

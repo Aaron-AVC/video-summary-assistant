@@ -89,12 +89,13 @@ function executionFixture(): FinalCheckpointExecution {
     initialChunkCount: 3,
     reductionLevels: 0,
     mapPlan: [
-      { id: "chunk-1", index: 0, startSec: 0, endSec: 10 },
-      { id: "chunk-2", index: 1, startSec: 10, endSec: 20 },
-      { id: "chunk-3", index: 2, startSec: 20, endSec: 30 },
+      { id: "chunk-1", index: 0, startSec: 0, endSec: 10, cueStartIndex: 0, cueEndIndex: 1 },
+      { id: "chunk-2", index: 1, startSec: 10, endSec: 20, cueStartIndex: 1, cueEndIndex: 2 },
+      { id: "chunk-3", index: 2, startSec: 20, endSec: 30, cueStartIndex: 2, cueEndIndex: 3 },
     ],
     chunkSummaries,
     finalInputSummaries: chunkSummaries.map((summary) => ({ ...summary })),
+    finalInputMapChunkIds: [["chunk-1"], ["chunk-2"], ["chunk-3"]],
     finalPrompt: {
       systemPrompt: "system prompt",
       userPrompt: "final user prompt",
@@ -104,6 +105,37 @@ function executionFixture(): FinalCheckpointExecution {
 
 async function candidateFixture(): Promise<FinalCheckpointCandidateInput> {
   return { context: await contextFixture(), execution: executionFixture() }
+}
+
+async function overlappingCandidateFixture(): Promise<FinalCheckpointCandidateInput> {
+  const cues: TranscriptCue[] = [
+    { startSec: 0, endSec: 10, text: "outer cue" },
+    { startSec: 5, endSec: 9, text: "nested cue" },
+    { startSec: 10, endSec: 20, text: "later cue" },
+  ]
+  const chunkSummaries = [
+    { chunkId: "chunk-1", startSec: 0, endSec: 10, summary: "outer summary" },
+    { chunkId: "chunk-2", startSec: 5, endSec: 9, summary: "nested summary" },
+    { chunkId: "chunk-3", startSec: 10, endSec: 20, summary: "later summary" },
+  ]
+  return {
+    context: await contextFixture({ transcript: { cues }, source: { durationSec: 20 } }),
+    execution: {
+      strategy: "map-reduce",
+      videoId: "video-a",
+      initialChunkCount: 3,
+      reductionLevels: 0,
+      mapPlan: [
+        { id: "chunk-1", index: 0, startSec: 0, endSec: 10, cueStartIndex: 0, cueEndIndex: 1 },
+        { id: "chunk-2", index: 1, startSec: 5, endSec: 9, cueStartIndex: 1, cueEndIndex: 2 },
+        { id: "chunk-3", index: 2, startSec: 10, endSec: 20, cueStartIndex: 2, cueEndIndex: 3 },
+      ],
+      chunkSummaries,
+      finalInputSummaries: chunkSummaries.map((summary) => ({ ...summary })),
+      finalInputMapChunkIds: [["chunk-1"], ["chunk-2"], ["chunk-3"]],
+      finalPrompt: { systemPrompt: "system prompt", userPrompt: "final user prompt" },
+    },
+  }
 }
 
 function controllerFixture(options: {
@@ -135,6 +167,52 @@ async function availableCheckpoint(options: {
   ))).toBe(true)
   return { controller, attempt: attempt! }
 }
+
+describe("M2 final checkpoint — deterministic overlapping-cue plans", () => {
+  it("publishes a Final 502 checkpoint for nested cues split into different chunks", async () => {
+    const input = await overlappingCandidateFixture()
+    const controller = controllerFixture()
+    const attempt = await controller.beginCandidate(input)
+    expect(attempt).not.toBeNull()
+    expect(await attempt!.promoteFinalFailure(new OpenAICompatibleClientError(
+      "temporary upstream failure",
+      { kind: "http", status: 502 },
+    ))).toBe(true)
+    expect(controller.getMetadata().state).toBe("available")
+    expect((await controller.acquire(input.context)).kind).toBe("acquired")
+  })
+
+  const corruptPlans: Array<[string, (input: FinalCheckpointCandidateInput) => void]> = [
+    ["tampered cue boundary", (input) => {
+      input.execution.mapPlan[0]!.endSec = 9
+      input.execution.chunkSummaries[0]!.endSec = 9
+      input.execution.finalInputSummaries[0]!.endSec = 9
+    }],
+    ["swapped chunks", (input) => {
+      for (const key of ["mapPlan", "chunkSummaries", "finalInputSummaries", "finalInputMapChunkIds"] as const) {
+        const items = input.execution[key]
+        ;[items[0], items[1]] = [items[1]!, items[0]!]
+      }
+    }],
+    ["missing cue", (input) => {
+      input.execution.mapPlan.splice(1, 1)
+      input.execution.mapPlan[1]!.index = 1
+      input.execution.chunkSummaries.splice(1, 1)
+      input.execution.finalInputSummaries.splice(1, 1)
+      input.execution.finalInputMapChunkIds.splice(1, 1)
+      input.execution.initialChunkCount = 2
+    }],
+  ]
+  for (const [name, mutate] of corruptPlans) {
+    it(`rejects ${name} in an overlapping-cue plan`, async () => {
+      const input = await overlappingCandidateFixture()
+      mutate(input)
+      const controller = controllerFixture()
+      expect(await controller.beginCandidate(input)).toBeNull()
+      expect(controller.getMetadata().state).toBe("empty")
+    })
+  }
+})
 
 describe("M2 final checkpoint — candidate and eligibility", () => {
   it("keeps a candidate private until the actual Final request fails with an eligible error", async () => {

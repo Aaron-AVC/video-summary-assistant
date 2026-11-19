@@ -19,7 +19,7 @@
 | AC-01 | 五个 Map 成功，首次 Final 返回 502，用户不点继续 | 完成 5×Map + 1×Final；无自动新增请求；出现 Final/HTTP 502 的脱敏错误及恢复入口；无完整分析写入 | `PASS`（M3 黄金流程：5 Map + 1 Final 后调用数固定为 6） |
 | AC-02 | 继 AC-01，用户点击一次继续，Final 返回合法 JSON | **恢复时 Map=0 / Reduction=0 / Final=1**；沿用原 Map 结果，得到正常 Schema 的完整分析并保存，检查点销毁 | `PASS`（M3 黄金流程：resume 段 0/0/1，落盘 1 次，检查点转 empty） |
 | AC-03 | 必须先归并的长视频：Map 完成→Reduction 完成→Final 502→继续 | 恢复时只调用 Final；保存的原 Map/Reduction 层数、范围和既有结果形状一致 | `PASS`（M3 一级与两级 Reduction 恢复：恢复期 Map/Reduction 均为 0） |
-| AC-04 | 同一精确输入已有完整缓存结果才点击继续 | 命中已有完整分析，**0 次 AI 调用**；原检查点销毁 | `PASS`（M3 协调器：cached，无模型请求，检查点 invalidate） |
+| AC-04 | 同一精确输入已有完整缓存结果才点击继续 | 命中已有完整分析，**0 次 AI 调用**；原检查点销毁 | `PASS`（M3 协调器：cached，无模型请求，检查点 invalidate。**2026-11-19 定向修复**：缓存快路径原在 `acquireForResume` 之前，只检查 `state === "available"`，未验证身份/完整性/TTL；现改为租约先行 —— 检查点属于 A 而实时请求是 B 时返回 `identity-mismatch` 且不发布，过期检查点返回 `expired` 而非 `cached`；命中路径改用 `lease.destroy()` 而非 `release()`，保持 0 次 AI 请求与 nullable `analysisRunId`） |
 | AC-05 | 首次完整运行成功，或 single-pass 成功/失败 | 无恢复检查点；现有 Generate、Regenerate、Analysis Cache 和历史结果字节/身份行为不变 | `PASS`（M1/M2 与全仓回归） |
 | AC-06 | Final 第一次恢复再次 503，稍后用户再次明确点击 | 失败后仍在未过期且同身份时展示恢复；每次点击恰好一次 Final，**没有自动重试** | `PASS`（M3：再次 503 → final-retryable，检查点保持 available，且仅 1 次 Final） |
 | AC-07 | 恢复 Final 返回 Schema 非法，再修复成功 | 最多 1×Final + 1×Repair；原有 Schema/时间范围/Prompt fence 校验仍有效 | `PASS`（M3 Final-only 执行：非法结构 → 1 Repair；结构失败会销毁检查点） |
@@ -33,17 +33,17 @@
 
 | ID | 注入变化 / 失效场景 | 必须结果 | 状态 |
 | --- | --- | --- | --- |
-| AC-13 | YouTube A→B→A；同 BV P1→P2→P1；切换来源标签页 | 原检查点在首次身份变化时失效；继续入口不重新出现；伪造继续请求 0 次 AI 调用 | `PASS`（M2 生命周期/身份失效；M3 入口 NOT RUN） |
+| AC-13 | YouTube A→B→A；同 BV P1→P2→P1；切换来源标签页 | 原检查点在首次身份变化时失效；继续入口不重新出现；伪造继续请求 0 次 AI 调用 | `PASS`（M2 生命周期/身份失效。**2026-11-19 定向修复 F-02**：Side Panel `readLiveSource` 原先把 readiness 取自当前 `videoContextRef`（可能是 B）、身份却取自任务快照（A），构成混用；现由 `assertLiveSourceMatchesTask` 保证全部身份字段来自同一次运行时读取并与冻结快照逐字段严格比对 tab/platform/video/part/contentKey，不一致立即 fail closed；新增 YouTube A→B→A、Bilibili P1→P2→P1、await 期间切换来源三组用例） |
 | AC-14 | 同一个视频，字幕 cue 文本或时间范围变化 | 指纹变化，拒绝继续且 0 AI 请求 | `PASS`（M2 上下文身份校验） |
 | AC-15 | 同一 cue 指纹但 Title、Duration、Budget Policy、分块规划或 Final Prompt 变化 | 严格恢复身份不匹配，拒绝继续且 0 AI 请求 | `PASS`（M2 严格身份校验） |
-| AC-16 | Provider Profile、endpoint、model、凭据修订或用户预设/Prompt 版本发生变化 | 检查点失效且 0 AI 请求；不能跨 Standard/Concise 复用 | `PASS`（M2 直接执行字段比较 + 生命周期） |
+| AC-16 | Provider Profile、endpoint、model、凭据修订或用户预设/Prompt 版本发生变化 | 检查点失效且 0 AI 请求；不能跨 Standard/Concise 复用 | `PASS`（M2 直接执行字段比较 + 生命周期。**2026-11-19 定向修复 F-04**：Provider 原在异步缓存查询与租约获取之前解析，Final 实际使用的 `apiKey` 早于这些 await；现改为三次真实重采集（准入、Final 前、落盘前），每轮重读 tab/视频/字幕/Provider 并以新 context 调 `lease.validate`，另以 `executionTargetMatches` 逐项比较 baseUrl/model/timeout/`credentialRevision`/`apiKey`，不一致即销毁租约、`identity-mismatch`、零额外模型请求） |
 | AC-17 | 取消 Final / 任务被用户取消；异步请求回调在取消后返回 | 没有恢复入口、没有落盘、没有旧任务 UI 回写 | `PASS`（M2 取消/陈旧 generation 回归） |
 | AC-18 | Side Panel 销毁/刷新后重新打开 | 单会话检查点不复活，持久化库中不存在中间摘要表 | `PARTIAL`（M2 destroy/无新表范围审查 PASS；M3 未改变该边界；真实刷新仍 NOT RUN） |
 | AC-19 | 可控时钟推进到 TTL 临界值；摘要超过总 256 KiB 上限 | 恰好边界按明确规则处理，过期/超限失效；不截断摘要；0 恢复请求 | `PASS`（M2 TTL/UTF-8 容量边界） |
 | AC-20 | 检查点含重复 chunkId、错序范围、NaN/Infinity、缺块或被篡改摘要 | 解码/验证 fail closed，**0 AI 请求**，不会向其他视频发布 | `PASS`（M2 integrity/范围校验） |
 | AC-21 | 精确视频被删除，或另一个 Side Panel 执行清空全部/分析历史/字幕缓存 | mutation 广播淘汰相应 checkpoint；竞争情况下拒绝过期恢复，不复活已删除数据 | `PASS`（M2 mutation policy + 跨 surface 生命周期） |
 | AC-22 | 删除不相关视频；清空 Ask 对话或诊断日志 | 仅保留与当前身份严格相关的合法检查点；不误复活用户已删除数据 | `PASS`（M2 精确 mutation policy） |
-| AC-23 | Provider Resolve 延迟后 Secret 被更换；字幕读取等待期间用户换分 P | 第二次 guard 阻止模型请求/发布，修订变化会淘汰 checkpoint | `PASS`（M2 二次身份校验；含同时间戳与跨面板回归） |
+| AC-23 | Provider Resolve 延迟后 Secret 被更换；字幕读取等待期间用户换分 P | 第二次 guard 阻止模型请求/发布，修订变化会淘汰 checkpoint | `PASS`（M2 二次身份校验；含同时间戳与跨面板回归。**2026-11-19 定向修复 F-01/F-04**：`lease.validate(currentContext)` 原先比较获取时捕获的 `compareContext` 而忽略传入上下文，Final 后传入旧 context 等于没有做实时复核；现改为比较传入的最新上下文，并以 `resumeScoped` 获取期标记把 `taskId`/`workspaceEpoch` 归一化收敛为 resume 专属，普通 `acquire()` 全程零归一化。coordinator 在 Final 前与落盘前各做一次真实重采集后调用该 validate） |
 | AC-24 | Model 成功但最终持久化抛错 / quota error | 呈现持久化故障，不标记为 Provider 可恢复；既有未完成写入与历史语义保持一致 | `PASS`（M2 persistence 前 discard 与既有错误回归） |
 
 ## 4. UI、隐私与工程门禁

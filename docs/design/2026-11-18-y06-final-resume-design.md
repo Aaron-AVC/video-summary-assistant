@@ -123,7 +123,7 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | D0 | `done` | 设计、验收矩阵、风险和测试门禁 | 不改代码 |
 | M1 | `done` | 精确 `map/reduction/final/repair` 事件和可分类 HTTP 错误；不改变请求行为 | 失败注入 RED→GREEN |
 | M2 | `in_review` | 30 分钟 / 256 KiB 的单一内存检查点、完整性/身份/generation/lease 校验、真实 Reduction 接缝、Provider 二次身份校验及跨面板失效 | M1；等待 Draft PR 与独立审查 |
-| M3 | `in_review` | 手动「继续最终总结」、双身份恢复准入（`acquireForResume` 仅替换 `taskId`/`workspaceEpoch`）、0×Map/0×Reduction 的 Final-only 请求、共用完成持久化、五分支 lease 状态机、TTL 订阅与中英文 UI | M3 专项授权 2026-11-19；等待独立审查 |
+| M3 | `in_review` | 手动「继续最终总结」、双身份恢复准入（`acquireForResume` 仅替换 `taskId`/`workspaceEpoch`）、0×Map/0×Reduction 的 Final-only 请求、共用完成持久化、五分支 lease 状态机、TTL 订阅与中英文 UI。**2026-11-19 定向修复**：`lease.validate` 改用传入的最新上下文（resume 归一化收敛为该租约专属）、Side Panel `readLiveSource` 改为全部身份来自单次运行时读取、租约先于缓存快路径、Final 前与落盘前各做一次真实重采集与凭据复核 | M3 专项授权 2026-11-19；定向修复后等待独立定向复核 |
 | M4 | `pending` | M2 已覆盖部分身份、隐私和损坏输入回归；完整恢复流、取消竞争和浏览器 Smoke 依赖 M3 | M3 |
 | M5 | `in_review` | 候选 SHA 的 targeted/full test、typecheck、build、`git diff --check` 与 Chrome for Testing 产物门禁已执行；最终 SHA 门禁和独立审查另记 | M2/M3 各自范围 |
 
@@ -150,6 +150,11 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | 2026-11-19 | `in_review`（M3 黄金流程） | 真实 `runAnalysis`+真实检查点+纯 Mock Provider：5 Map → Final 502 → 不点继续无新请求 → 手动继续 0 Map/0 Reduction/1 Final 200 → 保存 → 检查点销毁；另覆盖一/两级 Reduction 与再次 503 需再次点击 | 4 项黄金流程测试（AC-01/02/03/06/29） |
 | 2026-11-19 | `in_review`（M3 UI） | Overview 失败区新增独立「继续最终总结」入口与「完整重新生成」分流；处理中禁用并显示「正在继续最终总结」，落盘阶段显示「正在保存」；TTL 到期、视频/分P/字幕/Provider/预设变化自动失效；暴露的只有脱敏 HTTP 状态 | 10 项可用性 + 7 项组件 + 7 项 i18n 测试 |
 | 2026-11-19 | `in_review`（M3 门禁） | 全量 1605 pass / 0 fail / 5797 assertions（115 文件）；`typecheck` 与 `git diff --check` 退出 0；Chrome for Testing 156.0.8078.73 MV3 产物门禁 PASS | Side Panel 交互 Smoke 仍 NOT RUN（见验收矩阵说明） |
+| 2026-11-19 | `in_review`（M3 定向修复 F-01） | `lease.validate(currentContext)` 改为比较**传入的最新上下文**，不再使用获取时捕获的 `compareContext`；`acquireWith` 新增 `resumeScoped` 获取期标记，只有 `acquireForResume` 取得的租约才在 validate 内对 `taskId`/`workspaceEpoch` 做来源归一化，普通 `acquire()` 全程严格比较、零归一化。另收紧为 fail closed：过期/执行失效/记录校验异常一律 invalidate 并返回 false | 28 项新增断言；RED 18 fail → GREEN 111 pass（含 M2 回归）；普通 acquire 严格契约不变有专项证明测试 |
+| 2026-11-19 | `in_review`（M3 定向修复 F-02） | Side Panel `readLiveSource` 原先把 readiness 取自当前 `videoContextRef`（可能是新视频 B），身份却取自任务快照（旧视频 A），构成混用。新增纯函数 `assertLiveSourceMatchesTask`：全部身份字段来自**同一次运行时读取**（含新增 `activeTabIdRef`），再与冻结快照逐字段严格比对 tab/platform/video/part/contentKey，任何不一致立即抛 `FinalResumeSourceMismatchError`（只带字段名，不带内容值）。`finalCheckpointDurationRef` 同时改为按 `contentKey` 作用域，避免旧时长混入新任务身份 | 覆盖 YouTube A→B→A、Bilibili P1→P2→P1、await 期间切换来源；RED 2 fail → GREEN 13 pass |
+| 2026-11-19 | `in_review`（M3 定向修复 F-03） | 缓存快路径原先在 `acquireForResume` **之前**执行，只检查了 `state === "available"`，未验证身份/完整性/TTL，可能为 B 发布属于 A 的可用检查点结果，或把过期检查点当缓存命中。改为「租约先行」：`acquireForResume` 通过后才查精确缓存，命中走 `lease.destroy()` 后发布（非 `release()`），保持 0 次 AI 请求与 nullable `analysisRunId`；过期检查点返回 `expired` 而非 `cached` | RED 3 fail（`Received: "cached"`）→ GREEN；缓存命中零模型请求有显式断言 |
+| 2026-11-19 | `in_review`（M3 定向修复 F-04） | Provider 配置在异步缓存查询与租约获取之前解析，Final 实际使用的是早先读到的 `apiKey`，Final 之后仅用捕获的旧 context 调 `validate`，跨面板轮换可绕过校验。改为三次**真实重采集**（准入、Final 前、落盘前），每轮重读 tab/视频/字幕/Provider，并以新 context 调 `lease.validate`；新增 `executionTargetMatches` 逐项比较 baseUrl/model/timeout/`credentialRevision`/`apiKey`，不一致即销毁租约、`identity-mismatch`、零额外模型请求 | RED 2 fail（`Received: "completed"`）→ GREEN；`analysisRunId` 与 `credentialRevision` 全链路可追溯 |
+| 2026-11-19 | `in_review`（M3 定向修复 NOTE） | ① `transcriptCapturedAt` 原在恢复路径复用 `completedAt`，与普通路径「字幕真实捕获时刻」语义漂移；改为 `FinalResumeTranscript.capturedAt` 由真实采集点提供，落盘使用最后一次真实采集的捕获时刻。② UI 由固定 30s 轮询改为对齐真实 `expiresAt` 的调度器（`createFinalResumeTtlScheduler`），新检查点改变 `expiresAt` 自动重排。③ 任务释放瞬间即刷新（`shouldRefreshFinalResumeOnTaskRelease`），修复首次 Final 失败后按钮不能及时回到 `available` | RED 5 fail（`Expected: 1740000, Received: 30000`）→ GREEN 17 pass；`getSnapshot` 保持纯读语义 |
 | 2026-11-18 | `in_review`（候选门禁） | 改写前候选 `00a2a2df1287aabde9449d5fdb6f177426dd6170`：全量 1517 pass / 0 fail / 5371 assertions；typecheck、build、`git diff --check` 退出 0；Chrome for Testing 156.0.8078.73 的 MV3 产物门禁 PASS | 最终分支 SHA 必须重跑全量门禁；独立审查和 M3 恢复执行仍为 NOT RUN |
 
 [返回文档索引](../README.md)

@@ -59,6 +59,21 @@ export type SettingsStorageAdapter = {
   remove: (keys: string[]) => Promise<void>
 }
 
+export type SettingsStorageLockManager = {
+  request: <T>(
+    name: string,
+    options: { mode: "exclusive" },
+    callback: (lock: { name: string; mode: "exclusive" } | null) => Promise<T>,
+  ) => Promise<T>
+}
+
+export type SettingsStorageOptions = {
+  /** Pass null in tests to verify the explicit unavailable-lock failure path. */
+  lockManager?: SettingsStorageLockManager | null
+}
+
+const PROVIDER_SETTINGS_WRITE_LOCK = "yt-summarizer.settings.provider.write"
+
 export const SETTINGS_KEYS = {
   theme: "yt-summarizer.theme",
   defaultProviderId: "yt-summarizer.provider.default",
@@ -229,8 +244,30 @@ function legacyProfile(value: unknown): { profile: ProviderProfile; apiKey: stri
   return { profile, apiKey: record.apiKey.trim() }
 }
 
-export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
+export function createSettingsStorage(
+  adapter = createChromeStorageAdapter(),
+  options: SettingsStorageOptions = {},
+) {
   let migrationPromise: Promise<void> | null = null
+  const lockManager = options.lockManager === undefined
+    ? (typeof navigator === "undefined" || !navigator.locks
+      ? null
+      : navigator.locks as unknown as SettingsStorageLockManager)
+    : options.lockManager
+
+  async function withProviderWriteLock<T>(operation: () => Promise<T>): Promise<T> {
+    if (!lockManager) {
+      throw new Error("Provider settings coordination requires Web Locks in this browser context.")
+    }
+    return lockManager.request(
+      PROVIDER_SETTINGS_WRITE_LOCK,
+      { mode: "exclusive" },
+      async (lock) => {
+        if (!lock) throw new Error("Could not acquire the provider settings write lock.")
+        return operation()
+      },
+    )
+  }
 
   async function migrateLegacyProviderStorage(): Promise<void> {
     const values = await adapter.get<unknown>([
@@ -283,7 +320,7 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     await adapter.remove([SETTINGS_KEYS.legacyProviderConfigs])
   }
 
-  async function ensureMigration() {
+  async function ensureMigrationLocked() {
     if (!migrationPromise) {
       const pending = migrateLegacyProviderStorage()
       migrationPromise = pending.catch((error) => {
@@ -294,8 +331,18 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     await migrationPromise
   }
 
-  async function readSnapshot(): Promise<SettingsSnapshot> {
-    await ensureMigration()
+  async function ensureMigration() {
+    await withProviderWriteLock(ensureMigrationLocked)
+  }
+
+  async function withMigratedWriteLock<T>(operation: () => Promise<T>): Promise<T> {
+    return withProviderWriteLock(async () => {
+      await ensureMigrationLocked()
+      return operation()
+    })
+  }
+
+  async function readSnapshotCurrent(): Promise<SettingsSnapshot> {
     const values = await adapter.get<unknown>([
       SETTINGS_KEYS.theme,
       SETTINGS_KEYS.defaultProviderId,
@@ -333,10 +380,19 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
     }
   }
 
-  async function readSecretEntries(): Promise<ProviderSecretRecord> {
+  async function readSnapshot(): Promise<SettingsSnapshot> {
     await ensureMigration()
+    return readSnapshotCurrent()
+  }
+
+  async function readSecretEntriesCurrent(): Promise<ProviderSecretRecord> {
     const values = await adapter.get<unknown>([SETTINGS_KEYS.providerSecrets])
     return normalizeSecretEntries(values[SETTINGS_KEYS.providerSecrets]).entries
+  }
+
+  async function readSecretEntries(): Promise<ProviderSecretRecord> {
+    await ensureMigration()
+    return readSecretEntriesCurrent()
   }
 
   async function writeProfiles(
@@ -393,63 +449,69 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
         Partial<Pick<ProviderProfile, "createdAt" | "updatedAt" | "generationTimeoutSec">>,
       apiKey?: string,
     ): Promise<ProviderProfileView> {
-      const snapshot = await readSnapshot()
-      const now = new Date().toISOString()
-      const existing = snapshot.providerConfigs.find((profile) => profile.id === input.id)
-      const profile: ProviderProfile = {
-        id: input.id,
-        name: input.name,
-        baseUrl: input.baseUrl,
-        model: input.model,
-        generationTimeoutSec: normalizeGenerationTimeoutSec(input.generationTimeoutSec),
-        createdAt: input.createdAt ?? existing?.createdAt ?? now,
-        updatedAt: input.updatedAt ?? now,
-      }
-      const profiles: ProviderProfile[] = [
-        ...snapshot.providerConfigs.filter((entry) => entry.id !== profile.id),
-        profile,
-      ].map(({ id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt }) => ({
-        id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt,
-      }))
-      const defaultProviderId = snapshot.defaultProviderId ?? profile.id
-      const secrets = await readSecretEntries()
-      if (apiKey !== undefined) {
-        if (apiKey.trim()) {
-          secrets[profile.id] = {
-            apiKey: apiKey.trim(),
-            credentialRevision: createCredentialRevision()
-          }
-        } else delete secrets[profile.id]
-      }
-      await writeProfiles(profiles, defaultProviderId, apiKey === undefined ? undefined : secrets)
-      return {
-        ...profile,
-        isDefault: defaultProviderId === profile.id,
-        hasApiKey: Boolean(secrets[profile.id]),
-      }
-    },
-    async removeProviderProfile(providerId: string) {
-      const snapshot = await readSnapshot()
-      const profiles: ProviderProfile[] = snapshot.providerConfigs
-        .filter((profile) => profile.id !== providerId)
-        .map(({ id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt }) => ({
+      return withMigratedWriteLock(async () => {
+        const snapshot = await readSnapshotCurrent()
+        const now = new Date().toISOString()
+        const existing = snapshot.providerConfigs.find((profile) => profile.id === input.id)
+        const profile: ProviderProfile = {
+          id: input.id,
+          name: input.name,
+          baseUrl: input.baseUrl,
+          model: input.model,
+          generationTimeoutSec: normalizeGenerationTimeoutSec(input.generationTimeoutSec),
+          createdAt: input.createdAt ?? existing?.createdAt ?? now,
+          updatedAt: input.updatedAt ?? now,
+        }
+        const profiles: ProviderProfile[] = [
+          ...snapshot.providerConfigs.filter((entry) => entry.id !== profile.id),
+          profile,
+        ].map(({ id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt }) => ({
           id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt,
         }))
-      const defaultProviderId = snapshot.defaultProviderId === providerId
-        ? profiles[0]?.id ?? null
-        : snapshot.defaultProviderId
-      const secrets = await readSecretEntries()
-      delete secrets[providerId]
-      await writeProfiles(profiles, defaultProviderId, secrets)
-      return (await readSnapshot()).providerConfigs
+        const defaultProviderId = snapshot.defaultProviderId ?? profile.id
+        const secrets = await readSecretEntriesCurrent()
+        if (apiKey !== undefined) {
+          if (apiKey.trim()) {
+            secrets[profile.id] = {
+              apiKey: apiKey.trim(),
+              credentialRevision: createCredentialRevision()
+            }
+          } else delete secrets[profile.id]
+        }
+        await writeProfiles(profiles, defaultProviderId, apiKey === undefined ? undefined : secrets)
+        return {
+          ...profile,
+          isDefault: defaultProviderId === profile.id,
+          hasApiKey: Boolean(secrets[profile.id]),
+        }
+      })
+    },
+    async removeProviderProfile(providerId: string) {
+      return withMigratedWriteLock(async () => {
+        const snapshot = await readSnapshotCurrent()
+        const profiles: ProviderProfile[] = snapshot.providerConfigs
+          .filter((profile) => profile.id !== providerId)
+          .map(({ id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt }) => ({
+            id, name, baseUrl, model, generationTimeoutSec, createdAt, updatedAt,
+          }))
+        const defaultProviderId = snapshot.defaultProviderId === providerId
+          ? profiles[0]?.id ?? null
+          : snapshot.defaultProviderId
+        const secrets = await readSecretEntriesCurrent()
+        delete secrets[providerId]
+        await writeProfiles(profiles, defaultProviderId, secrets)
+        return (await readSnapshotCurrent()).providerConfigs
+      })
     },
     async setDefaultProviderId(providerId: string | null) {
-      const snapshot = await readSnapshot()
-      const nextDefault = providerId && snapshot.providerConfigs.some((profile) => profile.id === providerId)
-        ? providerId
-        : snapshot.providerConfigs[0]?.id ?? null
-      await adapter.set({ [SETTINGS_KEYS.defaultProviderId]: nextDefault })
-      return nextDefault
+      return withMigratedWriteLock(async () => {
+        const snapshot = await readSnapshotCurrent()
+        const nextDefault = providerId && snapshot.providerConfigs.some((profile) => profile.id === providerId)
+          ? providerId
+          : snapshot.providerConfigs[0]?.id ?? null
+        await adapter.set({ [SETTINGS_KEYS.defaultProviderId]: nextDefault })
+        return nextDefault
+      })
     },
     async getDefaultProviderId() {
       return (await readSnapshot()).defaultProviderId
@@ -458,19 +520,27 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       return Boolean((await readSecretEntries())[providerId])
     },
     async setProviderApiKey(providerId: string, apiKey: string) {
-      const secrets = await readSecretEntries()
-      if (apiKey.trim()) {
-        secrets[providerId] = {
-          apiKey: apiKey.trim(),
-          credentialRevision: createCredentialRevision()
+      return withMigratedWriteLock(async () => {
+        const snapshot = await readSnapshotCurrent()
+        if (!snapshot.providerConfigs.some((profile) => profile.id === providerId)) {
+          throw new Error("Provider profile was not found.")
         }
-      } else delete secrets[providerId]
-      await adapter.set({ [SETTINGS_KEYS.providerSecrets]: secrets })
+        const secrets = await readSecretEntriesCurrent()
+        if (apiKey.trim()) {
+          secrets[providerId] = {
+            apiKey: apiKey.trim(),
+            credentialRevision: createCredentialRevision()
+          }
+        } else delete secrets[providerId]
+        await adapter.set({ [SETTINGS_KEYS.providerSecrets]: secrets })
+      })
     },
     async removeProviderApiKey(providerId: string) {
-      const secrets = await readSecretEntries()
-      delete secrets[providerId]
-      await adapter.set({ [SETTINGS_KEYS.providerSecrets]: secrets })
+      return withMigratedWriteLock(async () => {
+        const secrets = await readSecretEntriesCurrent()
+        delete secrets[providerId]
+        await adapter.set({ [SETTINGS_KEYS.providerSecrets]: secrets })
+      })
     },
     async resolveProvider(providerId: string): Promise<ResolvedProvider> {
       await ensureMigration()
@@ -538,17 +608,20 @@ export function createSettingsStorage(adapter = createChromeStorageAdapter()) {
       }
     },
     async clearSettings() {
-      await adapter.remove([
-        SETTINGS_KEYS.theme,
-        SETTINGS_KEYS.defaultProviderId,
-        SETTINGS_KEYS.providerProfiles,
-        SETTINGS_KEYS.providerSecrets,
-        SETTINGS_KEYS.legacyProviderConfigs,
-        SETTINGS_KEYS.diagnosticLogging,
-        SETTINGS_KEYS.language,
-        SETTINGS_KEYS.analysisPreset,
-      ])
-      migrationPromise = null
+      await withProviderWriteLock(async () => {
+        // Any earlier migration holds this same lock until its writes have settled.
+        await adapter.remove([
+          SETTINGS_KEYS.theme,
+          SETTINGS_KEYS.defaultProviderId,
+          SETTINGS_KEYS.providerProfiles,
+          SETTINGS_KEYS.providerSecrets,
+          SETTINGS_KEYS.legacyProviderConfigs,
+          SETTINGS_KEYS.diagnosticLogging,
+          SETTINGS_KEYS.language,
+          SETTINGS_KEYS.analysisPreset,
+        ])
+        migrationPromise = null
+      })
     }
   }
 }

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test"
 
 import {
-  createSettingsStorage,
   SETTINGS_KEYS,
   type SettingsStorageAdapter
 } from "@/features/settings/lib/settings-storage"
+import { createSettingsStorageForTest } from "@/features/settings/lib/testing/settings-storage-lock"
 
 function createAdapter() {
   const store = new Map<string, unknown>()
@@ -25,7 +25,7 @@ function createAdapter() {
   return { adapter, store }
 }
 
-async function seedProvider(storage: ReturnType<typeof createSettingsStorage>, apiKey = "sk-first") {
+async function seedProvider(storage: ReturnType<typeof createSettingsStorageForTest>, apiKey = "sk-first") {
   await storage.saveProviderConfig({
     id: "provider-a",
     name: "Provider A",
@@ -38,7 +38,7 @@ async function seedProvider(storage: ReturnType<typeof createSettingsStorage>, a
 describe("provider credential revisions", () => {
   it("returns a non-secret revision outside profile metadata and keeps it stable across reads", async () => {
     const { adapter } = createAdapter()
-    const storage = createSettingsStorage(adapter)
+    const storage = createSettingsStorageForTest(adapter)
     await seedProvider(storage)
 
     const first = await storage.resolveProvider("provider-a")
@@ -54,7 +54,7 @@ describe("provider credential revisions", () => {
 
   it("rotates the revision when the same profile receives a replacement key", async () => {
     const { adapter } = createAdapter()
-    const storage = createSettingsStorage(adapter)
+    const storage = createSettingsStorageForTest(adapter)
     await seedProvider(storage)
     const before = await storage.resolveProvider("provider-a")
 
@@ -67,7 +67,7 @@ describe("provider credential revisions", () => {
 
   it("retains the revision for metadata-only edits and rotates it for key edits", async () => {
     const { adapter } = createAdapter()
-    const storage = createSettingsStorage(adapter)
+    const storage = createSettingsStorageForTest(adapter)
     await seedProvider(storage)
     const before = await storage.resolveProvider("provider-a")
     const input = {
@@ -89,16 +89,16 @@ describe("provider credential revisions", () => {
 
   it("migrates a legacy string secret once and shares its stable revision across instances", async () => {
     const { adapter, store } = createAdapter()
-    const first = createSettingsStorage(adapter)
+    const first = createSettingsStorageForTest(adapter)
     await seedProvider(first, "sk-legacy")
     store.set(SETTINGS_KEYS.providerSecrets, { "provider-a": "sk-legacy" })
 
-    const migrated = createSettingsStorage(adapter)
+    const migrated = createSettingsStorageForTest(adapter)
     const resolved = await migrated.resolveProvider("provider-a")
     expect(resolved.apiKey).toBe("sk-legacy")
     expect(resolved.credentialRevision).toBeString()
 
-    const anotherPanel = createSettingsStorage(adapter)
+    const anotherPanel = createSettingsStorageForTest(adapter)
     expect((await anotherPanel.resolveProvider("provider-a")).credentialRevision)
       .toBe(resolved.credentialRevision)
     expect(store.has("providerCredentialRevisions")).toBe(false)
@@ -107,7 +107,7 @@ describe("provider credential revisions", () => {
 
   it("does not overwrite another panel's key replacement with a stale metadata-only save", async () => {
     const { adapter, store } = createAdapter()
-    const panelA = createSettingsStorage(adapter)
+    const panelA = createSettingsStorageForTest(adapter)
     await seedProvider(panelA)
     const before = await panelA.resolveProvider("provider-a")
 
@@ -129,8 +129,8 @@ describe("provider credential revisions", () => {
       set: (values) => adapter.set(values),
       remove: (keys) => adapter.remove(keys),
     }
-    const stalePanel = createSettingsStorage(gatedAdapter)
-    const panelB = createSettingsStorage(adapter)
+    const stalePanel = createSettingsStorageForTest(gatedAdapter)
+    const panelB = createSettingsStorageForTest(adapter)
     const metadataSave = stalePanel.saveProviderProfile({
       id: "provider-a",
       name: "Renamed in panel A",
@@ -155,8 +155,8 @@ describe("provider credential revisions", () => {
 
   it("observes another panel's key replacement without relying on profile timestamps", async () => {
     const { adapter } = createAdapter()
-    const panelA = createSettingsStorage(adapter)
-    const panelB = createSettingsStorage(adapter)
+    const panelA = createSettingsStorageForTest(adapter)
+    const panelB = createSettingsStorageForTest(adapter)
     await seedProvider(panelA)
     const before = await panelA.resolveProvider("provider-a")
     const profileTimestamp = before.profile.updatedAt
@@ -170,7 +170,7 @@ describe("provider credential revisions", () => {
 
   it("invalidates on removal and creates a fresh revision when a key is added again", async () => {
     const { adapter } = createAdapter()
-    const storage = createSettingsStorage(adapter)
+    const storage = createSettingsStorageForTest(adapter)
     await seedProvider(storage)
     const before = await storage.resolveProvider("provider-a")
 
@@ -183,7 +183,7 @@ describe("provider credential revisions", () => {
 
   it("deleting a profile removes its credential entry without introducing a new storage key", async () => {
     const { adapter, store } = createAdapter()
-    const storage = createSettingsStorage(adapter)
+    const storage = createSettingsStorageForTest(adapter)
     await seedProvider(storage)
     const keysBefore = new Set(store.keys())
 

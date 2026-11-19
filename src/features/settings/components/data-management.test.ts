@@ -9,10 +9,10 @@ import {
 import { DestructiveOperationBlockedError } from "@/features/history/lib/destructive-operation-coordinator"
 import { createHistoryRepository } from "@/features/history/lib/history-repository"
 import {
-  createSettingsStorage,
   type SettingsExportSnapshot,
   type SettingsStorageAdapter
 } from "@/features/settings/lib/settings-storage"
+import { createSettingsStorageForTest } from "@/features/settings/lib/testing/settings-storage-lock"
 import type { TranscriptLogEntry } from "@/features/transcript/lib/transcript-log"
 import type { PersistenceExport } from "@/lib/schemas/persistence"
 
@@ -204,7 +204,7 @@ describe("data-management storage lifecycle", () => {
   it("excludes API keys from settings and IndexedDB provider exports", async () => {
     const secret = "sk-secret-must-not-export"
     const timestamp = "2026-05-04T00:00:00.000Z"
-    const storage = createSettingsStorage(createSettingsAdapter())
+    const storage = createSettingsStorageForTest(createSettingsAdapter())
 
     await storage.saveProviderConfig({
       id: "settings-provider",

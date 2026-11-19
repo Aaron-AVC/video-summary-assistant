@@ -30,12 +30,14 @@ import {
   AnalysisTaskAlreadyRunningError,
   AnalysisTaskController,
   type ActiveAnalysisTask,
+  type AnalysisTaskSnapshot,
 } from "@/features/analysis/lib/analysis-task-controller"
 import {
   AskTaskController,
   type ActiveAskTask,
 } from "@/features/analysis/lib/ask-task-controller"
 import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
+import { OpenAICompatibleClientError } from "@/features/analysis/lib/openai-compatible-client"
 import type { RecentAnalysisListItem } from "@/features/history/components/recent-analysis-list"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
@@ -46,12 +48,14 @@ import {
   type DestructiveTaskSnapshot,
 } from "@/features/history/lib/destructive-operation-coordinator"
 import {
+  computeAnalysisCacheKey,
   isExactCurrentAnalysis,
 } from "@/lib/persistence/cache-identity"
 import { VIDEO_ANALYSIS_SCHEMA_VERSION } from "@/features/analysis/lib/analysis-schema"
 import type {
   ActiveVideoContext,
   VideoIdentity,
+  VideoInfo,
 } from "@/features/platform/types"
 import {
   settingsStorage,
@@ -69,6 +73,17 @@ import {
   type FinalResumeCheckpointController,
 } from "@/features/analysis/lib/final-resume-checkpoint"
 import { SidePanelFinalCheckpointLifecycle } from "@/sidepanel/analysis/final-checkpoint-lifecycle"
+import {
+  FINAL_RESUME_ENTRY_TTL_MS,
+  createFinalResumeAvailability,
+  type FinalResumeAvailability,
+  type FinalResumeView,
+} from "@/sidepanel/analysis/final-resume-availability"
+import { runFinalOnlyAnalysis } from "@/features/analysis/lib/run-final-only-analysis"
+import {
+  createFinalResumeCoordinator,
+  type FinalResumeResult,
+} from "@/features/analysis/lib/final-resume-coordinator"
 import { OverviewTab } from "@/sidepanel/components/overview-tab"
 import { SettingsTab } from "@/sidepanel/components/settings-tab"
 import { SidePanelShell } from "@/sidepanel/components/sidepanel-shell"
@@ -146,6 +161,18 @@ import {
   type WorkspaceHistoryRestoreMode,
   type WorkspaceRestoredAnalysisIdentity,
 } from "@/sidepanel/workspace/workspace-controller"
+
+/** Content-free identity used to decide whether a resume entry still applies. */
+type FinalResumeIdentitySnapshot = {
+  sourceTabId: number | null
+  contentKey: string | null
+  partId: string | null
+  title: string | null
+  durationSec: number | null
+  transcriptFingerprint: string | null
+  providerProfileId: string | null
+  analysisPresetId: AnalysisPresetId
+}
 
 type AnalysisView = {
   platform: "youtube" | "bilibili"
@@ -290,6 +317,36 @@ function SidepanelWorkspace() {
   }
   const finalCheckpointLifecycle = finalCheckpointLifecycleRef.current
   const finalCheckpointDurationRef = useRef<number | null>(null)
+  /**
+   * M2 only exposes a synchronous metadata read, so the panel owns the
+   * subscription, TTL watch and phase state needed for a live resume entry.
+   */
+  const finalResumeIdentityRef = useRef<FinalResumeIdentitySnapshot>({
+    sourceTabId: null,
+    contentKey: null,
+    partId: null,
+    title: null,
+    durationSec: null,
+    transcriptFingerprint: null,
+    providerProfileId: null,
+    analysisPresetId: DEFAULT_ANALYSIS_PRESET_ID,
+  })
+  const finalResumeCheckpointIdentityRef = useRef<FinalResumeIdentitySnapshot>(
+    finalResumeIdentityRef.current,
+  )
+  const finalResumeConflictRef = useRef<() => boolean>(() => false)
+  const finalResumeAvailabilityRef = useRef<FinalResumeAvailability | null>(null)
+  if (!finalResumeAvailabilityRef.current) {
+    finalResumeAvailabilityRef.current = createFinalResumeAvailability({
+      readMetadata: () => finalCheckpointLifecycle.controller.getMetadata(),
+      readIdentity: () => finalCheckpointLifecycle.controller.getMetadata().state === "empty"
+        ? finalResumeIdentityRef.current
+        : finalResumeCheckpointIdentityRef.current,
+      readCurrentIdentity: () => finalResumeIdentityRef.current,
+      hasConflict: () => finalResumeConflictRef.current(),
+    })
+  }
+  const finalResumeAvailability = finalResumeAvailabilityRef.current
   const workspaceControllerRef = useRef<WorkspaceController | null>(null)
   if (!workspaceControllerRef.current) workspaceControllerRef.current = new WorkspaceController()
   const workspaceController = workspaceControllerRef.current
@@ -472,7 +529,49 @@ function SidepanelWorkspace() {
 
   useEffect(() => () => finalCheckpointLifecycle.destroy(), [finalCheckpointLifecycle])
 
+  const [finalResumeView, setFinalResumeView] = useState<FinalResumeView>(
+    finalResumeAvailability.getSnapshot(),
+  )
   useEffect(() => {
+    setFinalResumeView(finalResumeAvailability.getSnapshot())
+    return finalResumeAvailability.subscribe(() => {
+      setFinalResumeView(finalResumeAvailability.getSnapshot())
+    })
+  }, [finalResumeAvailability])
+
+  // The action must disappear on its own when the TTL elapses; a manual refresh
+  // is not part of the contract. The interval only re-reads a synchronous view.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      finalResumeAvailability.refresh({ kind: "ttl" })
+    }, Math.min(30_000, FINAL_RESUME_ENTRY_TTL_MS))
+    return () => clearInterval(timer)
+  }, [finalResumeAvailability])
+
+  useEffect(() => () => finalResumeAvailability.destroy(), [finalResumeAvailability])
+
+  // A workspace conflict (another analysis or a destructive operation) hides the
+  // entry without discarding the checkpoint itself.
+  finalResumeConflictRef.current = () => Boolean(activeAnalysisTask) || analysisPhase === "loading-transcript"
+    || analysisPhase === "analyzing"
+    || analysisPhase === "finalizing"
+    || analysisPhase === "cancelling"
+
+  useEffect(() => {
+    const identity: FinalResumeIdentitySnapshot = {
+      sourceTabId: activeTabId,
+      contentKey: videoContext.contentKey,
+      partId: videoContext.partId,
+      title: videoContext.title ?? videoContext.videoId,
+      durationSec: finalCheckpointDurationRef.current,
+      transcriptFingerprint: currentTranscriptFingerprint,
+      providerProfileId: provider?.id ?? null,
+      analysisPresetId,
+    }
+    finalResumeIdentityRef.current = identity
+    if (finalCheckpointLifecycle.controller.getMetadata().state !== "empty") {
+      finalResumeCheckpointIdentityRef.current = identity
+    }
     finalCheckpointLifecycle.syncSource({
       sourceTabId: activeTabId,
       platform: videoContext.platform,
@@ -486,6 +585,7 @@ function SidepanelWorkspace() {
       providerProfileId: provider?.id ?? null,
       analysisPresetId,
     })
+    finalResumeAvailability.refresh({ kind: "identity" })
   }, [
     activeTabId,
     analysisPresetId,
@@ -497,6 +597,7 @@ function SidepanelWorkspace() {
     videoContext.platform,
     videoContext.title,
     videoContext.videoId,
+    finalResumeAvailability,
     workspaceController,
   ])
 
@@ -1151,6 +1252,7 @@ function SidepanelWorkspace() {
           || (error instanceof Error && error.message.includes("video part changed while captions were loading"))
           ? "Source video changed before its transcript could be captured."
           : error instanceof Error ? error.message : t("toast.unknownAnalysisError")
+        finalResumeAvailability.refresh({ kind: "analysis-failed" })
         workspaceController.publishAnalysisError({
           workspaceEpoch: requestedWorkspaceEpoch,
           taskContentKey: taskSnapshot.contentKey,
@@ -1180,6 +1282,278 @@ function SidepanelWorkspace() {
     finalCheckpointLifecycle.invalidate()
     analysisTaskController.cancel()
   }, [analysisTaskController, finalCheckpointLifecycle])
+
+  /**
+   * Explicit Final-only resume.
+   *
+   * It is deliberately not a variant of `handleAnalyze`: that path starts by
+   * invalidating the checkpoint and always runs a full analysis. Here the
+   * checkpoint is the input, the source is re-collected and re-verified, and a
+   * dedicated admission owns the task. A failure before the Final request costs
+   * zero AI calls.
+   */
+  const handleResumeFinal = useCallback(async () => {
+    if (analysisPresetWriter.isPending()) return
+    if (activeAnalysisTask) {
+      toast.error(t("toast.anotherAnalysis"))
+      return
+    }
+    if (!videoContext.isReady || !videoContext.contentKey || activeTabId === null) {
+      toast.error(t("toast.openSupportedPage"))
+      return
+    }
+    if (!provider) {
+      setActiveTab("settings")
+      return
+    }
+    if (finalCheckpointLifecycle.controller.getMetadata().state !== "available") {
+      toast.error(t("finalResume.toast.unavailable"))
+      return
+    }
+
+    const requestedProvider = provider
+    const requestedPreset = createAnalysisPresetSnapshot(analysisPresetId)
+    type ResumeTaskSnapshot = Omit<AnalysisTaskSnapshot, "taskId" | "startedAt">
+    const taskSnapshot: ResumeTaskSnapshot = {
+      sourceTabId: activeTabId,
+      platform: videoContext.platform!,
+      videoId: videoContext.videoId!,
+      partId: videoContext.partId,
+      contentKey: videoContext.contentKey,
+      title: videoContext.title ?? videoContext.videoId!,
+      author: videoContext.author,
+      canonicalUrl: videoContext.canonicalUrl ?? videoContext.url ?? null,
+      providerProfileId: requestedProvider.id,
+      providerBaseUrl: requestedProvider.baseUrl,
+      providerModel: requestedProvider.model,
+      generationTimeoutSec: requestedProvider.generationTimeoutSec ?? 600,
+      analysisPresetId: requestedPreset.id,
+      analysisPromptVersion: requestedPreset.promptVersion,
+    }
+    const requestedWorkspaceEpoch = workspaceController.captureEpoch()
+    finalResumeAvailability.setPhase("resuming")
+
+    const runResume = async () => {
+      let admission: TaskAdmissionHandle | null = null
+      let taskPromise: Promise<void> | null = null
+      let settled: FinalResumeResult | null = null
+      try {
+        admission = await admitDestructiveTask({
+          kind: "analysis",
+          contentKey: taskSnapshot.contentKey,
+          analysisRunId: destructiveWorkspaceRef.current.analysisRunId ?? undefined,
+          phase: "loading-transcript",
+        }, (taskId) => {
+          taskPromise = analysisTaskController.start(
+            taskSnapshot,
+            async ({ taskId, signal, setPhase, setProgress }) => {
+              const task = analysisTaskController.getSnapshot()
+              if (!task || task.snapshot.taskId !== taskId) {
+                throw new Error("Analysis task is no longer active.")
+              }
+              const ensureTaskCurrent = () => {
+                if (!analysisTaskController.isCurrent(taskId)) {
+                  throw new Error("Analysis task is no longer active.")
+                }
+                if (signal.aborted) throw new AnalysisAbortedError()
+              }
+
+              const coordinator = createFinalResumeCoordinator({
+                readLiveSource: async () => {
+                  const current = videoContextRef.current
+                  if (!current.isReady || !current.contentKey) {
+                    throw new Error("The source video is no longer available.")
+                  }
+                  const active = analysisTaskController.getSnapshot()
+                  if (!active || active.snapshot.taskId !== taskId) {
+                    throw new Error("Analysis task is no longer active.")
+                  }
+                  const video: VideoInfo = {
+                    platform: active.snapshot.platform,
+                    videoId: active.snapshot.videoId,
+                    partId: active.snapshot.partId,
+                    contentKey: active.snapshot.contentKey,
+                    title: current.title ?? active.snapshot.title,
+                    author: current.author,
+                    durationSec: finalCheckpointDurationRef.current,
+                    thumbnailUrl: null,
+                    canonicalUrl: current.canonicalUrl ?? current.url ?? null,
+                  }
+                  return {
+                    taskSnapshot: active.snapshot,
+                    sourceVideo: video,
+                    workspaceEpoch: requestedWorkspaceEpoch,
+                  }
+                },
+                loadTranscript: async (live) => {
+                  const result = await transcriptController.acquireForTask({
+                    request: {
+                      video: {
+                        platform: live.sourceVideo.platform,
+                        videoId: live.sourceVideo.videoId,
+                        contentKey: live.sourceVideo.contentKey,
+                        ...(live.sourceVideo.partId ? { partId: live.sourceVideo.partId } : {}),
+                        title: live.sourceVideo.title,
+                        author: live.sourceVideo.author,
+                        canonicalUrl: live.sourceVideo.canonicalUrl,
+                      },
+                      sourceTabId: taskSnapshot.sourceTabId,
+                      cachedPartIdFallback: taskSnapshot.partId,
+                    },
+                    session: {
+                      identity: transcriptIdentity,
+                      segments: transcriptCues,
+                      rawVtt,
+                    },
+                    forceReload: false,
+                    isTaskCurrent: () => analysisTaskController.isCurrent(taskId) && !signal.aborted,
+                  })
+                  ensureTaskCurrent()
+                  const finalized = await transcriptController.prepareTaskFinalization({
+                    result,
+                    taskSource: task.snapshot,
+                  })
+                  ensureTaskCurrent()
+                  return {
+                    transcript: result.transcript,
+                    fingerprint: finalized.transcriptFingerprint,
+                  }
+                },
+                resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId).then((resolved) => ({
+                  apiKey: resolved.apiKey,
+                  credentialRevision: resolved.credentialRevision,
+                  profileUpdatedAt: resolved.profile.updatedAt,
+                  profileBaseUrl: resolved.profile.baseUrl,
+                  profileModel: resolved.profile.model,
+                  profileGenerationTimeoutSec: resolved.profile.generationTimeoutSec,
+                })),
+                getAnalysisCache: (cacheKey) => historyRepository.getAnalysisCache(cacheKey),
+                runFinalOnlyAnalysis,
+                persistCompletedAnalysis: async (input) => {
+                  const cacheKey = await computeAnalysisCacheKey({
+                    contentKey: input.taskSnapshot.contentKey,
+                    transcriptFingerprint: input.transcriptFingerprint,
+                    providerProfileId: input.taskSnapshot.providerProfileId,
+                    baseUrl: input.taskSnapshot.providerBaseUrl,
+                    model: input.taskSnapshot.providerModel,
+                    promptVersion: input.taskSnapshot.analysisPromptVersion,
+                  })
+                  const result = await analysisController.persistCompletedAnalysis({
+                    taskSnapshot: input.taskSnapshot,
+                    sourceVideo: input.sourceVideo,
+                    transcript: input.transcript,
+                    transcriptFingerprint: input.transcriptFingerprint,
+                    analysis: input.analysis,
+                    cacheKey,
+                    analysisPromptVersion: input.taskSnapshot.analysisPromptVersion,
+                    transcriptCapturedAt: input.completedAt,
+                    taskStartedAt: input.taskStartedAt,
+                    completedAt: input.completedAt,
+                    analysisRunId: input.analysisRunId,
+                    transcriptSnapshotId: input.transcriptSnapshotId,
+                  })
+                  return { analysisRunId: result.analysisRunId }
+                },
+              })
+
+              settled = await coordinator.resume({
+                taskSnapshot: task.snapshot,
+                workspaceEpoch: requestedWorkspaceEpoch,
+                signal,
+                setPhase,
+                onProgress: setProgress,
+                ensureTaskCurrent,
+                checkpoint: finalCheckpointLifecycle.controller,
+                checkpointMetadata: () => finalCheckpointLifecycle.controller.getMetadata(),
+              })
+              finalResumeAvailability.refresh({ kind: "resume-settled" })
+            },
+            { taskId },
+          )
+        })
+        await taskPromise
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t("toast.unknownAnalysisError")
+        toast.error(message)
+      } finally {
+        admission?.release()
+      }
+
+      const outcome = settled
+      finalResumeAvailability.setPhase("available")
+      if (!outcome) return
+      switch (outcome.kind) {
+        case "completed":
+        case "cached": {
+          await workspaceController.publishAnalysisResult({
+            workspaceEpoch: requestedWorkspaceEpoch,
+            taskContentKey: taskSnapshot.contentKey,
+            currentContentKey: videoContextRef.current.contentKey,
+            effects: {
+              publishAnalysis: () => publishCompleted(outcome.publication),
+              setAnalysisCompleted: () => setAnalysisPhase("completed"),
+              restoreQaConversation: async (input) => {
+                await restoreQaConversation(
+                  outcome.publication.contentKey,
+                  outcome.publication.analysisRunId,
+                  workspaceController.captureLoadGeneration(),
+                  outcome.publication.transcriptFingerprint,
+                  input.isCurrent,
+                )
+              },
+            },
+          })
+          await refreshRecentAnalyses()
+          setAnalysisError(null)
+          toast.success(outcome.kind === "cached"
+            ? t("finalResume.toast.cached")
+            : t("finalResume.toast.completed", { title: taskSnapshot.title }))
+          return
+        }
+        case "final-retryable":
+          finalResumeAvailability.refresh({ kind: "retryable" })
+          toast.error(t("finalResume.toast.retryable", {
+            status: outcome.error instanceof OpenAICompatibleClientError
+              ? (outcome.error.status ?? 0)
+              : 0,
+          }))
+          return
+        case "cancelled":
+          finalResumeAvailability.refresh({ kind: "cancelled" })
+          workspaceController.publishAnalysisCancelled({
+            workspaceEpoch: requestedWorkspaceEpoch,
+            taskContentKey: taskSnapshot.contentKey,
+            currentContentKey: videoContextRef.current.contentKey,
+            effects: {
+              clearAnalysisError: () => setAnalysisError(null),
+              setAnalysisCancelled: () => setAnalysisPhase("cancelled"),
+            },
+          })
+          toast.message(t("finalResume.toast.cancelled"))
+          return
+        case "persistence-failed":
+          toast.error(t("finalResume.toast.persistence", {
+            error: outcome.error instanceof Error ? outcome.error.message : t("toast.unknownAnalysisError"),
+          }))
+          return
+        case "structured-output-failed":
+          finalResumeAvailability.refresh({ kind: "structured" })
+          toast.error(t("finalResume.toast.structured"))
+          return
+        case "fatal-failure":
+          finalResumeAvailability.refresh({ kind: "fatal" })
+          toast.error(t("finalResume.toast.fatal", {
+            error: outcome.error instanceof Error ? outcome.error.message : t("toast.unknownAnalysisError"),
+          }))
+          return
+        default:
+          finalResumeAvailability.refresh({ kind: outcome.kind })
+          toast.error(t("finalResume.toast.unavailable"))
+      }
+    }
+
+    void runResume()
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, finalCheckpointLifecycle, finalResumeAvailability, provider, publishCompleted, rawVtt, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, transcriptCues, transcriptIdentity, videoContext, workspaceController])
 
   const handleOpenSavedAnalysis = useCallback(async (
     videoId: string,
@@ -2024,6 +2398,16 @@ function SidepanelWorkspace() {
             activeAnalysisRunId={analysisView?.analysisRunId}
             onAnalyze={handleAnalyze}
             onCancel={handleCancelAnalysis}
+            finalResume={{
+              view: finalResumeView,
+              onResume: () => {
+                void handleResumeFinal()
+              },
+              onRegenerate: () => {
+                void handleAnalyze({ force: true })
+              },
+              onCancel: handleCancelAnalysis,
+            }}
             onConfigureProvider={() => setActiveTab("settings")}
             onJump={handleAnalysisJump}
             onSelectHistory={(videoId, contentKey, analysisRunId) => {

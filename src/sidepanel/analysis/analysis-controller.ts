@@ -108,6 +108,31 @@ export type AnalysisControllerDependencies = {
 
 export type AnalysisController = {
   runExecutionTask: (request: AnalysisExecutionRequest) => Promise<AnalysisExecutionResult>
+  /**
+   * The single completion persistence used by a one-shot success and by a
+   * Final-only resume. Both paths must produce identical rows in the same order.
+   */
+  persistCompletedAnalysis: (input: CompletedAnalysisPersistenceInput) => Promise<CompletedAnalysisPersistenceResult>
+}
+
+export type CompletedAnalysisPersistenceInput = {
+  taskSnapshot: AnalysisTaskSnapshot
+  sourceVideo: VideoInfo
+  transcript: VideoTranscript
+  transcriptFingerprint: string
+  analysis: VideoAnalysis
+  /** Exact analysis cache identity for this completion. */
+  cacheKey: string
+  analysisPromptVersion: string
+  transcriptCapturedAt: string
+  taskStartedAt: string
+  completedAt: string
+  analysisRunId: string
+  transcriptSnapshotId: string
+}
+
+export type CompletedAnalysisPersistenceResult = {
+  analysisRunId: string
 }
 
 export function createAnalysisController(
@@ -115,6 +140,125 @@ export function createAnalysisController(
 ): AnalysisController {
   const now = dependencies.now ?? (() => new Date().toISOString())
   const randomUUID = dependencies.randomUUID ?? (() => crypto.randomUUID())
+
+  const persistCompletedAnalysis = async (
+    input: CompletedAnalysisPersistenceInput,
+  ): Promise<CompletedAnalysisPersistenceResult> => {
+    const {
+      taskSnapshot,
+      sourceVideo,
+      transcript,
+      transcriptFingerprint,
+      analysis,
+      cacheKey,
+      analysisPromptVersion,
+      transcriptCapturedAt,
+      taskStartedAt,
+      completedAt,
+      analysisRunId,
+      transcriptSnapshotId,
+    } = input
+
+    await persistIfSupportedPlatform(sourceVideo, async () => {
+      await dependencies.saveVideoRecord({
+        contentKey: taskSnapshot.contentKey,
+        platform: taskSnapshot.platform,
+        videoId: taskSnapshot.videoId,
+        partId: taskSnapshot.partId,
+        title: sourceVideo.title,
+        channelTitle: sourceVideo.author,
+        thumbnailUrl: sourceVideo.thumbnailUrl ?? null,
+        canonicalUrl: sourceVideo.canonicalUrl || null,
+        durationSec: sourceVideo.durationSec ?? null,
+        openedAt: taskStartedAt,
+        updatedAt: completedAt,
+        analyzedAt: completedAt,
+      })
+      await dependencies.saveTranscriptSnapshot({
+        id: transcriptSnapshotId,
+        videoId: taskSnapshot.videoId,
+        platform: taskSnapshot.platform,
+        contentKey: taskSnapshot.contentKey,
+        partId: taskSnapshot.partId,
+        language: transcript.language ?? null,
+        sourceUrl: transcript.raw?.sourceUrl ?? null,
+        rawVtt: transcript.raw?.text ?? null,
+        cues: transcript.segments,
+        createdAt: transcriptCapturedAt,
+        updatedAt: transcriptCapturedAt,
+      })
+      await dependencies.saveAnalysisRun({
+        analysisRun: {
+          id: analysisRunId,
+          videoId: taskSnapshot.videoId,
+          platform: taskSnapshot.platform,
+          contentKey: taskSnapshot.contentKey,
+          partId: taskSnapshot.partId,
+          transcriptSnapshotId,
+          providerConfigId: taskSnapshot.providerProfileId,
+          transcriptFingerprint,
+          analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+          analysisPromptVersion,
+          analysisCacheKey: cacheKey,
+          providerProfileId: taskSnapshot.providerProfileId,
+          providerBaseUrl: taskSnapshot.providerBaseUrl,
+          providerModel: taskSnapshot.providerModel,
+          status: "completed",
+          summary: analysis.summary,
+          keyPoints: analysis.keyPoints,
+          topics: [],
+          errorMessage: null,
+          createdAt: taskStartedAt,
+          updatedAt: completedAt,
+          completedAt,
+        },
+        segments: analysis.chapters.map((chapter) => ({
+          id: randomUUID(),
+          analysisRunId,
+          videoId: taskSnapshot.videoId,
+          contentKey: taskSnapshot.contentKey,
+          title: chapter.title,
+          summary: chapter.summary,
+          detail: chapter.detail,
+          startSec: chapter.startSec,
+          endSec: chapter.endSec,
+          createdAt: taskStartedAt,
+          updatedAt: completedAt,
+        })),
+        recentVideo: {
+          videoId: taskSnapshot.videoId,
+          analysisRunId,
+          contentKey: taskSnapshot.contentKey,
+          title: sourceVideo.title,
+          channelTitle: sourceVideo.author,
+          thumbnailUrl: sourceVideo.thumbnailUrl ?? null,
+          status: "completed",
+          openedAt: taskStartedAt,
+          analyzedAt: completedAt,
+          updatedAt: completedAt,
+        },
+      })
+      await dependencies.saveAnalysisCache({
+        cacheKey,
+        contentKey: taskSnapshot.contentKey,
+        platform: taskSnapshot.platform,
+        videoId: taskSnapshot.videoId,
+        partId: taskSnapshot.partId,
+        transcriptFingerprint,
+        analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+        analysisPromptVersion,
+        providerProfileId: taskSnapshot.providerProfileId,
+        providerBaseUrl: taskSnapshot.providerBaseUrl,
+        providerModel: taskSnapshot.providerModel,
+        analysisRunId,
+        analysis,
+        createdAt: taskStartedAt,
+        updatedAt: completedAt,
+      })
+    })
+
+    return { analysisRunId }
+  }
 
   const runExecutionTask = async (
     request: AnalysisExecutionRequest,
@@ -318,102 +462,19 @@ export function createAnalysisController(
     const analysisRunId = randomUUID()
     const transcriptSnapshotId = randomUUID()
 
-    await persistIfSupportedPlatform(sourceVideo, async () => {
-      await dependencies.saveVideoRecord({
-        contentKey: taskSnapshot.contentKey,
-        platform: taskSnapshot.platform,
-        videoId: taskSnapshot.videoId,
-        partId: taskSnapshot.partId,
-        title: sourceVideo.title,
-        channelTitle: sourceVideo.author,
-        thumbnailUrl: sourceVideo.thumbnailUrl ?? null,
-        canonicalUrl: sourceVideo.canonicalUrl || null,
-        durationSec: sourceVideo.durationSec ?? null,
-        openedAt: taskStartedAt,
-        updatedAt: completedAt,
-        analyzedAt: completedAt,
-      })
-      await dependencies.saveTranscriptSnapshot({
-        id: transcriptSnapshotId,
-        videoId: taskSnapshot.videoId,
-        platform: taskSnapshot.platform,
-        contentKey: taskSnapshot.contentKey,
-        partId: taskSnapshot.partId,
-        language: transcript.language ?? null,
-        sourceUrl: transcript.raw?.sourceUrl ?? null,
-        rawVtt: transcript.raw?.text ?? null,
-        cues: transcript.segments,
-        createdAt: transcriptCapturedAt,
-        updatedAt: transcriptCapturedAt,
-      })
-      await dependencies.saveAnalysisRun({
-        analysisRun: {
-          id: analysisRunId,
-          videoId: taskSnapshot.videoId,
-          platform: taskSnapshot.platform,
-          contentKey: taskSnapshot.contentKey,
-          partId: taskSnapshot.partId,
-          transcriptSnapshotId,
-          providerConfigId: taskSnapshot.providerProfileId,
-          transcriptFingerprint,
-          analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-          analysisPromptVersion,
-          analysisCacheKey: cacheKey,
-          providerProfileId: taskSnapshot.providerProfileId,
-          providerBaseUrl: taskSnapshot.providerBaseUrl,
-          providerModel: taskSnapshot.providerModel,
-          status: "completed",
-          summary: completed.analysis.summary,
-          keyPoints: completed.analysis.keyPoints,
-          topics: [],
-          errorMessage: null,
-          createdAt: taskStartedAt,
-          updatedAt: completedAt,
-          completedAt,
-        },
-        segments: completed.analysis.chapters.map((chapter) => ({
-          id: randomUUID(),
-          analysisRunId,
-          videoId: taskSnapshot.videoId,
-          contentKey: taskSnapshot.contentKey,
-          title: chapter.title,
-          summary: chapter.summary,
-          detail: chapter.detail,
-          startSec: chapter.startSec,
-          endSec: chapter.endSec,
-          createdAt: taskStartedAt,
-          updatedAt: completedAt,
-        })),
-        recentVideo: {
-          videoId: taskSnapshot.videoId,
-          analysisRunId,
-          contentKey: taskSnapshot.contentKey,
-          title: sourceVideo.title,
-          channelTitle: sourceVideo.author,
-          thumbnailUrl: sourceVideo.thumbnailUrl ?? null,
-          status: "completed",
-          openedAt: taskStartedAt,
-          analyzedAt: completedAt,
-          updatedAt: completedAt,
-        },
-      })
-      await dependencies.saveAnalysisCache({
-        cacheKey,
-        contentKey: taskSnapshot.contentKey,
-        platform: taskSnapshot.platform,
-        videoId: taskSnapshot.videoId,
-        partId: taskSnapshot.partId,
-        transcriptFingerprint,
-        analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
-        analysisPromptVersion,
-        providerProfileId: taskSnapshot.providerProfileId,
-        providerBaseUrl: taskSnapshot.providerBaseUrl,
-        providerModel: taskSnapshot.providerModel,
-        analysisRunId,
-        analysis: completed.analysis,
-        createdAt: taskStartedAt,
-        updatedAt: completedAt,
-      })
+    await persistCompletedAnalysis({
+      taskSnapshot,
+      sourceVideo,
+      transcript,
+      transcriptFingerprint,
+      analysis: completed.analysis,
+      cacheKey,
+      analysisPromptVersion,
+      transcriptCapturedAt,
+      taskStartedAt,
+      completedAt,
+      analysisRunId,
+      transcriptSnapshotId,
     })
 
     return {
@@ -437,5 +498,5 @@ export function createAnalysisController(
     }
   }
 
-  return { runExecutionTask }
+  return { runExecutionTask, persistCompletedAnalysis }
 }

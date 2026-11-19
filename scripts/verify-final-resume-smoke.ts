@@ -8,8 +8,17 @@
  *   Generate -> 5 Map calls -> Final returns HTTP 502 -> "Continue final summary"
  *   -> exactly one Final call -> the analysis is saved and re-renders.
  *
+ * --scenario refresh and --scenario reopen stop at the eligible checkpoint and
+ * instead verify that a real panel reload / target destruction loses the entry,
+ * never starts a provider request, and never persists intermediate summaries.
+ * Reopen additionally seeds a normal completed history record before creating
+ * the 502, requires that record to survive target destruction, then starts a
+ * fresh full analysis on a distinct video.
+ * Each invocation owns a new isolated Chrome profile.
+ *
  * The provider is a local mock; no paid request is made. The script prints one
- * JSON evidence line and exits non-zero on any failed assertion.
+ * JSON evidence line and exits non-zero on any failed assertion. Secret-bearing
+ * provider settings are represented only by their Chrome Storage keys.
  *
  * Run:
  *   bun scripts/verify-final-resume-smoke.ts --chrome "<chrome.exe>" \\
@@ -88,16 +97,20 @@ import {
   waitForDevToolsPort,
 } from "./lib/cdp-client"
 
+type SmokeScenario = "golden" | "refresh" | "reopen"
+
 type CliOptions = {
   artifactDir: string
   chromePath: string
   keepProfile: boolean
+  scenario: SmokeScenario
 }
 
 function parseArgs(argv: string[]): CliOptions {
   let artifactDir = resolve(DEFAULT_ARTIFACT_DIR)
   let chromePath = process.env.VSA_CHROME_PATH ?? ""
   let keepProfile = false
+  let scenario: SmokeScenario = "golden"
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === "--chrome") {
@@ -108,6 +121,15 @@ function parseArgs(argv: string[]): CliOptions {
       index += 1
     } else if (arg === "--keep-profile") {
       keepProfile = true
+    } else if (arg === "--scenario") {
+      const value = argv[index + 1] ?? ""
+      if (value !== "golden" && value !== "refresh" && value !== "reopen") {
+        throw new Error("--scenario must be golden, refresh, or reopen.")
+      }
+      scenario = value
+      index += 1
+    } else {
+      throw new Error(`Unknown argument: ${arg}`)
     }
   }
   if (!chromePath) {
@@ -115,7 +137,7 @@ function parseArgs(argv: string[]): CliOptions {
   }
   const validated = validateChromePath(chromePath, existsSync)
   if (!validated.ok) throw new Error((validated as { message: string }).message)
-  return { artifactDir, chromePath: validated.path, keepProfile }
+  return { artifactDir, chromePath: validated.path, keepProfile, scenario }
 }
 
 /* ------------------------------------------------------------------ fixtures */
@@ -158,6 +180,7 @@ type ProviderCall = { kind: ProviderKind, status: number, index: number }
 
 type SmokeState = {
   calls: ProviderCall[]
+  /** Consume the first failure only when explicitly starting a retryable run. */
   failFirstFinal: boolean
   /** Which CDP session's Fetch domain answered each intercepted class. */
   interceptTargets: Record<string, string>
@@ -173,10 +196,10 @@ const STUB_ORIGIN = "https://www.youtube.com"
  * The player JSON `readPageMetadata` scrapes. `videoDetails.videoId` must equal
  * the URL id or the caption tracks are dropped (see header note 2).
  */
-function stubPlayerResponse() {
+function stubPlayerResponse(videoId: string = VIDEO_ID) {
   return {
     videoDetails: {
-      videoId: VIDEO_ID,
+      videoId,
       title: VIDEO_TITLE,
       author: VIDEO_AUTHOR,
       lengthSeconds: String(VIDEO_DURATION_SEC),
@@ -187,7 +210,7 @@ function stubPlayerResponse() {
         captionTracks: [{
           // Same-origin (header note 3): the content script fetches this from the
           // stub page's own https origin.
-          baseUrl: `${STUB_ORIGIN}${TIMEDTEXT_PATH}?v=${VIDEO_ID}&lang=en`,
+          baseUrl: `${STUB_ORIGIN}${TIMEDTEXT_PATH}?v=${videoId}&lang=en`,
           languageCode: "en",
           kind: "",
           name: { simpleText: "English" },
@@ -201,11 +224,11 @@ function stubPlayerResponse() {
  * The MAIN-world player surface. YouTube exposes these on #movie_player; the
  * background's live-state reader calls exactly these three members.
  */
-const PLAYER_SURFACE_SCRIPT = `(() => {
+const playerSurfaceScript = (videoId: string = VIDEO_ID) => `(() => {
   const player = document.getElementById("movie_player");
   if (!player) return false;
   player.getVideoData = () => ({
-    videoId: ${JSON.stringify(VIDEO_ID)},
+    videoId: ${JSON.stringify(videoId)},
     title: ${JSON.stringify(VIDEO_TITLE)},
     author: ${JSON.stringify(VIDEO_AUTHOR)}
   });
@@ -228,8 +251,8 @@ const PLAYER_SURFACE_SCRIPT = `(() => {
  * The inline player script is a belt-and-braces install; CDP re-applies the same
  * surface after load, so the test does not depend on inline script surviving.
  */
-function stubWatchHtml(): string {
-  const player = JSON.stringify(stubPlayerResponse())
+function stubWatchHtml(videoId: string): string {
+  const player = JSON.stringify(stubPlayerResponse(videoId))
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8">
 <title>${VIDEO_TITLE} - YouTube</title>
@@ -256,7 +279,7 @@ function stubWatchHtml(): string {
     </ytd-channel-name>
   </div>
 </ytd-watch-metadata>
-<script>${PLAYER_SURFACE_SCRIPT}</script>
+<script>${playerSurfaceScript(videoId)}</script>
 </body></html>`
 }
 
@@ -369,7 +392,7 @@ function respondToIntercepted(
     return {
       status: 200,
       headers: [{ name: "content-type", value: "text/html; charset=utf-8" }],
-      body: stubWatchHtml(),
+      body: stubWatchHtml(url.searchParams.get("v") ?? VIDEO_ID),
     }
   }
 
@@ -429,7 +452,9 @@ async function main() {
   const options = parseArgs(process.argv.slice(2))
   const state: SmokeState = {
     calls: [],
-    failFirstFinal: true,
+    // Reopen first seeds a normal successful history record. Its independent
+    // 502 is armed only after that seed has been saved and its panel closed.
+    failFirstFinal: options.scenario === "reopen" ? false : true,
     interceptTargets: {},
     interceptCounts: {},
   }
@@ -458,6 +483,7 @@ async function main() {
     const endpoint = await waitForCdpEndpoint(devToolsPort, 30_000)
     cdp = await CdpConnection.connect(endpoint.webSocketDebuggerUrl, 15_000)
     evidence["chrome"] = endpoint.browser
+    evidence["scenario"] = options.scenario
     evidence["steps"] = steps
     evidence["stub"] = {
       videoId: VIDEO_ID,
@@ -539,7 +565,7 @@ async function main() {
     )
     // CDP re-applies the MAIN-world player surface: CSP cannot block it, and it
     // does not depend on the inline script above having run.
-    const bootstrapped = await evaluate<boolean>(cdp, pageSession, PLAYER_SURFACE_SCRIPT)
+    const bootstrapped = await evaluate<boolean>(cdp, pageSession, playerSurfaceScript())
     await poll(
       async () => evaluate<boolean>(cdp!, pageSession, "document.readyState === 'complete'"),
       30_000,
@@ -616,12 +642,31 @@ async function main() {
       }
     })()`)
     evidence["providerPermission"] = providerPermission
+
+    // A real completed run is the reopen scenario's existing-history sentinel.
+    // It uses the same public panel buttons and production persistence as the
+    // failed run, rather than writing an IndexedDB fixture behind the product.
+    if (options.scenario === "reopen") {
+      await sendNamed(cdp, "Page.navigate", {
+        url: `chrome-extension://${extensionId}/sidepanel.html`,
+      }, optionsSession)
+      await poll(
+        async () => evaluate<boolean>(cdp!, optionsSession,
+          "document.getElementById('__plasmo')?.childElementCount > 0"),
+        60_000,
+        "history-seed panel mount",
+      )
+      await seedNormalHistory(cdp, optionsSession, pageSession, sessionKinds)
+      evidence["historySeedCallCount"] = state.calls.length
+    }
     await sendNamed(cdp, "Target.closeTarget", { targetId: optionsTargetId })
+    if (options.scenario === "reopen") state.failFirstFinal = true
 
     steps.push("create-sidepanel")
     const sidePanel = await sendNamed(cdp, "Target.createTarget", { url: "about:blank" })
+    const originalSideTargetId = String(sidePanel.result?.targetId)
     steps.push("focus-sidepanel")
-    const sideSession = await attach(cdp, String(sidePanel.result?.targetId))
+    let sideSession = await attach(cdp, originalSideTargetId)
     sessionKinds.set(sideSession, "sidepanel")
     // A background/occluded tab can have its rendering deferred; focusing the
     // target keeps React mounting and effect timers running.
@@ -860,18 +905,21 @@ async function main() {
       `the resume entry rendered as unavailable instead of offering a resume: ${resumeText}`,
     )
 
+    const firstPassCalls = state.calls.slice(
+      options.scenario === "reopen" ? Number(evidence["historySeedCallCount"]) : 0,
+    )
     const firstPass = {
-      mapCalls: state.calls.filter((call) => call.kind === "map").length,
-      reductionCalls: state.calls.filter((call) => call.kind === "reduction").length,
-      finalCalls: state.calls.filter((call) => call.kind === "final").length,
-      repairCalls: state.calls.filter((call) => call.kind === "repair").length,
-      finalStatuses: state.calls.filter((call) => call.kind === "final").map((call) => call.status),
+      mapCalls: firstPassCalls.filter((call) => call.kind === "map").length,
+      reductionCalls: firstPassCalls.filter((call) => call.kind === "reduction").length,
+      finalCalls: firstPassCalls.filter((call) => call.kind === "final").length,
+      repairCalls: firstPassCalls.filter((call) => call.kind === "repair").length,
+      finalStatuses: firstPassCalls.filter((call) => call.kind === "final").map((call) => call.status),
       // The resume panel renders "最终总结失败 · HTTP 502" and its own 502 status,
       // so both the visible status line and the provider record are checked.
       showed502: /HTTP 502/.test(parsedResumeView.text ?? ""),
     }
     evidence["firstPass"] = firstPass
-    evidence["callsAfterFirstPass"] = [...state.calls]
+    evidence["callsAfterFirstPass"] = [...firstPassCalls]
 
     expect(firstPass.mapCalls === 5, `the first pass must issue exactly 5 Map requests, saw ${firstPass.mapCalls}`)
     expect(firstPass.reductionCalls === 0, "the first pass must not need a Reduction level")
@@ -910,6 +958,31 @@ async function main() {
       `an unavailable resume panel must not coexist with the continue button: ${resumeButtonState}`,
     )
 
+    if (options.scenario !== "golden") {
+      await runLifecycleScenario({
+        cdp,
+        evidence,
+        state,
+        steps,
+        scenario: options.scenario,
+        extensionId,
+        pageSession,
+        originalSideTargetId,
+        sideSession,
+        sessionKinds,
+      })
+      evidence["interceptTargets"] = state.interceptTargets
+      evidence["interceptCounts"] = state.interceptCounts
+      evidence["pageErrors"] = pageErrors.slice(0, 5)
+      evidence["result"] = "PASS"
+      console.log(`@@SMOKE_EVIDENCE@@${JSON.stringify(evidence)}`)
+      return
+    }
+
+    // A quiet pre-click window proves there is no delayed automatic retry.
+    await Bun.sleep(2000)
+    expect(state.calls.length === firstPassCalls.length,
+      `the retryable failure must not issue a request before the explicit click: ${JSON.stringify(state.calls)}`)
     const callsBeforeResume = state.calls.length
     const clickedResume = await evaluate<boolean>(cdp, sideSession, `(() => {
       const button = document.querySelector('[data-testid="final-resume-continue"]');
@@ -1130,6 +1203,285 @@ async function main() {
       }
     }
   }
+}
+
+/* ----------------------------------------------------- AC-18 real lifecycle */
+
+type LifecycleInput = {
+  cdp: CdpConnection
+  evidence: Record<string, any>
+  state: SmokeState
+  steps: string[]
+  scenario: Exclude<SmokeScenario, "golden">
+  extensionId: string
+  pageSession: string
+  originalSideTargetId: string
+  sideSession: string
+  sessionKinds: Map<string, "page" | "sidepanel">
+}
+
+/** Audit only metadata and test-fixture leak markers; never print stored secrets. */
+async function readPersistenceAudit(cdp: CdpConnection, session: string): Promise<string> {
+  return evaluate<string>(cdp, session, `(async () => {
+    const readAll = (db, store) => new Promise((resolve, reject) => {
+      let request;
+      try { request = db.transaction(store, "readonly").objectStore(store).getAll(); }
+      catch (error) { reject(error); return; }
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+    const openDb = () => new Promise((resolve, reject) => {
+      const request = indexedDB.open("youtube-summarizer");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const [local, sync] = await Promise.all([
+        chrome.storage.local.get(null), chrome.storage.sync.get(null),
+      ]);
+      const stores = {};
+      const db = await openDb();
+      for (const name of db.objectStoreNames) {
+        const rows = await readAll(db, name);
+        const serialized = JSON.stringify(rows);
+        stores[name] = {
+          count: rows.length,
+          resumeMarker: /final.?resume|final.?checkpoint|resumeCheckpoint/i.test(serialized),
+          mapSummaryLeak: serialized.includes("stub chunk summary"),
+          statuses: [...new Set(rows.map((row) => row.status).filter((v) => typeof v === "string"))],
+        };
+        if (name === "analysisRuns") {
+          stores[name].runs = rows.map((row) => ({
+            id: row.id, videoId: row.videoId, status: row.status,
+            summary: typeof row.summary === "string" ? row.summary.slice(0, 80) : null,
+          }));
+        }
+      }
+      db.close();
+      const nonSecretStorageText = (area) => Object.entries(area)
+        .filter(([key]) => key !== "yt-summarizer.provider.secrets")
+        .map(([key, value]) => JSON.stringify([key, value])).join("\\n");
+      const storageAudit = (area) => ({
+        keys: Object.keys(area),
+        resumeMarker: /final.?resume|final.?checkpoint|resumeCheckpoint/i.test(nonSecretStorageText(area)),
+        mapSummaryLeak: nonSecretStorageText(area).includes("stub chunk summary"),
+      });
+      return JSON.stringify({
+        database: "youtube-summarizer", stores,
+        local: storageAudit(local), sync: storageAudit(sync),
+      });
+    } catch (error) {
+      return JSON.stringify({ error: String(error) });
+    }
+  })()`)
+}
+
+type PersistenceAudit = {
+  error?: string
+  stores?: Record<string, {
+    count: number, resumeMarker: boolean, mapSummaryLeak: boolean,
+    runs?: Array<{ id?: string, videoId?: string, status?: string, summary?: string }>,
+  }>
+  local?: { keys: string[], resumeMarker: boolean, mapSummaryLeak: boolean }
+  sync?: { keys: string[], resumeMarker: boolean, mapSummaryLeak: boolean }
+}
+
+function assertNoIntermediatePersistence(raw: string): PersistenceAudit {
+  const audit = JSON.parse(raw) as PersistenceAudit
+  expect(!audit.error, `persistence audit must succeed: ${raw}`)
+  const stores = audit.stores ?? {}
+  expect(Object.keys(stores).length > 0, "the real production IndexedDB schema must be present")
+  for (const [name, store] of Object.entries(stores)) {
+    expect(!store.resumeMarker, `IndexedDB ${name} must not contain a resume checkpoint`)
+    expect(!store.mapSummaryLeak, `IndexedDB ${name} must not contain an intermediate Map summary`)
+  }
+  for (const [name, area] of [["local", audit.local], ["sync", audit.sync]] as const) {
+    expect(!area?.resumeMarker, `Chrome ${name} Storage must not contain a resume checkpoint`)
+    expect(!area?.mapSummaryLeak, `Chrome ${name} Storage must not contain an intermediate Map summary`)
+  }
+  return audit
+}
+
+function completedRunIds(audit: PersistenceAudit): string[] {
+  return (audit.stores?.analysisRuns?.runs ?? [])
+    .filter((run) => run.status === "completed" && typeof run.id === "string")
+    .map((run) => run.id!)
+}
+
+async function readResumeSurface(cdp: CdpConnection, session: string): Promise<string> {
+  return evaluate<string>(cdp, session, `JSON.stringify({
+    continueButton: Boolean(document.querySelector('[data-testid="final-resume-continue"]')),
+    resumePanel: Boolean(document.querySelector('[data-testid="final-resume-panel"]')),
+    unavailable: Boolean(document.querySelector('[data-testid="final-resume-unavailable"]')),
+    regenerateButton: Boolean(document.querySelector('[data-testid="final-resume-regenerate"]')),
+    oldHttp502: (document.body?.innerText || "").includes("HTTP 502"),
+    hasResumeCopy: /Continue final summary|继续最终总结/.test(document.body?.innerText || "")
+  })`)
+}
+
+function assertNoResumeSurface(raw: string): void {
+  const surface = JSON.parse(raw) as Record<string, boolean>
+  expect(!surface.continueButton && !surface.resumePanel && !surface.unavailable
+    && !surface.regenerateButton && !surface.oldHttp502 && !surface.hasResumeCopy,
+  `the destroyed panel must not restore its resume UI: ${raw}`)
+}
+
+async function settleActiveVideo(cdp: CdpConnection, sideSession: string, pageSession: string): Promise<void> {
+  await sendNamed(cdp, "Page.bringToFront", {}, pageSession)
+  await Bun.sleep(300)
+  await evaluate(cdp, sideSession, `(() => {
+    const button = [...document.querySelectorAll("button")].find((node) => {
+      const label = (node.getAttribute("aria-label") || "") + " " + (node.getAttribute("title") || "");
+      return /refresh|刷新视频上下文/i.test(label);
+    });
+    if (button) button.click();
+    return Boolean(button);
+  })()`)
+  await Bun.sleep(1200)
+}
+
+async function clickGenerate(cdp: CdpConnection, session: string, label: string): Promise<void> {
+  const snapshot = await evaluate<string>(cdp, session, `(() => {
+    const button = [...document.querySelectorAll("button")].find((node) =>
+      /Generate analysis|Regenerate|生成分析|重新生成/i.test(node.textContent || ""));
+    if (!button) return JSON.stringify({ present: false, disabled: null });
+    const state = { present: true, disabled: button.disabled, text: (button.textContent || "").trim() };
+    if (!button.disabled) button.click();
+    return JSON.stringify(state);
+  })()`)
+  const button = JSON.parse(snapshot) as { present?: boolean, disabled?: boolean | null }
+  expect(button.present === true && button.disabled === false,
+    `${label} must expose an enabled full-analysis button: ${snapshot}`)
+}
+
+async function seedNormalHistory(
+  cdp: CdpConnection,
+  sideSession: string,
+  pageSession: string,
+  sessionKinds: Map<string, "page" | "sidepanel">,
+): Promise<void> {
+  sessionKinds.set(sideSession, "sidepanel")
+  await sendNamed(cdp, "Fetch.enable", {
+    patterns: [{ urlPattern: `${STUB_ORIGIN}/v1/*`, requestStage: "Request" }],
+  }, sideSession)
+  await poll(async () => evaluate<string>(cdp!, sideSession, "document.body?.innerText || ''")
+    .then((text) => /Smoke Mock/.test(text) ? true : null), 45_000, "history-seed provider")
+  await settleActiveVideo(cdp, sideSession, pageSession)
+  await clickGenerate(cdp, sideSession, "history seed")
+  await poll(async () => evaluate<string>(cdp!, sideSession, "document.body?.innerText || ''")
+    .then((text) => /Smoke resume summary/.test(text) ? true : null),
+  180_000, "normal history seeded through the real panel")
+  await Bun.sleep(1000)
+}
+
+async function runLifecycleScenario(input: LifecycleInput): Promise<void> {
+  const { cdp, evidence, state, steps, scenario, extensionId, pageSession } = input
+  const before = {
+    calls: [...state.calls],
+    persistence: await readPersistenceAudit(cdp, input.sideSession),
+  }
+  assertNoIntermediatePersistence(before.persistence)
+  evidence["beforeLifecycle"] = { calls: before.calls, persistence: before.persistence }
+
+  let replacementSession: string
+  if (scenario === "refresh") {
+    steps.push("refresh-sidepanel")
+    // Page.reload replaces the document within the same target. Keeping this
+    // session proves that the checkpoint was bound to the destroyed document.
+    replacementSession = input.sideSession
+    await sendNamed(cdp, "Page.reload", { ignoreCache: true }, replacementSession)
+  } else {
+    steps.push("close-sidepanel-target")
+    const closeResult = await sendNamed(cdp, "Target.closeTarget", { targetId: input.originalSideTargetId })
+    expect(closeResult.result?.success === true, "the original Side Panel target must actually close")
+    await poll(async () => {
+      const response = await cdp.send("Target.getTargets")
+      const infos = (response.result?.targetInfos ?? []) as Array<{ targetId?: string }>
+      return infos.some((target) => target.targetId === input.originalSideTargetId) ? null : true
+    }, 15_000, "original Side Panel target destruction")
+    steps.push("reopen-new-sidepanel-target")
+    const created = await sendNamed(cdp, "Target.createTarget", {
+      url: `chrome-extension://${extensionId}/sidepanel.html`, background: true,
+    })
+    expect(String(created.result?.targetId) !== input.originalSideTargetId,
+      "reopen must create a distinct Side Panel target")
+    replacementSession = await attach(cdp, String(created.result?.targetId))
+    evidence["lifecycleTargetIds"] = {
+      closedTargetId: input.originalSideTargetId,
+      reopenedTargetId: String(created.result?.targetId),
+      distinct: String(created.result?.targetId) !== input.originalSideTargetId,
+    }
+    input.sessionKinds.set(replacementSession, "sidepanel")
+  }
+
+  await sendNamed(cdp, "Fetch.enable", {
+    patterns: [{ urlPattern: `${STUB_ORIGIN}/v1/*`, requestStage: "Request" }],
+  }, replacementSession)
+  await sendNamed(cdp, "Page.enable", {}, replacementSession)
+  await poll(async () => evaluate<boolean>(cdp!, replacementSession,
+    "document.getElementById('__plasmo')?.childElementCount > 0"),
+  60_000, `${scenario} replacement panel mount`)
+  await poll(async () => evaluate<string>(cdp!, replacementSession,
+    "document.body?.innerText || ''").then((text) => /Smoke Mock/.test(text) ? true : null),
+  45_000, `${scenario} replacement provider`)
+  await settleActiveVideo(cdp, replacementSession, pageSession)
+  // A quiet window rules out a delayed automatic request, not only an immediate one.
+  await Bun.sleep(2000)
+  const callsBeforeSecondRun = [...state.calls]
+  expect(callsBeforeSecondRun.length === before.calls.length,
+    `${scenario} must not send any provider request: ${JSON.stringify(callsBeforeSecondRun.slice(before.calls.length))}`)
+  expect(callsBeforeSecondRun.every((call, index) => call.kind === before.calls[index]?.kind
+    && call.status === before.calls[index]?.status),
+  `${scenario} must not alter the completed provider call history`)
+  evidence["afterLifecycle"] = {
+    providerCalls: callsBeforeSecondRun,
+    surface: await readResumeSurface(cdp, replacementSession),
+    persistence: await readPersistenceAudit(cdp, replacementSession),
+  }
+  assertNoResumeSurface(evidence["afterLifecycle"].surface)
+  const after = assertNoIntermediatePersistence(evidence["afterLifecycle"].persistence)
+  if (scenario === "reopen") {
+    const originalIds = completedRunIds(assertNoIntermediatePersistence(before.persistence))
+    const reopenedIds = completedRunIds(after)
+    expect(originalIds.length > 0, "the reopen scenario must seed a real completed history record")
+    expect(originalIds.every((id) => reopenedIds.includes(id)),
+      "closing/reopening must preserve the pre-existing normal history")
+    evidence["preservedHistoryIds"] = originalIds
+  }
+
+  if (scenario === "refresh") return
+  steps.push("fresh-analysis-after-reopen")
+  await sendNamed(cdp, "Page.navigate", {
+    url: `${STUB_ORIGIN}/watch?v=smokeVideo2`,
+  }, pageSession)
+  await evaluate(cdp, pageSession, playerSurfaceScript("smokeVideo2"))
+  await settleActiveVideo(cdp, replacementSession, pageSession)
+  const beforeFresh = state.calls.length
+  await clickGenerate(cdp, replacementSession, "fresh post-reopen analysis")
+  await poll(async () => evaluate<string>(cdp!, replacementSession, "document.body?.innerText || ''")
+    .then((text) => /Smoke resume summary/.test(text) ? true : null),
+  180_000, "fresh analysis after reopen")
+  await Bun.sleep(1000)
+  const freshCalls = state.calls.slice(beforeFresh)
+  evidence["freshAfterReopen"] = {
+    calls: freshCalls,
+    surface: await readResumeSurface(cdp, replacementSession),
+    persistence: await readPersistenceAudit(cdp, replacementSession),
+  }
+  expect(freshCalls.filter((call) => call.kind === "map").length === 5,
+    "the fresh post-reopen analysis must execute 5 Map calls")
+  expect(freshCalls.filter((call) => call.kind === "reduction").length === 0,
+    "the fresh post-reopen analysis must not require Reduction")
+  expect(freshCalls.filter((call) => call.kind === "final").length === 1
+    && freshCalls.find((call) => call.kind === "final")?.status === 200,
+  "the fresh post-reopen analysis must execute one successful Final")
+  assertNoResumeSurface(evidence["freshAfterReopen"].surface)
+  const finalAudit = assertNoIntermediatePersistence(evidence["freshAfterReopen"].persistence)
+  expect((finalAudit.stores?.analysisRuns?.runs ?? []).some((run) =>
+    run.videoId === "smokeVideo2" && run.status === "completed"),
+  "the fresh post-reopen analysis must be persisted as a normal completed run")
+  expect(completedRunIds(after).every((id) => completedRunIds(finalAudit).includes(id)),
+    "the fresh analysis must not overwrite the pre-existing normal history")
 }
 
 async function sendNamed(

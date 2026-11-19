@@ -13,6 +13,13 @@ import {
   captureAnalysisCompletionTimes,
   type AnalysisTaskExecutionPolicy,
 } from "@/features/analysis/lib/analysis-task-lifecycle"
+import { DEFAULT_ANALYSIS_BUDGET_POLICY } from "@/features/analysis/lib/analysis-budget"
+import {
+  FINAL_CHECKPOINT_PLANNING_VERSION,
+  type FinalCheckpointCandidateAttempt,
+  type FinalCheckpointContext,
+  type FinalResumeCheckpointController,
+} from "@/features/analysis/lib/final-resume-checkpoint"
 import type { RunAnalysisOptions, RunAnalysisResult, AnalysisProgressEvent } from "@/features/analysis/lib/run-analysis"
 import type { SaveAnalysisRunInput } from "@/features/history/lib/history-repository"
 import { persistIfSupportedPlatform } from "@/features/platform/persistence-compat"
@@ -39,6 +46,11 @@ export type AnalysisExecutionRequest = {
   setPhase: (phase: AnalysisTaskPhase) => void
   onProgress?: (event: AnalysisProgressEvent) => void
   ensureTaskCurrent: () => void
+  /** Per-Side-Panel in-memory checkpoint; absence preserves the pre-M2 execution path. */
+  finalCheckpoint?: {
+    controller: FinalResumeCheckpointController
+    workspaceEpoch: number
+  }
 }
 
 /**
@@ -72,6 +84,13 @@ export type AnalysisExecutionResult =
 
 export type AnalysisProviderSecret = {
   apiKey: string
+  credentialRevision: string
+  /** Non-secret storage revision used to close the metadata-update race. */
+  profileUpdatedAt: string
+  /** Execution metadata is compared directly because timestamps may share a millisecond. */
+  profileBaseUrl: string
+  profileModel: string
+  profileGenerationTimeoutSec: number
 }
 
 export type AnalysisControllerDependencies = {
@@ -121,9 +140,17 @@ export function createAnalysisController(
      */
     const preset: AnalysisPresetStrategy = resolveAnalysisPresetStrategy(taskSnapshot.analysisPresetId)
     const analysisPromptVersion = taskSnapshot.analysisPromptVersion
+    const providerMatchesFrozenExecution = (provider: AnalysisProviderSecret): boolean =>
+      provider.profileBaseUrl === taskSnapshot.providerBaseUrl
+      && provider.profileModel === taskSnapshot.providerModel
+      && provider.profileGenerationTimeoutSec === taskSnapshot.generationTimeoutSec
 
     const resolvedProvider = await dependencies.resolveProvider(taskSnapshot.providerProfileId)
     ensureTaskCurrent()
+    if (!providerMatchesFrozenExecution(resolvedProvider)) {
+      request.finalCheckpoint?.controller.invalidate("provider-changed")
+      throw new Error("Provider configuration changed before analysis startup")
+    }
 
     const cacheKey = await computeAnalysisCacheKey({
       contentKey: taskSnapshot.contentKey,
@@ -185,6 +212,87 @@ export function createAnalysisController(
       }
     }
 
+    const checkpointRequest = request.finalCheckpoint
+    let finalCheckpointHooks: RunAnalysisOptions["finalCheckpoint"]
+    if (checkpointRequest) {
+      const { controller, workspaceEpoch } = checkpointRequest
+      let candidateAttempt: FinalCheckpointCandidateAttempt | null = null
+      const providerIsCurrent = async (): Promise<boolean> => {
+        ensureTaskCurrent()
+        const current = await dependencies.resolveProvider(taskSnapshot.providerProfileId)
+        ensureTaskCurrent()
+        return providerMatchesFrozenExecution(current)
+          && current.apiKey === resolvedProvider.apiKey
+          && current.credentialRevision === resolvedProvider.credentialRevision
+          && current.profileUpdatedAt === resolvedProvider.profileUpdatedAt
+          && current.profileBaseUrl === resolvedProvider.profileBaseUrl
+          && current.profileModel === resolvedProvider.profileModel
+          && current.profileGenerationTimeoutSec === resolvedProvider.profileGenerationTimeoutSec
+      }
+      const checkpointContext = (): FinalCheckpointContext => ({
+        source: {
+          taskId: taskSnapshot.taskId,
+          workspaceEpoch,
+          sourceTabId: taskSnapshot.sourceTabId,
+          platform: taskSnapshot.platform,
+          videoId: taskSnapshot.videoId,
+          partId: taskSnapshot.partId,
+          contentKey: taskSnapshot.contentKey,
+          title: sourceVideo.title,
+          durationSec: sourceVideo.durationSec ?? null,
+        },
+        transcript: { fingerprint: transcriptFingerprint, cues: transcript.segments },
+        provider: {
+          profileId: taskSnapshot.providerProfileId,
+          baseUrl: taskSnapshot.providerBaseUrl,
+          model: taskSnapshot.providerModel,
+          timeoutMs: taskSnapshot.generationTimeoutSec * 1000,
+          credentialRevision: resolvedProvider.credentialRevision,
+        },
+        preset,
+        schemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+        planningVersion: FINAL_CHECKPOINT_PLANNING_VERSION,
+        budgetPolicy: { ...DEFAULT_ANALYSIS_BUDGET_POLICY },
+      })
+      finalCheckpointHooks = {
+        prepareFinalCandidate: async (candidate) => {
+          candidateAttempt = null
+          if (!await providerIsCurrent()) {
+            controller.invalidate("provider-changed")
+            return false
+          }
+          candidateAttempt = await controller.beginCandidate({
+            context: checkpointContext(),
+            execution: { videoId: sourceVideo.videoId, ...candidate },
+          })
+          if (!candidateAttempt) return false
+          if (!await providerIsCurrent()) {
+            candidateAttempt.discard("provider-changed")
+            return false
+          }
+          return candidateAttempt.validate()
+        },
+        promoteFinalFailure: async (error) => {
+          if (!candidateAttempt) return false
+          if (!await providerIsCurrent()) {
+            controller.invalidate("provider-changed")
+            return false
+          }
+          const published = await candidateAttempt.promoteFinalFailure(error)
+          // A cross-panel key replacement may have raced the asynchronous digest.
+          if (!await providerIsCurrent()) {
+            controller.invalidate("provider-changed")
+            return false
+          }
+          return published
+        },
+        discardFinalCandidate: () => {
+          candidateAttempt?.discard("final-response")
+          candidateAttempt = null
+        },
+      }
+    }
+
     const completed = await dependencies.runAnalysis({
       provider: {
         baseUrl: taskSnapshot.providerBaseUrl,
@@ -201,6 +309,7 @@ export function createAnalysisController(
       preset,
       signal,
       ...(request.onProgress ? { onProgress: request.onProgress } : {}),
+      ...(finalCheckpointHooks ? { finalCheckpoint: finalCheckpointHooks } : {}),
     })
     ensureTaskCurrent()
     setPhase("finalizing")

@@ -9,6 +9,19 @@ export type TranscriptChunk = {
   text: string
 }
 
+export function createTranscriptChunkCueRanges(chunks: TranscriptChunk[]): Array<{
+  cueStartIndex: number
+  cueEndIndex: number
+}> {
+  let cueStartIndex = 0
+  return chunks.map((chunk) => {
+    const cueEndIndex = cueStartIndex + chunk.cues.length
+    const range = { cueStartIndex, cueEndIndex }
+    cueStartIndex = cueEndIndex
+    return range
+  })
+}
+
 export function createTranscriptChunk(index: number, cues: TranscriptCue[]): TranscriptChunk {
   const firstCue = cues[0]
   const lastCue = cues[cues.length - 1]

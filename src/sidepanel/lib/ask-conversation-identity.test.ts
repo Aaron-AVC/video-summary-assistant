@@ -38,6 +38,7 @@ describe("Ask conversation identity", () => {
   it("keeps the frozen thread endpoint and model when the resolved profile is current provider B", () => {
     expect(getFrozenQaProviderRequest(thread, {
       apiKey: "key-b",
+      credentialRevision: "credential-revision-b",
       profile: {
         id: "provider-b",
         name: "Provider B",

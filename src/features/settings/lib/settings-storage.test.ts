@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
-import { createSettingsStorage, type SettingsStorageAdapter } from "@/features/settings/lib/settings-storage"
+import { type SettingsStorageAdapter } from "@/features/settings/lib/settings-storage"
+import { createSettingsStorageForTest } from "@/features/settings/lib/testing/settings-storage-lock"
 import type { AnalysisPresetId } from "@/features/analysis/lib/analysis-preset"
 
 function createAdapter(): SettingsStorageAdapter {
@@ -33,7 +34,7 @@ function createAdapter(): SettingsStorageAdapter {
 
 describe("createSettingsStorage", () => {
   it("persists theme and default provider selection", async () => {
-    const storage = createSettingsStorage(createAdapter())
+    const storage = createSettingsStorageForTest(createAdapter())
 
     await storage.setThemePreference("dark")
     await storage.saveProviderConfig({
@@ -52,7 +53,7 @@ describe("createSettingsStorage", () => {
   })
 
   it("persists, exports, and clears the language preference", async () => {
-    const storage = createSettingsStorage(createAdapter())
+    const storage = createSettingsStorageForTest(createAdapter())
 
     await storage.setLanguagePreference("zh-CN")
     expect(await storage.getLanguagePreference()).toBe("zh-CN")
@@ -65,7 +66,7 @@ describe("createSettingsStorage", () => {
   })
 
   it("exports and clears persisted settings without native helper configuration", async () => {
-    const storage = createSettingsStorage(createAdapter())
+    const storage = createSettingsStorageForTest(createAdapter())
 
     await storage.setThemePreference("light")
     await storage.saveProviderConfig({
@@ -98,7 +99,7 @@ describe("createSettingsStorage", () => {
   })
 
   it("persists, exports and clears the global analysis preset", async () => {
-    const storage = createSettingsStorage(createAdapter())
+    const storage = createSettingsStorageForTest(createAdapter())
 
     expect(await storage.getAnalysisPresetId()).toBe("standard")
     expect((await storage.getSettingsSnapshot()).analysisPresetId).toBe("standard")
@@ -116,7 +117,7 @@ describe("createSettingsStorage", () => {
   it("falls back to standard for missing or invalid stored preset values", async () => {
     for (const stored of [undefined, null, "", "legacy-unknown", "DETAILED", 7]) {
       const store = new Map<string, unknown>([["yt-summarizer.analysis.preset", stored]])
-      const storage = createSettingsStorage({
+      const storage = createSettingsStorageForTest({
         async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
           const result: Partial<Record<string, T>> = {}
           for (const key of keys) {
@@ -139,7 +140,7 @@ describe("createSettingsStorage", () => {
 
   it("normalizes an invalid preset written through the setter", async () => {
     const store = new Map<string, unknown>()
-    const storage = createSettingsStorage({
+    const storage = createSettingsStorageForTest({
       async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
         const result: Partial<Record<string, T>> = {}
         for (const key of keys) {
@@ -187,7 +188,7 @@ describe("createSettingsStorage", () => {
         for (const key of keys) store.delete(key)
       }
     }
-    const storage = createSettingsStorage(adapter)
+    const storage = createSettingsStorageForTest(adapter)
 
     const first = await storage.getSettingsSnapshot()
     const second = await storage.getSettingsSnapshot()
@@ -205,7 +206,7 @@ describe("createSettingsStorage", () => {
   })
 
   it("keeps an existing secret when an edited profile omits a replacement key", async () => {
-    const storage = createSettingsStorage(createAdapter())
+    const storage = createSettingsStorageForTest(createAdapter())
     await storage.saveProviderProfile({
       id: "provider-1",
       name: "Provider",
@@ -226,7 +227,7 @@ describe("createSettingsStorage", () => {
   })
 
   it("normalizes invalid generation timeout metadata to 600 seconds", async () => {
-    const storage = createSettingsStorage(createAdapter())
+    const storage = createSettingsStorageForTest(createAdapter())
     await storage.saveProviderProfile({
       id: "provider-timeout",
       name: "Provider",
@@ -266,7 +267,7 @@ describe("createSettingsStorage", () => {
         for (const key of keys) store.delete(key)
       },
     }
-    const storage = createSettingsStorage(adapter)
+    const storage = createSettingsStorageForTest(adapter)
 
     await expect(storage.getSettingsSnapshot()).rejects.toThrow("migration write failed")
     expect(removeCalls).toBe(0)
@@ -280,7 +281,7 @@ describe("createSettingsStorage", () => {
   })
 
   it("removes the corresponding secret when a provider is deleted or all data is cleared", async () => {
-    const storage = createSettingsStorage(createAdapter())
+    const storage = createSettingsStorageForTest(createAdapter())
     await storage.saveProviderProfile({
       id: "provider-1", name: "Provider", baseUrl: "https://api.example.com", model: "model"
     }, "sk-delete")

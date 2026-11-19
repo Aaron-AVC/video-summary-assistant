@@ -17,7 +17,12 @@ import {
   DEFAULT_PROVIDER_GENERATION_TIMEOUT_MS,
   OpenAICompatibleClientError
 } from "@/features/analysis/lib/openai-compatible-client"
-import { AnalysisAbortedError, runAnalysis, type AnalysisProgressEvent } from "@/features/analysis/lib/run-analysis"
+import {
+  AnalysisAbortedError,
+  runAnalysis,
+  type AnalysisProgressEvent,
+  type FinalAnalysisCheckpointCandidate
+} from "@/features/analysis/lib/run-analysis"
 import type { TranscriptCue } from "@/features/transcript/lib/transcript-schema"
 
 type Call = {
@@ -557,6 +562,146 @@ describe("runAnalysis", () => {
     expect(repairCall.system).not.toContain("<<<UNTRUSTED_PARTIAL_ANALYSES_BEGIN")
   })
 
+  it("prepares the real map/final input once and publishes only the initial Final failure", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief map summary", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    const checkpoint = createCheckpointRecorder()
+    const calls: Call[] = []
+    const error = await runAnalysis({
+      provider,
+      transcript: { videoId: "checkpoint-long", title: "Checkpoint", cues },
+      budgetPolicy: scenario.policy,
+      client: createClient(calls, (call) => {
+        if (call.structured) {
+          checkpoint.order.push("final-request")
+          throw new OpenAICompatibleClientError("temporary", { kind: "http", status: 502 })
+        }
+        return "brief map summary"
+      }) as never,
+      finalCheckpoint: checkpoint.hook
+    }).then(() => null, (reason: unknown) => reason)
+
+    expect(error).toMatchObject({ kind: "http", status: 502 })
+    expect(checkpoint.prepared).toHaveLength(1)
+    expect(checkpoint.published).toHaveLength(1)
+    expect(checkpoint.order).toEqual(["prepare", "final-request", "publish"])
+    expect(calls).toHaveLength(scenario.chunkCount + 1)
+    const candidate = checkpoint.prepared[0]!
+    expect(candidate.strategy).toBe("map-reduce")
+    expect(candidate.initialChunkCount).toBe(scenario.chunkCount)
+    expect(candidate.mapPlan).toHaveLength(scenario.chunkCount)
+    expect(candidate.chunkSummaries).toHaveLength(scenario.chunkCount)
+    expect(candidate.finalInputSummaries).toEqual(candidate.chunkSummaries)
+    expect(candidate.finalPrompt.userPrompt).toBe(calls.at(-1)!.user)
+    expect(candidate.finalPrompt.systemPrompt).toBe(calls.at(-1)!.system)
+  })
+
+  it("discards on the first Final response and never publishes a Repair failure", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief map summary", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    const checkpoint = createCheckpointRecorder()
+    let structuredCalls = 0
+    const error = await runAnalysis({
+      provider,
+      transcript: { videoId: "checkpoint-repair", cues },
+      budgetPolicy: scenario.policy,
+      client: createClient([], (call) => {
+        if (!call.structured) return "brief map summary"
+        structuredCalls += 1
+        if (structuredCalls === 1) return "not json"
+        throw new OpenAICompatibleClientError("repair upstream", { kind: "http", status: 502 })
+      }) as never,
+      finalCheckpoint: checkpoint.hook
+    }).then(() => null, (reason: unknown) => reason)
+
+    expect(error).toMatchObject({ kind: "http", status: 502 })
+    expect(checkpoint.prepared).toHaveLength(1)
+    expect(checkpoint.published).toEqual([])
+    expect(checkpoint.discarded).toBe(1)
+    expect(structuredCalls).toBe(2)
+  })
+
+  it("does not prepare or publish for Map, Reduction, or single-pass failures", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief map summary", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    const mapCheckpoint = createCheckpointRecorder()
+    await expect(runAnalysis({
+      provider,
+      transcript: { videoId: "map-failure", cues },
+      budgetPolicy: scenario.policy,
+      client: createClient([], () => {
+        throw new OpenAICompatibleClientError("map upstream", { kind: "http", status: 502 })
+      }) as never,
+      finalCheckpoint: mapCheckpoint.hook
+    })).rejects.toMatchObject({ status: 502 })
+    expect(mapCheckpoint.prepared).toEqual([])
+    expect(mapCheckpoint.published).toEqual([])
+
+    const reductionCues = longCues(10, 280)
+    const reductionScenario = findScenario(
+      reductionCues,
+      `map ${"m".repeat(260)}`,
+      "condensed reduction",
+      (value) => value.chunkCount >= 4 && value.reductionLevels === 1
+    )
+    const reductionCheckpoint = createCheckpointRecorder()
+    await expect(runAnalysis({
+      provider,
+      transcript: { videoId: "reduction-failure", cues: reductionCues },
+      budgetPolicy: reductionScenario.policy,
+      client: createClient([], (call) => {
+        if (call.user.includes("Reduction level:")) {
+          throw new OpenAICompatibleClientError("reduction upstream", { kind: "http", status: 503 })
+        }
+        return `map ${"m".repeat(260)}`
+      }) as never,
+      finalCheckpoint: reductionCheckpoint.hook
+    })).rejects.toMatchObject({ status: 503 })
+    expect(reductionCheckpoint.prepared).toEqual([])
+    expect(reductionCheckpoint.published).toEqual([])
+
+    const directCheckpoint = createCheckpointRecorder()
+    await expect(runAnalysis({
+      provider,
+      transcript: shortTranscript,
+      client: createClient([], () => {
+        throw new OpenAICompatibleClientError("direct upstream", { kind: "http", status: 502 })
+      }) as never,
+      finalCheckpoint: directCheckpoint.hook
+    })).rejects.toMatchObject({ status: 502 })
+    expect(directCheckpoint.prepared).toEqual([])
+    expect(directCheckpoint.published).toEqual([])
+  })
+
+  it("does not publish when candidate preparation declines or fails", async () => {
+    const cues = longCues(8, 260)
+    const scenario = findScenario(cues, "brief map summary", "condensed", (value) =>
+      value.chunkCount >= 3 && value.reductionLevels === 0
+    )
+    for (const mode of ["decline", "throw"] as const) {
+      const checkpoint = createCheckpointRecorder(mode)
+      await expect(runAnalysis({
+        provider,
+        transcript: { videoId: `prepare-${mode}`, cues },
+        budgetPolicy: scenario.policy,
+        client: createClient([], (call) => {
+          if (call.structured) {
+            throw new OpenAICompatibleClientError("temporary", { kind: "http", status: 504 })
+          }
+          return "brief map summary"
+        }) as never,
+        finalCheckpoint: checkpoint.hook
+      })).rejects.toMatchObject({ status: 504 })
+      expect(checkpoint.published).toEqual([])
+    }
+  })
+
   it("fails fast when transcript cues are missing", async () => {
     await expect(runAnalysis({
       provider,
@@ -564,6 +709,33 @@ describe("runAnalysis", () => {
     })).rejects.toThrow("Transcript cues are required")
   })
 })
+
+function createCheckpointRecorder(mode: "prepare" | "decline" | "throw" = "prepare") {
+  const prepared: FinalAnalysisCheckpointCandidate[] = []
+  const published: unknown[] = []
+  const order: string[] = []
+  let discardCount = 0
+  return {
+    prepared,
+    published,
+    order,
+    get discarded() { return discardCount },
+    hook: {
+      prepareFinalCandidate: async (candidate: FinalAnalysisCheckpointCandidate) => {
+        order.push("prepare")
+        prepared.push(candidate)
+        if (mode === "throw") throw new Error("preparation failed")
+        return mode === "prepare"
+      },
+      promoteFinalFailure: async (error: unknown) => {
+        order.push("publish")
+        published.push(error)
+        return true
+      },
+      discardFinalCandidate: () => { discardCount += 1 }
+    }
+  }
+}
 
 function longCues(count: number, textLength: number): TranscriptCue[] {
   return Array.from({ length: count }, (_, index) => ({

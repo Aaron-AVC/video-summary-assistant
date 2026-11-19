@@ -1,12 +1,14 @@
 # Y-06 / Issue #22 — 最终结构化总结失败后的会话内恢复设计
 
-> **DESIGN CANDIDATE / NOT IMPLEMENTED / NOT APPROVED FOR CODE CHANGES**
+> **M1 + M2 IMPLEMENTED / IN REVIEW · M3 NOT IMPLEMENTED / NOT AUTHORIZED**
 >
-> 创建日期：2026-11-18 · 建议优先级：P1 · 设计基线：`main@b42b7fffe05661fa1155a30af60874ab5793e2ca`
+> 创建日期：2026-11-18 · 建议优先级：P1 · 原设计基线：`main@b42b7fffe05661fa1155a30af60874ab5793e2ca`
+>
+> M2 实施基线：`main@7c5adbad7e75fa730c6b996c844ce085763ae15e`；恢复来源检查点：`618a8fb85f13e66d90522562ebaf645d3c6f6b2b`；M2 基础提交：`806d0c1e011eb775bbd2e872b3c67fcf0538b1f1`；Reduction 集成测试：`bb778859a7a52f703d42782a0e10294c225e74fe`；Provider 竞态修复：`44429c6c2061bd900f0558a757e3ccab9868d32c`。
 >
 > 缺陷：[Issue #22](https://github.com/Aaron-AVC/video-summary-assistant/issues/22) · [脱敏事故记录](../reviews/2026-11-18-y06-provider-502-diagnostic.md) · [验收矩阵](2026-11-18-y06-final-resume-acceptance.md)
 >
-> 本文定义候选行为和必须验证的边界。尚未实施、不修改 `LICENSE`、不发布、不触发 Provider 真实请求、也未批准数据库迁移或自动付费重试。
+> M1 的类型化阶段/错误和 M2 的内存检查点、身份门禁及淘汰逻辑已实施；M3 的显式恢复 UI、恢复准入和 Final-only 请求尚未实施。当前工作不修改 `LICENSE`、不发布、不触发 Provider 真实请求，也未增加数据库表、扩展权限或自动付费重试。
 
 ## 1. 用户目标与事故证据
 
@@ -114,16 +116,16 @@ Y-06 的 1h47m39s 视频在 Standard 预设下，五次顺序 Map 分块调用�
 
 Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `buildFinalAnalysisPrompt` 的 nonce fence 与证据格式化，而不是拼接裸文本；缓存变量不可公开到日志/存储。恢复时再次校验 chunkId 唯一、范围合法、序号完整和摘要大小，拒绝损坏对象。
 
-## 5. 分步实施候选（需要后续明确批准）
+## 5. 分步实施记录与后续候选
 
-| 里程碑 | 候选 PR | 预期输出 | 依赖 |
+| 里程碑 | 状态 | 实际输出 / 后续边界 | 依赖 |
 | --- | --- | --- | --- |
-| D0 | 当前文档 PR | 设计、验收矩阵、风险和测试门禁 | 不改代码 |
-| M1 | typed phase / typed HTTP failure | 精确 `map/reduction/final/repair` 事件和可分类 HTTP 错误；不改变请求行为 | 要有失败注入 RED |
-| M2 | memory checkpoint + identity gate | 单实例有限期、有限大小、单所有者的 Final 检查点及全套淘汰逻辑 | M1；偏向纯函数和注入时钟 |
-| M3 | explicit resume UI + controller | 用户主动继续、只发 Final、沿用保存/发布逻辑、无隐式付费重试 | M2；任务准入和权限复核 |
-| M4 | reliability / privacy regression | 跨 P、取消/清空、多面板竞争、损坏检查点、浏览器 Smoke | M3 |
-| M5 | independent review | Bun targeted/full test、typecheck、build、`git diff --check`、必要产物/浏览器门禁、回滚与文档 | M4 |
+| D0 | `done` | 设计、验收矩阵、风险和测试门禁 | 不改代码 |
+| M1 | `done` | 精确 `map/reduction/final/repair` 事件和可分类 HTTP 错误；不改变请求行为 | 失败注入 RED→GREEN |
+| M2 | `in_review` | 30 分钟 / 256 KiB 的单一内存检查点、完整性/身份/generation/lease 校验、真实 Reduction 接缝、Provider 二次身份校验及跨面板失效 | M1；等待 Draft PR 与独立审查 |
+| M3 | `not_authorized` | 显式恢复 UI、任务准入、0×Map/0×Reduction 的 Final-only 请求及恢复后的保存/发布均未实施 | M2 审查后另行授权 |
+| M4 | `pending` | M2 已覆盖部分身份、隐私和损坏输入回归；完整恢复流、取消竞争和浏览器 Smoke 依赖 M3 | M3 |
+| M5 | `in_review` | 候选 SHA 的 targeted/full test、typecheck、build、`git diff --check` 与 Chrome for Testing 产物门禁已执行；最终 SHA 门禁和独立审查另记 | M2/M3 各自范围 |
 
 **不批准的后续议题**：跨刷新持久化检查点；Map 阶段续跑；自助设置重试次数 / `Retry-After` 自动退避；费用估算 UI。需另立 PR，评估数据库 Schema、导出/删除、秘钥修订和用户可见的计费提示。
 
@@ -137,5 +139,9 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | --- | --- | --- | --- |
 | 2026-11-18 | `candidate` | 先设计而不动源码；MVP 提议单 Side Panel 内存 Final 恢复、手动触发、保守失效、无自动重试；原有 Final API 可取消/`finalizing` 仅保存 | 用户/维护者批准检查点保留时间与大小、修复拆分、浏览器 Smoke 门禁，再实施 M1 |
 | 2026-11-18 | `in_progress`（仅 M1） | 用户明确授权 M1：Provider 错误分类、类型化阶段进度、测试先行；尚未执行本地验证 | 先完成 M1 目标/全量测试及独立审查，M2/M3 需另行批准 |
+| 2026-11-18 | `in_review`（M2 检查点） | 恢复固定 WIP 后核验：`runAnalysis` 在真实 Final 前准备候选，只有首次 Final 的 502/503/504/timeout 可发布；首个响应、不可恢复失败、prepare/promote 异常均完整 discard。控制器不持有恢复请求能力 | Draft PR 与独立代码审查；不得把内存 `available` 当成 M3 已可点击恢复 |
+| 2026-11-18 | `in_review`（Reduction 接缝） | 新增真实 `runAnalysis + FinalResumeCheckpointController` 集成测试，覆盖一级和两级 Reduction、502 发布、原始 Map 摘要保留、归并 ID/范围/摘要与 Final Prompt 身份、异常完全失效；未调用恢复请求 | 提交 `bb778859a7a52f703d42782a0e10294c225e74fe`；4 pass / 0 fail / 62 assertions |
+| 2026-11-18 | `in_review`（Provider 竞态） | 第二次身份校验除 `apiKey + credentialRevision + profileUpdatedAt` 外，直接比较 baseUrl/model/generationTimeoutSec，封堵同毫秒时间戳不变的执行配置替换；metadata-only 保存不再回写旧 secrets 整表，避免跨面板覆盖新 key/revision | 提交 `44429c6c2061bd900f0558a757e3ccab9868d32c`；两项均有独立 RED→GREEN 日志 |
+| 2026-11-18 | `in_review`（候选门禁） | 改写前候选 `00a2a2df1287aabde9449d5fdb6f177426dd6170`：全量 1517 pass / 0 fail / 5371 assertions；typecheck、build、`git diff --check` 退出 0；Chrome for Testing 156.0.8078.73 的 MV3 产物门禁 PASS | 最终分支 SHA 必须重跑全量门禁；独立审查和 M3 恢复执行仍为 NOT RUN |
 
 [返回文档索引](../README.md)

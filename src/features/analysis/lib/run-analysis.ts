@@ -13,6 +13,8 @@ import {
   selectAnalysisStrategy,
   type AnalysisStrategy
 } from "@/features/analysis/lib/analysis-plan"
+import { createTranscriptChunkCueRanges } from "@/features/analysis/lib/chunk-transcript"
+import type { FinalCheckpointExecution } from "@/features/analysis/lib/final-resume-checkpoint"
 import {
   DEFAULT_ANALYSIS_PRESET_STRATEGY,
   type AnalysisPresetStrategy
@@ -46,6 +48,14 @@ export type AnalysisProgressEvent =
   | { kind: "final" }
   | { kind: "repair" }
 
+export type FinalAnalysisCheckpointCandidate = Omit<FinalCheckpointExecution, "videoId">
+
+export type FinalAnalysisCheckpointHooks = {
+  prepareFinalCandidate: (candidate: FinalAnalysisCheckpointCandidate) => Promise<boolean>
+  promoteFinalFailure: (error: unknown) => Promise<boolean>
+  discardFinalCandidate: () => void
+}
+
 export type RunAnalysisOptions = {
   provider: ProviderConnectionInput
   transcript: {
@@ -61,6 +71,8 @@ export type RunAnalysisOptions = {
   signal?: AbortSignal
   /** Emits stage names and integer counters only, without provider or transcript text. */
   onProgress?: (event: AnalysisProgressEvent) => void
+  /** Optional in-memory M2 seam; it never retries or issues a provider request itself. */
+  finalCheckpoint?: FinalAnalysisCheckpointHooks
 }
 
 export class AnalysisAbortedError extends Error {
@@ -159,6 +171,7 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
   }
 
   let survivingSummaries: EvidenceSummary[] = chunkSummaries
+  let survivingMapChunkIds = chunkSummaries.map((summary) => [summary.chunkId])
   let reductionLevels = 0
   while (!finalAnalysisPromptFits({
     videoTitle: options.transcript.title,
@@ -174,9 +187,14 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
       preset
     })
     const reduced: EvidenceSummary[] = []
+    const reducedMapChunkIds: string[][] = []
+    let groupOffset = 0
     emitProgress(options, { kind: "reduction", level: nextLevel, completed: 0, total: groups.length })
     for (const [groupIndex, group] of groups.entries()) {
       throwIfAborted(signal)
+      const mapChunkIds = survivingMapChunkIds.slice(groupOffset, groupOffset + group.length).flat()
+      groupOffset += group.length
+      reducedMapChunkIds.push(mapChunkIds)
       if (group.length === 1) {
         reduced.push(group[0])
         emitProgress(options, {
@@ -203,7 +221,11 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     if (reduced.length >= survivingSummaries.length) {
       throw new Error("Reduction budget is too small to make progress safely.")
     }
+    if (groupOffset !== survivingSummaries.length) {
+      throw new Error("Reduction groups did not cover the planned summaries.")
+    }
     survivingSummaries = reduced
+    survivingMapChunkIds = reducedMapChunkIds
     reductionLevels = nextLevel
   }
 
@@ -212,8 +234,48 @@ export async function runAnalysis(options: RunAnalysisOptions): Promise<RunAnaly
     chunkSummaries: survivingSummaries,
     preset
   })
+  const chunkCueRanges = createTranscriptChunkCueRanges(chunks)
+  let checkpointPrepared = false
+  if (options.finalCheckpoint) {
+    try {
+      checkpointPrepared = await options.finalCheckpoint.prepareFinalCandidate({
+        strategy,
+        initialChunkCount: chunks.length,
+        reductionLevels,
+        mapPlan: chunks.map(({ id, index, startSec, endSec }, chunkIndex) => ({
+          id,
+          index,
+          startSec,
+          endSec,
+          ...chunkCueRanges[chunkIndex]!,
+        })),
+        chunkSummaries,
+        finalInputSummaries: survivingSummaries,
+        finalInputMapChunkIds: survivingMapChunkIds,
+        finalPrompt
+      })
+    } catch {
+      checkpointPrepared = false
+      options.finalCheckpoint.discardFinalCandidate()
+    }
+  }
   emitProgress(options, { kind: "final" })
-  const structured = await requestStructuredAnalysis({ client, prompt: finalPrompt, options })
+  const structured = await requestStructuredAnalysis({
+    client,
+    prompt: finalPrompt,
+    options,
+    onInitialResponse: () => {
+      if (checkpointPrepared) options.finalCheckpoint?.discardFinalCandidate()
+    },
+    onInitialError: async (error) => {
+      if (!checkpointPrepared || !options.finalCheckpoint) return
+      try {
+        await options.finalCheckpoint.promoteFinalFailure(error)
+      } catch {
+        options.finalCheckpoint.discardFinalCandidate()
+      }
+    }
+  })
   return {
     videoId: options.transcript.videoId,
     strategy,
@@ -228,13 +290,23 @@ async function requestStructuredAnalysis(input: {
   client: AnalysisClient
   prompt: AnalysisPrompt
   options: RunAnalysisOptions
+  onInitialResponse?: () => void
+  onInitialError?: (error: unknown) => Promise<void>
 }): Promise<Pick<RunAnalysisResult, "analysis" | "rawResponse" | "repairAttempted">> {
   const { signal } = input.options
   throwIfAborted(signal)
-  let rawResponse = await requestCompletion(input.client, {
-    messages: promptMessages(input.prompt),
-    signal
-  }, signal)
+  let rawResponse: string
+  try {
+    rawResponse = await requestCompletion(input.client, {
+      messages: promptMessages(input.prompt),
+      signal
+    }, signal)
+  } catch (error) {
+    await input.onInitialError?.(error)
+    throw error
+  }
+  // A response ends Final-request eligibility even when parsing or Repair later fails.
+  input.onInitialResponse?.()
   let repairAttempted = false
   try {
     return {

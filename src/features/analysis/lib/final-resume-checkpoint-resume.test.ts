@@ -10,6 +10,7 @@ import { computeTranscriptFingerprint } from "@/lib/persistence/cache-identity"
 import {
   createFinalResumeCheckpointController,
   FINAL_CHECKPOINT_PLANNING_VERSION,
+  FINAL_CHECKPOINT_TTL_MS,
   type FinalCheckpointContext,
   type FinalResumeCheckpointController,
 } from "./final-resume-checkpoint"
@@ -225,5 +226,201 @@ describe("final resume double identity", () => {
     })
 
     expect(acquired.kind).toBe("expired")
+  })
+})
+
+async function acquireResumeLease(
+  controller: FinalResumeCheckpointController = createFinalResumeCheckpointController(),
+  context?: FinalCheckpointContext,
+  isCurrentExecution: () => boolean = () => true,
+) {
+  const published = await publishAvailableCheckpoint(controller)
+  const leaseContext = context ?? await resumeContext()
+  const acquired = await controller.acquireForResume({ context: leaseContext, isCurrentExecution })
+  if (acquired.kind !== "acquired") throw new Error(`expected a resume lease, received ${acquired.kind}`)
+  return { controller, lease: acquired.lease, resumeContext: leaseContext, publishedContext: published.context }
+}
+
+/** Every mutation except the two resume-normalized execution fields. */
+const liveIdentityMutations: Array<[string, (context: FinalCheckpointContext) => Promise<FinalCheckpointContext>]> = [
+  ["contentKey", async (context) => ({ ...context, source: { ...context.source, contentKey: "youtube:other" } })],
+  ["credentialRevision", async (context) => ({ ...context, provider: { ...context.provider, credentialRevision: "credential-revision-2" } })],
+  ["cues", async (context) => {
+    const changedCues: TranscriptCue[] = [
+      { startSec: 0, endSec: 10, text: "First cue rewritten." },
+      { startSec: 10, endSec: 20, text: "Second cue." },
+    ]
+    return {
+      ...context,
+      transcript: { cues: changedCues, fingerprint: await computeTranscriptFingerprint(changedCues) },
+    }
+  }],
+  ["timeoutMs", async (context) => ({ ...context, provider: { ...context.provider, timeoutMs: 60_000 } })],
+  ["partId", async (context) => ({ ...context, source: { ...context.source, partId: "2" } })],
+  ["videoId", async (context) => ({ ...context, source: { ...context.source, videoId: "video-other", contentKey: "youtube:video-other" } })],
+  ["title", async (context) => ({ ...context, source: { ...context.source, title: "Renamed" } })],
+  ["durationSec", async (context) => ({ ...context, source: { ...context.source, durationSec: 21 } })],
+  ["preset", async (context) => ({ ...context, preset: createAnalysisPresetSnapshot("concise") })],
+  ["budgetPolicy", async (context) => ({ ...context, budgetPolicy: { ...context.budgetPolicy, reservedCompletionTokens: 1_000 } })],
+]
+
+describe("F-01 lease.validate must re-check the live identity it receives", () => {
+  for (const [label, mutate] of liveIdentityMutations) {
+    it(`refuses a resume lease when the live ${label} changed after acquisition`, async () => {
+      const { controller, lease, resumeContext: live } = await acquireResumeLease()
+
+      expect(await lease.validate(await mutate(live))).toBe(false)
+
+      const metadata = controller.getMetadata()
+      expect(metadata.state).toBe("empty")
+      expect(metadata.invalidationReason).not.toBeNull()
+    })
+  }
+
+  it("refuses a resume lease when several live fields changed at once", async () => {
+    const { controller, lease, resumeContext: live } = await acquireResumeLease()
+    const changed: FinalCheckpointContext = {
+      ...live,
+      source: { ...live.source, videoId: "video-other", partId: "9", contentKey: "youtube:video-other", title: "Other" },
+      provider: { ...live.provider, model: "other-model", credentialRevision: "credential-revision-9", timeoutMs: 5_000 },
+    }
+
+    expect(await lease.validate(changed)).toBe(false)
+    expect(controller.getMetadata().state).toBe("empty")
+    expect(controller.getMetadata().invalidationReason).not.toBeNull()
+  })
+
+  it("keeps the resume lease valid when only the normalized taskId and workspaceEpoch changed", async () => {
+    const { controller, lease, resumeContext: live } = await acquireResumeLease()
+
+    const normalizedOnly: FinalCheckpointContext = {
+      ...live,
+      source: { ...live.source, taskId: "task-resume-3", workspaceEpoch: 42 },
+    }
+    expect(normalizedOnly.source.taskId).not.toBe(live.source.taskId)
+    expect(normalizedOnly.source.workspaceEpoch).not.toBe(live.source.workspaceEpoch)
+
+    expect(await lease.validate(normalizedOnly)).toBe(true)
+    expect(controller.getMetadata().state).toBe("leased")
+  })
+
+  it("accepts the identical live context and stays reusable across repeated revalidation", async () => {
+    const { controller, lease, resumeContext: live } = await acquireResumeLease()
+
+    expect(await lease.validate(live)).toBe(true)
+    expect(await lease.validate(live)).toBe(true)
+    expect(controller.getMetadata().state).toBe("leased")
+  })
+
+  it("refuses a resume lease once the checkpoint TTL expired", async () => {
+    let clock = 1_000
+    const controller = createFinalResumeCheckpointController({ now: () => clock })
+    const published = await publishAvailableCheckpoint(controller)
+    const live = await resumeContext()
+    const acquired = await controller.acquireForResume({ context: live, isCurrentExecution: () => true })
+    if (acquired.kind !== "acquired") throw new Error("expected a resume lease")
+
+    clock += FINAL_CHECKPOINT_TTL_MS
+    expect(await acquired.lease.validate(live)).toBe(false)
+    expect(published.controller.getMetadata().state).toBe("empty")
+  })
+
+  it("refuses a resume lease after it was destroyed", async () => {
+    const { controller, lease, resumeContext: live } = await acquireResumeLease()
+    lease.destroy()
+
+    expect(await lease.validate(live)).toBe(false)
+    expect(controller.getMetadata().state).toBe("empty")
+  })
+
+  it("refuses a resume lease after it was released", async () => {
+    const { controller, lease, resumeContext: live } = await acquireResumeLease()
+    lease.release()
+
+    expect(await lease.validate(live)).toBe(false)
+    expect(controller.getMetadata().state).toBe("available")
+  })
+
+  it("refuses a resume lease when the live execution is no longer admitted", async () => {
+    let current = true
+    const { controller, lease, resumeContext: live } = await acquireResumeLease(
+      createFinalResumeCheckpointController(),
+      undefined,
+      () => current,
+    )
+
+    current = false
+    expect(await lease.validate(live)).toBe(false)
+    expect(controller.getMetadata().state).toBe("empty")
+    expect(controller.getMetadata().invalidationReason).toBe("execution-superseded")
+  })
+})
+
+describe("F-01 plain acquire keeps its unnormalized strict identity contract", () => {
+  async function acquirePlainLease(controller: FinalResumeCheckpointController) {
+    const published = await publishAvailableCheckpoint(controller)
+    const acquired = await controller.acquire(published.context)
+    if (acquired.kind !== "acquired") throw new Error(`expected a plain lease, received ${acquired.kind}`)
+    return { lease: acquired.lease, context: published.context }
+  }
+
+  for (const [label, mutate] of [
+    ["videoId", async (context: FinalCheckpointContext) => ({
+      ...context,
+      source: { ...context.source, videoId: "video-other", contentKey: "youtube:video-other" },
+    })],
+    ["partId", async (context: FinalCheckpointContext) => ({
+      ...context,
+      source: { ...context.source, partId: "2" },
+    })],
+    ["contentKey", async (context: FinalCheckpointContext) => ({
+      ...context,
+      source: { ...context.source, contentKey: "youtube:other" },
+    })],
+    ["credentialRevision", async (context: FinalCheckpointContext) => ({
+      ...context,
+      provider: { ...context.provider, credentialRevision: "credential-revision-2" },
+    })],
+    ["cues", async (context: FinalCheckpointContext) => {
+      const changedCues: TranscriptCue[] = [
+        { startSec: 0, endSec: 10, text: "First cue rewritten." },
+        { startSec: 10, endSec: 20, text: "Second cue." },
+      ]
+      return {
+        ...context,
+        transcript: { cues: changedCues, fingerprint: await computeTranscriptFingerprint(changedCues) },
+      }
+    }],
+  ] as const) {
+    it(`refuses a plain lease when the live ${label} changed, with no resume normalization`, async () => {
+      const controller = createFinalResumeCheckpointController()
+      const { lease, context } = await acquirePlainLease(controller)
+
+      expect(await lease.validate(await mutate(context))).toBe(false)
+      expect(controller.getMetadata().state).toBe("empty")
+      expect(controller.getMetadata().invalidationReason).not.toBeNull()
+    })
+  }
+
+  it("does not normalize a new taskId or workspaceEpoch for a plain lease", async () => {
+    const controller = createFinalResumeCheckpointController()
+    const { lease, context } = await acquirePlainLease(controller)
+
+    const newExecution: FinalCheckpointContext = {
+      ...context,
+      source: { ...context.source, taskId: "task-resume-2", workspaceEpoch: 19 },
+    }
+    expect(await lease.validate(newExecution)).toBe(false)
+    expect(controller.getMetadata().state).toBe("empty")
+  })
+
+  it("still rejects a plain acquire from a new task with identity-mismatch", async () => {
+    const { controller } = await publishAvailableCheckpoint()
+
+    const acquired = await controller.acquire(await resumeContext())
+
+    expect(acquired.kind).toBe("identity-mismatch")
+    expect(controller.getMetadata().state).toBe("empty")
+    expect(controller.getMetadata().invalidationReason).toBe("identity-mismatch")
   })
 })

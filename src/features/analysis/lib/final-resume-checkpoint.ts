@@ -573,10 +573,18 @@ export function createFinalResumeCheckpointController(options: {
    * Shared acquisition path. `compareContext` supplies the context used for the
    * strict identity comparison and `isCurrentExecution` the live task guard;
    * both are identity-preserving for a normal acquire.
+   *
+   * `resumeScoped` records whether this acquisition came from
+   * `acquireForResume`. Only a resume acquisition may normalize the two
+   * execution-scoped identity fields later, inside `lease.validate`, so that a
+   * live context can be re-checked after the Final request. A plain `acquire`
+   * keeps the unnormalized strict contract for both acquisition and every
+   * subsequent validation.
    */
   const acquireWith = async (
     compareContext: FinalCheckpointContext,
     isCurrentExecution: () => boolean,
+    resumeScoped: boolean,
   ): Promise<FinalCheckpointAcquisition> => {
     if (destroyed) return { kind: "destroyed" }
     if (!isCurrentExecution()) return { kind: "execution-superseded" }
@@ -633,20 +641,41 @@ export function createFinalResumeCheckpointController(options: {
       identity: acquiredEntry.record.identity,
       payload: acquiredEntry.record.payload,
       async validate(currentContext) {
-        if (!stillOwnsLease() || expired(acquiredEntry.record)) return false
+        if (!stillOwnsLease()) return false
+        if (expired(acquiredEntry.record)) {
+          invalidate("expired")
+          return false
+        }
         if (!isCurrentExecution()) {
           invalidate("execution-superseded")
           return false
         }
-        const valid = await verifyFinalCheckpointRecord(acquiredEntry.record, digest)
-          && await contextMatchesRecord(compareContext, acquiredEntry.record, digest)
+        // F-01: compare the context the caller just supplied, never the context
+        // captured at acquisition time. A resume lease additionally substitutes
+        // only its two execution-scoped fields (task id and workspace epoch)
+        // with the checkpoint's immutable source values; a plain acquire lease
+        // is compared byte-for-byte with no normalization at all.
+        let valid = false
+        try {
+          const comparisonContext = resumeScoped
+            ? buildResumeComparisonContext(currentContext, acquiredEntry.record.identity)
+            : currentContext
+          valid = await verifyFinalCheckpointRecord(acquiredEntry.record, digest)
+            && await contextMatchesRecord(comparisonContext, acquiredEntry.record, digest)
+        } catch {
+          valid = false
+        }
         if (!stillOwnsLease()) return false
         if (!isCurrentExecution()) {
           invalidate("execution-superseded")
           return false
         }
-        if (!valid || expired(acquiredEntry.record)) {
-          invalidate(valid ? "expired" : "lease-validation-failed")
+        if (!valid) {
+          invalidate("lease-validation-failed")
+          return false
+        }
+        if (expired(acquiredEntry.record)) {
+          invalidate("expired")
           return false
         }
         return true
@@ -668,7 +697,7 @@ export function createFinalResumeCheckpointController(options: {
   }
 
   const acquire = async (context: FinalCheckpointContext): Promise<FinalCheckpointAcquisition> =>
-    acquireWith(context, () => true)
+    acquireWith(context, () => true, false)
 
   return {
     async beginCandidate(input) {
@@ -759,6 +788,7 @@ export function createFinalResumeCheckpointController(options: {
       return acquireWith(
         buildResumeComparisonContext(context, declared.record.identity),
         isCurrentExecution,
+        true,
       )
     },
 

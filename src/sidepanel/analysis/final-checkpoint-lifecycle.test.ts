@@ -59,7 +59,7 @@ function sourceFixture(): FinalCheckpointSourceIdentity {
 
 function createHarness() {
   const storageChanged = new FakeEvent<[Record<string, unknown>, string]>()
-  const tabUpdated = new FakeEvent<[number, { url?: string; title?: string; status?: string }]>()
+  const tabUpdated = new FakeEvent<[number, { url?: string; title?: string; status?: string; favIconUrl?: string }]>()
   const tabRemoved = new FakeEvent<[number]>()
   const controller = new FakeController()
   const lifecycle = new SidePanelFinalCheckpointLifecycle(controller, {
@@ -123,14 +123,38 @@ describe("Side Panel final-checkpoint lifecycle", () => {
     expect(controller.invalidations).toBe(0)
   })
 
-  test("invalidates for a matching tab update/removal but not an unrelated tab", () => {
+  test("preserves matching status/favicon updates but invalidates removal and ignores unrelated tabs", () => {
     const { controller, tabUpdated, tabRemoved } = createHarness()
     tabUpdated.emit(8, { url: "https://example.com/other" })
     tabRemoved.emit(8)
     expect(controller.invalidations).toBe(0)
     tabUpdated.emit(7, { status: "loading" })
+    tabUpdated.emit(7, { status: "complete", favIconUrl: "https://example.com/favicon.ico" })
+    expect(controller.invalidations).toBe(0)
     tabRemoved.emit(7)
+    expect(controller.invalidations).toBe(1)
+  })
+
+  test("invalidates conservatively for unstable or changed URLs without A→B→A or P1→P2→P1 resurrection", () => {
+    const { controller, tabUpdated } = createHarness()
+    const a = "https://www.youtube.com/watch?v=video-a"
+    const b = "https://www.youtube.com/watch?v=video-b"
+    const p1 = `${a}&p=1`
+    const p2 = `${a}&p=2`
+    tabUpdated.emit(7, { url: "" })
+    expect(controller.invalidations).toBe(1)
+    tabUpdated.emit(7, { url: a })
     expect(controller.invalidations).toBe(2)
+    tabUpdated.emit(7, { url: a })
+    tabUpdated.emit(7, { status: "complete" })
+    expect(controller.invalidations).toBe(2)
+    tabUpdated.emit(7, { url: b })
+    tabUpdated.emit(7, { url: a })
+    expect(controller.invalidations).toBe(4)
+    tabUpdated.emit(7, { url: p1 })
+    tabUpdated.emit(7, { url: p2 })
+    tabUpdated.emit(7, { url: p1 })
+    expect(controller.invalidations).toBe(7)
   })
 
   test("forwards destructive mutations without duplicating their matching policy", () => {

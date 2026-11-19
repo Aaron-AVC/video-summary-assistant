@@ -30,7 +30,7 @@ type ListenerEvent<Args extends unknown[]> = {
 export type FinalCheckpointLifecycleAdapters = {
   storage?: ListenerEvent<[Record<string, unknown>, string]>
   tabs?: {
-    onUpdated?: ListenerEvent<[number, { url?: string; title?: string; status?: string }]>
+    onUpdated?: ListenerEvent<[number, { url?: string; title?: string; status?: string; favIconUrl?: string }]>
     onRemoved?: ListenerEvent<[number]>
   }
 }
@@ -51,6 +51,7 @@ export class SidePanelFinalCheckpointLifecycle<
 > {
   private serializedSource: string | null = null
   private sourceTabId: number | null = null
+  private lastTabUrl: string | null = null
   private destroyed = false
 
   private readonly onStorageChanged = (changes: Record<string, unknown>, areaName: string): void => {
@@ -60,8 +61,21 @@ export class SidePanelFinalCheckpointLifecycle<
     }
   }
 
-  private readonly onTabUpdated = (tabId: number): void => {
-    if (this.sourceTabId !== null && tabId === this.sourceTabId) this.invalidate()
+  private readonly onTabUpdated = (tabId: number, changeInfo: { url?: string }): void => {
+    if (this.sourceTabId === null || tabId !== this.sourceTabId) return
+    if (changeInfo.url === undefined) return
+    const url = changeInfo.url.trim()
+    if (!url) {
+      this.lastTabUrl = null
+      this.invalidate()
+      return
+    }
+    if (url === this.lastTabUrl) return
+    // The first observed URL is not assumed to match the frozen source. An
+    // absent/empty or changed URL therefore fails closed; status/favicon-only
+    // events above do not invalidate the checkpoint.
+    this.lastTabUrl = url
+    this.invalidate()
   }
 
   private readonly onTabRemoved = (tabId: number): void => {
@@ -81,6 +95,7 @@ export class SidePanelFinalCheckpointLifecycle<
     if (this.destroyed) return
     const serialized = JSON.stringify(identity)
     if (this.serializedSource !== null && serialized !== this.serializedSource) {
+      this.lastTabUrl = null
       this.invalidate()
     }
     this.serializedSource = serialized

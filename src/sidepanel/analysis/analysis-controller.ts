@@ -140,9 +140,17 @@ export function createAnalysisController(
      */
     const preset: AnalysisPresetStrategy = resolveAnalysisPresetStrategy(taskSnapshot.analysisPresetId)
     const analysisPromptVersion = taskSnapshot.analysisPromptVersion
+    const providerMatchesFrozenExecution = (provider: AnalysisProviderSecret): boolean =>
+      provider.profileBaseUrl === taskSnapshot.providerBaseUrl
+      && provider.profileModel === taskSnapshot.providerModel
+      && provider.profileGenerationTimeoutSec === taskSnapshot.generationTimeoutSec
 
     const resolvedProvider = await dependencies.resolveProvider(taskSnapshot.providerProfileId)
     ensureTaskCurrent()
+    if (!providerMatchesFrozenExecution(resolvedProvider)) {
+      request.finalCheckpoint?.controller.invalidate("provider-changed")
+      throw new Error("Provider configuration changed before analysis startup")
+    }
 
     const cacheKey = await computeAnalysisCacheKey({
       contentKey: taskSnapshot.contentKey,
@@ -213,7 +221,8 @@ export function createAnalysisController(
         ensureTaskCurrent()
         const current = await dependencies.resolveProvider(taskSnapshot.providerProfileId)
         ensureTaskCurrent()
-        return current.apiKey === resolvedProvider.apiKey
+        return providerMatchesFrozenExecution(current)
+          && current.apiKey === resolvedProvider.apiKey
           && current.credentialRevision === resolvedProvider.credentialRevision
           && current.profileUpdatedAt === resolvedProvider.profileUpdatedAt
           && current.profileBaseUrl === resolvedProvider.profileBaseUrl

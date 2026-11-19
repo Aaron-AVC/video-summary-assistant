@@ -221,7 +221,7 @@ function createHarness(config: HarnessConfig = {}): Harness {
         profileUpdatedAt: "profile-revision-1",
         profileBaseUrl: "https://api.example.com/v1",
         profileModel: "model-1",
-        profileGenerationTimeoutSec: 600,
+        profileGenerationTimeoutSec: 120,
       }
     },
     saveTaskTranscriptCache: async (input) => {
@@ -810,7 +810,7 @@ describe("analysis controller — M2 final checkpoint identity", () => {
             profileUpdatedAt: "profile-revision-1",
             profileBaseUrl: "https://api.example.com/v1",
             profileModel: "model-1",
-            profileGenerationTimeoutSec: 600,
+            profileGenerationTimeoutSec: 120,
             ...credentialAtCall(resolveCall),
           }
         },
@@ -834,6 +834,36 @@ describe("analysis controller — M2 final checkpoint identity", () => {
       (reason: unknown) => reason,
     )
     return { error, finalCheckpoint, harness }
+  }
+
+  const startupMismatchScenarios = [
+    { field: "endpoint", execution: { profileBaseUrl: "https://replacement.example.com/v1" } },
+    { field: "model", execution: { profileModel: "model-2" } },
+    { field: "timeout", execution: { profileGenerationTimeoutSec: 300 } },
+  ] as const
+
+  for (const scenario of startupMismatchScenarios) {
+    it(`rejects a startup ${scenario.field} and key replacement before any model request`, async () => {
+      const { error, finalCheckpoint, harness } = await runFinalFailureScenario(() => ({
+        apiKey: "replacement-secret",
+        credentialRevision: "credential-revision-2",
+        profileUpdatedAt: "profile-revision-2",
+        profileBaseUrl: "https://api.example.com/v1",
+        profileModel: "model-1",
+        profileGenerationTimeoutSec: 120,
+        ...scenario.execution,
+      }))
+
+      expect({
+        error: error instanceof Error ? error.message : error,
+        modelRequests: harness.calls.runAnalysis.length,
+        checkpointState: finalCheckpoint.getMetadata().state,
+      }).toEqual({
+        error: "Provider configuration changed before analysis startup",
+        modelRequests: 0,
+        checkpointState: "empty",
+      })
+    })
   }
 
   it("publishes an eligible Final failure with stable provider identity and no secret metadata", async () => {
@@ -871,17 +901,19 @@ describe("analysis controller — M2 final checkpoint identity", () => {
   })
 
   it("rejects execution metadata replacement even when the profile timestamp is unchanged", async () => {
-    const { error, finalCheckpoint } = await runFinalFailureScenario((call) => ({
+    const { error, finalCheckpoint, harness } = await runFinalFailureScenario((call) => ({
       apiKey: "resolved-secret",
       credentialRevision: "credential-revision-1",
       profileUpdatedAt: "same-profile-timestamp",
       profileBaseUrl: call >= 2 ? "https://replacement.example.com/v1" : "https://api.example.com/v1",
       profileModel: call >= 2 ? "model-2" : "model-1",
-      profileGenerationTimeoutSec: call >= 2 ? 300 : 600,
+      profileGenerationTimeoutSec: call >= 2 ? 300 : 120,
     }))
 
     expect(error).toBe(finalFailure)
     expect(finalCheckpoint.getMetadata().state).toBe("empty")
+    // The analysis/Map phase already started; only later checkpoint operations are rejected.
+    expect(harness.calls.runAnalysis).toHaveLength(1)
   })
 
   it("rejects a key replacement at the asynchronous promotion boundary", async () => {

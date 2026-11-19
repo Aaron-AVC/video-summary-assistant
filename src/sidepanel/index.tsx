@@ -30,12 +30,14 @@ import {
   AnalysisTaskAlreadyRunningError,
   AnalysisTaskController,
   type ActiveAnalysisTask,
+  type AnalysisTaskSnapshot,
 } from "@/features/analysis/lib/analysis-task-controller"
 import {
   AskTaskController,
   type ActiveAskTask,
 } from "@/features/analysis/lib/ask-task-controller"
 import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-analysis"
+import { OpenAICompatibleClientError } from "@/features/analysis/lib/openai-compatible-client"
 import type { RecentAnalysisListItem } from "@/features/history/components/recent-analysis-list"
 import { historyRepository } from "@/features/history/lib/history-repository"
 import {
@@ -46,12 +48,14 @@ import {
   type DestructiveTaskSnapshot,
 } from "@/features/history/lib/destructive-operation-coordinator"
 import {
+  computeAnalysisCacheKey,
   isExactCurrentAnalysis,
 } from "@/lib/persistence/cache-identity"
 import { VIDEO_ANALYSIS_SCHEMA_VERSION } from "@/features/analysis/lib/analysis-schema"
 import type {
   ActiveVideoContext,
   VideoIdentity,
+  VideoInfo,
 } from "@/features/platform/types"
 import {
   settingsStorage,
@@ -66,9 +70,27 @@ import { AskTab } from "@/sidepanel/components/ask-tab"
 import { createAnalysisController, type AnalysisExecutionPublication } from "@/sidepanel/analysis/analysis-controller"
 import {
   createFinalResumeCheckpointController,
+  type FinalCheckpointMetadata,
   type FinalResumeCheckpointController,
 } from "@/features/analysis/lib/final-resume-checkpoint"
 import { SidePanelFinalCheckpointLifecycle } from "@/sidepanel/analysis/final-checkpoint-lifecycle"
+import {
+  FINAL_RESUME_TTL_FALLBACK_MS,
+  computeFinalResumeConflict,
+  createFinalResumeAvailability,
+  createFinalResumeTtlScheduler,
+  resolveCheckpointIdentityTransition,
+  shouldRefreshFinalResumeOnTaskAdmission,
+  shouldRefreshFinalResumeOnTaskRelease,
+  type FinalResumeAvailability,
+  type FinalResumeView,
+} from "@/sidepanel/analysis/final-resume-availability"
+import { assertLiveSourceMatchesTask } from "@/sidepanel/analysis/final-resume-source-identity"
+import { runFinalOnlyAnalysis } from "@/features/analysis/lib/run-final-only-analysis"
+import {
+  createFinalResumeCoordinator,
+  type FinalResumeResult,
+} from "@/features/analysis/lib/final-resume-coordinator"
 import { OverviewTab } from "@/sidepanel/components/overview-tab"
 import { SettingsTab } from "@/sidepanel/components/settings-tab"
 import { SidePanelShell } from "@/sidepanel/components/sidepanel-shell"
@@ -147,6 +169,18 @@ import {
   type WorkspaceRestoredAnalysisIdentity,
 } from "@/sidepanel/workspace/workspace-controller"
 
+/** Content-free identity used to decide whether a resume entry still applies. */
+type FinalResumeIdentitySnapshot = {
+  sourceTabId: number | null
+  contentKey: string | null
+  partId: string | null
+  title: string | null
+  durationSec: number | null
+  transcriptFingerprint: string | null
+  providerProfileId: string | null
+  analysisPresetId: AnalysisPresetId
+}
+
 type AnalysisView = {
   platform: "youtube" | "bilibili"
   videoId: string
@@ -170,6 +204,11 @@ function SidepanelWorkspace() {
   const { activeTabId, jumpToTimestamp, refreshCurrentVideo, status, videoContext } = useRuntimeBridge()
   const videoContextRef = useRef(videoContext)
   videoContextRef.current = videoContext
+  // The live tab id is part of the source identity a resume must re-verify, so
+  // it is mirrored into a ref for the same reason as the video context: the
+  // coordinator reads it from inside async work that outlives this render.
+  const activeTabIdRef = useRef(activeTabId)
+  activeTabIdRef.current = activeTabId
 
   const [activeTab, setActiveTab] = useState<SidePanelTab>(INITIAL_SIDE_PANEL_TAB)
   const [provider, setProvider] = useState<ProviderConfigRecord | null>(null)
@@ -289,7 +328,104 @@ function SidepanelWorkspace() {
     )
   }
   const finalCheckpointLifecycle = finalCheckpointLifecycleRef.current
-  const finalCheckpointDurationRef = useRef<number | null>(null)
+  /**
+   * Duration captured by the last real transcript acquisition, together with
+   * the content key it belongs to. The key turns the value from "the last
+   * duration we saw" into "the duration of *this* content", so a resume can
+   * never borrow a duration recorded for a different video or Bilibili part.
+   */
+  const finalCheckpointDurationRef = useRef<{ contentKey: string; durationSec: number | null } | null>(null)
+  const readFinalCheckpointDuration = (contentKey: string | null): number | null => {
+    const captured = finalCheckpointDurationRef.current
+    if (!captured || contentKey === null || captured.contentKey !== contentKey) return null
+    return captured.durationSec
+  }
+  /**
+   * M2 only exposes a synchronous metadata read, so the panel owns the
+   * subscription, TTL watch and phase state needed for a live resume entry.
+   */
+  const finalResumeIdentityRef = useRef<FinalResumeIdentitySnapshot>({
+    sourceTabId: null,
+    contentKey: null,
+    partId: null,
+    title: null,
+    durationSec: null,
+    transcriptFingerprint: null,
+    providerProfileId: null,
+    analysisPresetId: DEFAULT_ANALYSIS_PRESET_ID,
+  })
+  const finalResumeCheckpointIdentityRef = useRef<FinalResumeIdentitySnapshot>(
+    finalResumeIdentityRef.current,
+  )
+  /**
+   * Last checkpoint state this panel reconciled against.
+   *
+   * The checkpoint controller exposes only a synchronous `getMetadata()` and has
+   * no subscription, so "the checkpoint just appeared" cannot be observed from
+   * React alone. This mirror plus `checkpointStateVersion` turn that transition
+   * into a real render, and the reconcile below seeds the *expected* identity
+   * exactly once per checkpoint.
+   */
+  const checkpointStateRef = useRef<FinalCheckpointMetadata["state"]>("empty")
+  const [checkpointStateVersion, setCheckpointStateVersion] = useState(0)
+  const finalResumeConflictRef = useRef<() => boolean>(() => false)
+  const finalResumeAvailabilityRef = useRef<FinalResumeAvailability | null>(null)
+  if (!finalResumeAvailabilityRef.current) {
+    finalResumeAvailabilityRef.current = createFinalResumeAvailability({
+      readMetadata: () => finalCheckpointLifecycle.controller.getMetadata(),
+      readIdentity: () => finalCheckpointLifecycle.controller.getMetadata().state === "empty"
+        ? finalResumeIdentityRef.current
+        : finalResumeCheckpointIdentityRef.current,
+      readCurrentIdentity: () => finalResumeIdentityRef.current,
+      hasConflict: () => finalResumeConflictRef.current(),
+    })
+  }
+  const finalResumeAvailability = finalResumeAvailabilityRef.current
+  /**
+   * Reconciles the *expected* checkpoint identity against the real checkpoint
+   * state, and turns a state transition into a render.
+   *
+   * `expected` is the source snapshot the checkpoint is bound to. It is seeded
+   * once when a checkpoint appears and is never overwritten while it lives:
+   * overwriting it with the live identity would make expected equal current on
+   * every video/part switch and silently disable the identity protection, so a
+   * checkpoint created for video A could be resumed against video B. The
+   * decision itself lives in the pure `resolveCheckpointIdentityTransition`.
+   *
+   * The controller exposes only a synchronous `getMetadata()` and has no
+   * subscription, so this is invoked from every place a transition can be
+   * observed (identity effect, task notifications, TTL wake-up).
+   */
+  const reconcileCheckpointIdentityRef = useRef<(input: {
+    currentIdentity: FinalResumeIdentitySnapshot
+    taskIdentity?: FinalResumeIdentitySnapshot | null
+  }) => boolean>(() => false)
+  const reconcileCheckpointIdentity = (input: {
+    currentIdentity: FinalResumeIdentitySnapshot
+    taskIdentity?: FinalResumeIdentitySnapshot | null
+  }): boolean => {
+    const nextState = finalCheckpointLifecycle.controller.getMetadata().state
+    const transition = resolveCheckpointIdentityTransition({
+      previousState: checkpointStateRef.current,
+      nextState,
+      previousExpected: finalResumeCheckpointIdentityRef.current,
+      currentIdentity: input.currentIdentity,
+      taskIdentity: input.taskIdentity ?? null,
+    })
+    if (transition.kind === "unchanged") return false
+    // The panel's snapshot narrows `analysisPresetId` to AnalysisPresetId; the
+    // resolver only ever echoes the preset it was given, so this cast is safe.
+    finalResumeCheckpointIdentityRef.current = transition.expected as FinalResumeIdentitySnapshot
+    checkpointStateRef.current = nextState
+    // Publish immediately so the entry appears in this same frame instead of
+    // waiting for the next TTL wake-up.
+    finalResumeAvailability.refresh({ kind: `checkpoint-${transition.kind}` })
+    setCheckpointStateVersion((version) => version + 1)
+    return true
+  }
+  // Stable handle for the task subscription, which is created once.
+  reconcileCheckpointIdentityRef.current = reconcileCheckpointIdentity
+
   const workspaceControllerRef = useRef<WorkspaceController | null>(null)
   if (!workspaceControllerRef.current) workspaceControllerRef.current = new WorkspaceController()
   const workspaceController = workspaceControllerRef.current
@@ -347,6 +483,33 @@ function SidepanelWorkspace() {
   const [activeAnalysisTask, setActiveAnalysisTask] = useState<ActiveAnalysisTask | null>(
     analysisTaskController.getSnapshot(),
   )
+  // Mirrors the state for the subscription callback: it needs the *previous*
+  // task to tell a release from an unrelated notification.
+  const activeAnalysisTaskRef = useRef<ActiveAnalysisTask | null>(activeAnalysisTask)
+  /**
+   * Authority mirrors for the conflict decision.
+   *
+   * The conflict closure is invoked from inside refresh(), i.e. from the task
+   * controller's own notification or from a timer, never from a render. Reading
+   * Render-state variables there is one render behind: at the instant a task
+   * finished, React still held the finished task and the entry published a
+   * `conflict` snapshot for an already-free workspace. These refs are written
+   * synchronously at the point the authority changes.
+   */
+  const analysisTaskActiveRef = useRef(activeAnalysisTask !== null)
+  const analysisTaskReleasedRef = useRef(false)
+  const analysisPhaseRef = useRef<AnalysisPhase>(analysisPhase)
+  // Keep the authority mirror in step with the render as well: the subscription
+  // writes it at the transition, and this covers a state set from anywhere else.
+  analysisTaskActiveRef.current = activeAnalysisTask !== null
+  // The phase is React state, so the ref has to follow a render. Refreshing on
+  // a real change keeps the published snapshot in step with it: leaving the
+  // conflict phases is what makes the entry evaluable again after a failure.
+  useEffect(() => {
+    if (analysisPhaseRef.current === analysisPhase) return
+    analysisPhaseRef.current = analysisPhase
+    finalResumeAvailability.refresh({ kind: "analysis-phase" })
+  }, [analysisPhase, finalResumeAvailability])
   const [activeAskTask, setActiveAskTask] = useState<ActiveAskTask | null>(
     askTaskController.getSnapshot(),
   )
@@ -467,12 +630,133 @@ function SidepanelWorkspace() {
   }, [clearQaWorkspace, publishTranscript, restoreQaConversation, transcriptController, workspaceController])
 
   useEffect(() => analysisTaskController.subscribe(() => {
-    setActiveAnalysisTask(analysisTaskController.getSnapshot())
-  }), [analysisTaskController])
+    const next = analysisTaskController.getSnapshot()
+    const previousContentKey = activeAnalysisTaskRef.current?.snapshot.contentKey ?? null
+    const nextContentKey = next?.snapshot.contentKey ?? null
+    activeAnalysisTaskRef.current = next
+    setActiveAnalysisTask(next)
+    // The controller is the authority for "is a task running", so mirror it
+    // synchronously for the conflict closure. React state is one render behind
+    // this callback, and reading it here published a wrong `conflict` snapshot
+    // at the exact instant a task finished.
+    analysisTaskActiveRef.current = next !== null
+    // A release clears the workspace even though `analysisPhase` is still the
+    // phase of the run that just ended (React has not re-rendered it yet).
+    if (previousContentKey !== null && nextContentKey === null) {
+      analysisTaskReleasedRef.current = true
+    } else if (nextContentKey !== null) {
+      analysisTaskReleasedRef.current = false
+    }
+    // A released task stops being a conflict, but the state update above only
+    // reaches React on the next render. Recompute here so the entry is correct
+    // at the release instant, which is what makes the button come back after a
+    // first Final attempt failed. Admission/rotation is refreshed too, so a
+    // hidden action never outlives its reason.
+    //
+    // The checkpoint may have appeared or disappeared during this task (the
+    // Final failure path promotes a candidate to `available` right before the
+    // task settles), so reconcile the expected identity first and only then
+    // refresh: the refresh must observe the seeded identity, not a stale null.
+    reconcileCheckpointIdentityRef.current({
+      currentIdentity: finalResumeIdentityRef.current,
+      taskIdentity: next
+        ? {
+            sourceTabId: next.snapshot.sourceTabId,
+            contentKey: next.snapshot.contentKey,
+            partId: next.snapshot.partId,
+            title: next.snapshot.title,
+            durationSec: readFinalCheckpointDuration(next.snapshot.contentKey),
+            transcriptFingerprint: currentTranscriptFingerprintRef.current,
+            providerProfileId: next.snapshot.providerProfileId,
+            analysisPresetId: next.snapshot.analysisPresetId,
+          }
+        : null,
+    })
+    if (shouldRefreshFinalResumeOnTaskRelease({ previousTaskContentKey: previousContentKey, nextTaskContentKey: nextContentKey })
+      || shouldRefreshFinalResumeOnTaskAdmission({ previousTaskContentKey: previousContentKey, nextTaskContentKey: nextContentKey })) {
+      finalResumeAvailability.refresh({ kind: "task-transition" })
+    }
+  }), [analysisTaskController, finalResumeAvailability])
 
   useEffect(() => () => finalCheckpointLifecycle.destroy(), [finalCheckpointLifecycle])
 
+  const [finalResumeView, setFinalResumeView] = useState<FinalResumeView>(
+    finalResumeAvailability.getSnapshot(),
+  )
   useEffect(() => {
+    setFinalResumeView(finalResumeAvailability.getSnapshot())
+    return finalResumeAvailability.subscribe(() => {
+      setFinalResumeView(finalResumeAvailability.getSnapshot())
+    })
+  }, [finalResumeAvailability])
+
+  // The action must disappear on its own when the TTL elapses; a manual refresh
+  // is not part of the contract. The scheduler arms a single wake-up at the real
+  // `metadata.expiresAt`, so the button disappears at the expiry instant instead
+  // of up to a poll interval later. It re-reads the expiry on every wake-up, so
+  // a replacement checkpoint is picked up without restarting the panel, and it
+  // keeps a bounded idle re-check while no checkpoint exists yet (the normal
+  // state after mount, and after a checkpoint was discarded). Refreshing only
+  // re-reads a synchronous view.
+  useEffect(() => {
+    const scheduler = createFinalResumeTtlScheduler({
+      readExpiresAt: () => finalCheckpointLifecycle.controller.getMetadata().expiresAt,
+      refresh: () => finalResumeAvailability.refresh({ kind: "ttl" }),
+      // The wake-up targets the real expiry. This only covers the "no checkpoint
+      // yet" state, which must still self-heal when one appears later.
+      idleRecheckMs: FINAL_RESUME_TTL_FALLBACK_MS,
+    })
+    scheduler.start()
+    return () => scheduler.stop()
+  }, [finalCheckpointLifecycle, finalResumeAvailability])
+
+  useEffect(() => () => finalResumeAvailability.destroy(), [finalResumeAvailability])
+
+  // A workspace conflict (another analysis or a destructive operation) hides the
+  // entry without discarding the checkpoint itself.
+  //
+  // This closure is called from refresh(), which runs from the task controller's
+  // own notification and from timers, never from a render. It therefore reads
+  // the authority mirrors rather than the render-era state: otherwise the
+  // release notification (which fires before React re-renders) would decide on
+  // the task that just finished. See computeFinalResumeConflict.
+  finalResumeConflictRef.current = () => computeFinalResumeConflict({
+    taskActive: analysisTaskActiveRef.current,
+    phase: analysisPhaseRef.current,
+    taskReleased: analysisTaskReleasedRef.current,
+  })
+
+  useEffect(() => {
+    const identity: FinalResumeIdentitySnapshot = {
+      sourceTabId: activeTabId,
+      contentKey: videoContext.contentKey,
+      partId: videoContext.partId,
+      title: videoContext.title ?? videoContext.videoId,
+      durationSec: readFinalCheckpointDuration(videoContext.contentKey),
+      transcriptFingerprint: currentTranscriptFingerprint,
+      providerProfileId: provider?.id ?? null,
+      analysisPresetId,
+    }
+    finalResumeIdentityRef.current = identity
+    // A checkpoint binds the source of the analysis task that created it, so
+    // the task snapshot wins over the (possibly already drifted) live context.
+    // Seeding happens once per checkpoint; while one lives this never
+    // overwrites `expected`, which is what keeps the identity protection real.
+    reconcileCheckpointIdentity({
+      currentIdentity: identity,
+      taskIdentity: activeAnalysisTask
+        ? {
+            sourceTabId: activeAnalysisTask.snapshot.sourceTabId,
+            contentKey: activeAnalysisTask.snapshot.contentKey,
+            partId: activeAnalysisTask.snapshot.partId,
+            title: activeAnalysisTask.snapshot.title,
+            durationSec: readFinalCheckpointDuration(activeAnalysisTask.snapshot.contentKey),
+            transcriptFingerprint: currentTranscriptFingerprint,
+            providerProfileId: activeAnalysisTask.snapshot.providerProfileId,
+            analysisPresetId: activeAnalysisTask.snapshot.analysisPresetId,
+          }
+        : null,
+    })
     finalCheckpointLifecycle.syncSource({
       sourceTabId: activeTabId,
       platform: videoContext.platform,
@@ -480,15 +764,20 @@ function SidepanelWorkspace() {
       partId: videoContext.partId,
       contentKey: videoContext.contentKey,
       title: videoContext.title ?? videoContext.videoId,
-      durationSec: finalCheckpointDurationRef.current,
+      durationSec: readFinalCheckpointDuration(videoContext.contentKey),
       workspaceEpoch: workspaceController.captureEpoch(),
       transcriptFingerprint: currentTranscriptFingerprint,
       providerProfileId: provider?.id ?? null,
       analysisPresetId,
     })
+    finalResumeAvailability.refresh({ kind: "identity" })
   }, [
     activeTabId,
     analysisPresetId,
+    activeAnalysisTask,
+    // Re-runs when a checkpoint appeared or disappeared, so the expected side
+    // is reconciled even though `getMetadata()` cannot subscribe by itself.
+    checkpointStateVersion,
     currentTranscriptFingerprint,
     finalCheckpointLifecycle,
     provider?.id,
@@ -497,6 +786,7 @@ function SidepanelWorkspace() {
     videoContext.platform,
     videoContext.title,
     videoContext.videoId,
+    finalResumeAvailability,
     workspaceController,
   ])
 
@@ -1041,7 +1331,10 @@ function SidepanelWorkspace() {
             },
           })
 
-          finalCheckpointDurationRef.current = sourceVideo.durationSec ?? null
+          finalCheckpointDurationRef.current = {
+            contentKey: task.snapshot.contentKey,
+            durationSec: sourceVideo.durationSec ?? null,
+          }
           finalCheckpointLifecycle.syncSource({
             sourceTabId: task.snapshot.sourceTabId,
             platform: task.snapshot.platform,
@@ -1049,7 +1342,7 @@ function SidepanelWorkspace() {
             partId: task.snapshot.partId,
             contentKey: task.snapshot.contentKey,
             title: sourceVideo.title,
-            durationSec: finalCheckpointDurationRef.current,
+            durationSec: sourceVideo.durationSec ?? null,
             workspaceEpoch: requestedWorkspaceEpoch,
             transcriptFingerprint,
             providerProfileId: task.snapshot.providerProfileId,
@@ -1151,6 +1444,7 @@ function SidepanelWorkspace() {
           || (error instanceof Error && error.message.includes("video part changed while captions were loading"))
           ? "Source video changed before its transcript could be captured."
           : error instanceof Error ? error.message : t("toast.unknownAnalysisError")
+        finalResumeAvailability.refresh({ kind: "analysis-failed" })
         workspaceController.publishAnalysisError({
           workspaceEpoch: requestedWorkspaceEpoch,
           taskContentKey: taskSnapshot.contentKey,
@@ -1180,6 +1474,318 @@ function SidepanelWorkspace() {
     finalCheckpointLifecycle.invalidate()
     analysisTaskController.cancel()
   }, [analysisTaskController, finalCheckpointLifecycle])
+
+  /**
+   * Explicit Final-only resume.
+   *
+   * It is deliberately not a variant of `handleAnalyze`: that path starts by
+   * invalidating the checkpoint and always runs a full analysis. Here the
+   * checkpoint is the input, the source is re-collected and re-verified, and a
+   * dedicated admission owns the task. A failure before the Final request costs
+   * zero AI calls.
+   */
+  const handleResumeFinal = useCallback(async () => {
+    if (analysisPresetWriter.isPending()) return
+    if (activeAnalysisTask) {
+      toast.error(t("toast.anotherAnalysis"))
+      return
+    }
+    if (!videoContext.isReady || !videoContext.contentKey || activeTabId === null) {
+      toast.error(t("toast.openSupportedPage"))
+      return
+    }
+    if (!provider) {
+      setActiveTab("settings")
+      return
+    }
+    if (finalCheckpointLifecycle.controller.getMetadata().state !== "available") {
+      toast.error(t("finalResume.toast.unavailable"))
+      return
+    }
+
+    const requestedProvider = provider
+    const requestedPreset = createAnalysisPresetSnapshot(analysisPresetId)
+    type ResumeTaskSnapshot = Omit<AnalysisTaskSnapshot, "taskId" | "startedAt">
+    const taskSnapshot: ResumeTaskSnapshot = {
+      sourceTabId: activeTabId,
+      platform: videoContext.platform!,
+      videoId: videoContext.videoId!,
+      partId: videoContext.partId,
+      contentKey: videoContext.contentKey,
+      title: videoContext.title ?? videoContext.videoId!,
+      author: videoContext.author,
+      canonicalUrl: videoContext.canonicalUrl ?? videoContext.url ?? null,
+      providerProfileId: requestedProvider.id,
+      providerBaseUrl: requestedProvider.baseUrl,
+      providerModel: requestedProvider.model,
+      generationTimeoutSec: requestedProvider.generationTimeoutSec ?? 600,
+      analysisPresetId: requestedPreset.id,
+      analysisPromptVersion: requestedPreset.promptVersion,
+    }
+    const requestedWorkspaceEpoch = workspaceController.captureEpoch()
+    finalResumeAvailability.setPhase("resuming")
+
+    const runResume = async () => {
+      let admission: TaskAdmissionHandle | null = null
+      let taskPromise: Promise<void> | null = null
+      let settled: FinalResumeResult | null = null
+      try {
+        admission = await admitDestructiveTask({
+          kind: "analysis",
+          contentKey: taskSnapshot.contentKey,
+          analysisRunId: destructiveWorkspaceRef.current.analysisRunId ?? undefined,
+          phase: "loading-transcript",
+        }, (taskId) => {
+          taskPromise = analysisTaskController.start(
+            taskSnapshot,
+            async ({ taskId, signal, setPhase, setProgress }) => {
+              const task = analysisTaskController.getSnapshot()
+              if (!task || task.snapshot.taskId !== taskId) {
+                throw new Error("Analysis task is no longer active.")
+              }
+              const ensureTaskCurrent = () => {
+                if (!analysisTaskController.isCurrent(taskId)) {
+                  throw new Error("Analysis task is no longer active.")
+                }
+                if (signal.aborted) throw new AnalysisAbortedError()
+              }
+
+              const coordinator = createFinalResumeCoordinator({
+                // F-02: readiness *and* identity come from the same live runtime
+                // read. The frozen resume task only supplies what to compare
+                // against, never what to report, so a video/part switch while
+                // this resume waits can only fail closed. The coordinator calls
+                // this once per real re-capture (admission, before the Final
+                // request, before persistence), so it must stay uncached.
+                readLiveSource: async () => {
+                  const active = analysisTaskController.getSnapshot()
+                  if (!active || active.snapshot.taskId !== taskId) {
+                    throw new Error("Analysis task is no longer active.")
+                  }
+                  const current = videoContextRef.current
+                  // Throws FinalResumeSourceMismatchError on any divergence
+                  // (tab, platform, video, part, content key) before returning.
+                  const live = assertLiveSourceMatchesTask({
+                    current: {
+                      isReady: current.isReady,
+                      sourceTabId: activeTabIdRef.current,
+                      platform: current.platform,
+                      videoId: current.videoId,
+                      partId: current.partId,
+                      contentKey: current.contentKey,
+                      title: current.title,
+                    },
+                    frozen: {
+                      sourceTabId: taskSnapshot.sourceTabId,
+                      platform: taskSnapshot.platform,
+                      videoId: taskSnapshot.videoId,
+                      partId: taskSnapshot.partId,
+                      contentKey: taskSnapshot.contentKey,
+                      title: taskSnapshot.title,
+                    },
+                  })
+                  const video: VideoInfo = {
+                    platform: live.platform,
+                    videoId: live.videoId,
+                    partId: live.partId ?? undefined,
+                    contentKey: live.contentKey,
+                    title: live.title,
+                    author: current.author,
+                    // Only a duration captured for this exact content key may be
+                    // reused. `finalCheckpointDurationRef` is written from the
+                    // last real transcript acquisition and is keyed by content
+                    // key, so a value recorded for another video or part can
+                    // never leak into this resume's identity. When no trustworthy
+                    // duration exists it stays null and the coordinator's strict
+                    // checkpoint comparison decides.
+                    durationSec: readFinalCheckpointDuration(live.contentKey),
+                    thumbnailUrl: null,
+                    canonicalUrl: current.canonicalUrl ?? current.url ?? null,
+                  }
+                  return {
+                    taskSnapshot: active.snapshot,
+                    sourceVideo: video,
+                    workspaceEpoch: requestedWorkspaceEpoch,
+                  }
+                },
+                loadTranscript: async (live) => {
+                  const result = await transcriptController.acquireForTask({
+                    request: {
+                      video: {
+                        platform: live.sourceVideo.platform,
+                        videoId: live.sourceVideo.videoId,
+                        contentKey: live.sourceVideo.contentKey,
+                        ...(live.sourceVideo.partId ? { partId: live.sourceVideo.partId } : {}),
+                        title: live.sourceVideo.title,
+                        author: live.sourceVideo.author,
+                        canonicalUrl: live.sourceVideo.canonicalUrl,
+                      },
+                      sourceTabId: taskSnapshot.sourceTabId,
+                      cachedPartIdFallback: taskSnapshot.partId,
+                    },
+                    session: {
+                      identity: transcriptIdentity,
+                      segments: transcriptCues,
+                      rawVtt,
+                    },
+                    forceReload: false,
+                    isTaskCurrent: () => analysisTaskController.isCurrent(taskId) && !signal.aborted,
+                  })
+                  // The audit time of the transcript this resume actually used.
+                  // An ordinary run records the moment captions were acquired,
+                  // so the resume path must not substitute the save time; taken
+                  // right here, between acquisition and finalization.
+                  const capturedAt = new Date().toISOString()
+                  ensureTaskCurrent()
+                  const finalized = await transcriptController.prepareTaskFinalization({
+                    result,
+                    taskSource: task.snapshot,
+                  })
+                  ensureTaskCurrent()
+                  return {
+                    transcript: result.transcript,
+                    fingerprint: finalized.transcriptFingerprint,
+                    capturedAt,
+                  }
+                },
+                resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId).then((resolved) => ({
+                  apiKey: resolved.apiKey,
+                  credentialRevision: resolved.credentialRevision,
+                  profileUpdatedAt: resolved.profile.updatedAt,
+                  profileBaseUrl: resolved.profile.baseUrl,
+                  profileModel: resolved.profile.model,
+                  profileGenerationTimeoutSec: resolved.profile.generationTimeoutSec,
+                })),
+                getAnalysisCache: (cacheKey) => historyRepository.getAnalysisCache(cacheKey),
+                runFinalOnlyAnalysis,
+                persistCompletedAnalysis: async (input) => {
+                  const cacheKey = await computeAnalysisCacheKey({
+                    contentKey: input.taskSnapshot.contentKey,
+                    transcriptFingerprint: input.transcriptFingerprint,
+                    providerProfileId: input.taskSnapshot.providerProfileId,
+                    baseUrl: input.taskSnapshot.providerBaseUrl,
+                    model: input.taskSnapshot.providerModel,
+                    promptVersion: input.taskSnapshot.analysisPromptVersion,
+                  })
+                  const result = await analysisController.persistCompletedAnalysis({
+                    taskSnapshot: input.taskSnapshot,
+                    sourceVideo: input.sourceVideo,
+                    transcript: input.transcript,
+                    transcriptFingerprint: input.transcriptFingerprint,
+                    analysis: input.analysis,
+                    cacheKey,
+                    analysisPromptVersion: input.taskSnapshot.analysisPromptVersion,
+                    // The real transcript acquisition time carried by the
+                    // coordinator, never the save time: an ordinary run records
+                    // the capture moment, so a resumed write must match it.
+                    transcriptCapturedAt: input.transcriptCapturedAt,
+                    taskStartedAt: input.taskStartedAt,
+                    completedAt: input.completedAt,
+                    analysisRunId: input.analysisRunId,
+                    transcriptSnapshotId: input.transcriptSnapshotId,
+                  })
+                  return { analysisRunId: result.analysisRunId }
+                },
+              })
+
+              settled = await coordinator.resume({
+                taskSnapshot: task.snapshot,
+                workspaceEpoch: requestedWorkspaceEpoch,
+                signal,
+                setPhase,
+                onProgress: setProgress,
+                ensureTaskCurrent,
+                checkpoint: finalCheckpointLifecycle.controller,
+                checkpointMetadata: () => finalCheckpointLifecycle.controller.getMetadata(),
+              })
+              finalResumeAvailability.refresh({ kind: "resume-settled" })
+            },
+            { taskId },
+          )
+        })
+        await taskPromise
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t("toast.unknownAnalysisError")
+        toast.error(message)
+      } finally {
+        admission?.release()
+      }
+
+      const outcome = settled
+      finalResumeAvailability.setPhase("available")
+      if (!outcome) return
+      switch (outcome.kind) {
+        case "completed":
+        case "cached": {
+          await workspaceController.publishAnalysisResult({
+            workspaceEpoch: requestedWorkspaceEpoch,
+            taskContentKey: taskSnapshot.contentKey,
+            currentContentKey: videoContextRef.current.contentKey,
+            effects: {
+              publishAnalysis: () => publishCompleted(outcome.publication),
+              setAnalysisCompleted: () => setAnalysisPhase("completed"),
+              restoreQaConversation: async (input) => {
+                await restoreQaConversation(
+                  outcome.publication.contentKey,
+                  outcome.publication.analysisRunId,
+                  workspaceController.captureLoadGeneration(),
+                  outcome.publication.transcriptFingerprint,
+                  input.isCurrent,
+                )
+              },
+            },
+          })
+          await refreshRecentAnalyses()
+          setAnalysisError(null)
+          toast.success(outcome.kind === "cached"
+            ? t("finalResume.toast.cached")
+            : t("finalResume.toast.completed", { title: taskSnapshot.title }))
+          return
+        }
+        case "final-retryable":
+          finalResumeAvailability.refresh({ kind: "retryable" })
+          toast.error(t("finalResume.toast.retryable", {
+            status: outcome.error instanceof OpenAICompatibleClientError
+              ? (outcome.error.status ?? 0)
+              : 0,
+          }))
+          return
+        case "cancelled":
+          finalResumeAvailability.refresh({ kind: "cancelled" })
+          workspaceController.publishAnalysisCancelled({
+            workspaceEpoch: requestedWorkspaceEpoch,
+            taskContentKey: taskSnapshot.contentKey,
+            currentContentKey: videoContextRef.current.contentKey,
+            effects: {
+              clearAnalysisError: () => setAnalysisError(null),
+              setAnalysisCancelled: () => setAnalysisPhase("cancelled"),
+            },
+          })
+          toast.message(t("finalResume.toast.cancelled"))
+          return
+        case "persistence-failed":
+          toast.error(t("finalResume.toast.persistence", {
+            error: outcome.error instanceof Error ? outcome.error.message : t("toast.unknownAnalysisError"),
+          }))
+          return
+        case "structured-output-failed":
+          finalResumeAvailability.refresh({ kind: "structured" })
+          toast.error(t("finalResume.toast.structured"))
+          return
+        case "fatal-failure":
+          finalResumeAvailability.refresh({ kind: "fatal" })
+          toast.error(t("finalResume.toast.fatal", {
+            error: outcome.error instanceof Error ? outcome.error.message : t("toast.unknownAnalysisError"),
+          }))
+          return
+        default:
+          finalResumeAvailability.refresh({ kind: outcome.kind })
+          toast.error(t("finalResume.toast.unavailable"))
+      }
+    }
+
+    void runResume()
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, finalCheckpointLifecycle, finalResumeAvailability, provider, publishCompleted, rawVtt, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, transcriptCues, transcriptIdentity, videoContext, workspaceController])
 
   const handleOpenSavedAnalysis = useCallback(async (
     videoId: string,
@@ -2024,6 +2630,16 @@ function SidepanelWorkspace() {
             activeAnalysisRunId={analysisView?.analysisRunId}
             onAnalyze={handleAnalyze}
             onCancel={handleCancelAnalysis}
+            finalResume={{
+              view: finalResumeView,
+              onResume: () => {
+                void handleResumeFinal()
+              },
+              onRegenerate: () => {
+                void handleAnalyze({ force: true })
+              },
+              onCancel: handleCancelAnalysis,
+            }}
             onConfigureProvider={() => setActiveTab("settings")}
             onJump={handleAnalysisJump}
             onSelectHistory={(videoId, contentKey, analysisRunId) => {

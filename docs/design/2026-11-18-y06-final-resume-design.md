@@ -1,6 +1,8 @@
 # Y-06 / Issue #22 — 最终结构化总结失败后的会话内恢复设计
 
-> **M1 + M2 IMPLEMENTED / IN REVIEW · M3 NOT IMPLEMENTED / NOT AUTHORIZED**
+> **M1 / M2 MERGED · M3 IMPLEMENTED / DIRECTED REVIEW PASSED · FINAL MERGE APPROVAL PENDING** · 当前状态更新 2026-11-19
+>
+> M1 已由 PR #25 合并（`7c5adbad7e75fa730c6b996c844ce085763ae15e`），M2 已由 PR #26 合并（`e01572decbc5454560f48c8bfcbe9716219f0ab2`）。M3 Draft PR #27 的 F-01～F-04 已通过独立定向复核；最终 HEAD 的独立核验与合并授权仍待完成。
 >
 > 创建日期：2026-11-18 · 建议优先级：P1 · 原设计基线：`main@b42b7fffe05661fa1155a30af60874ab5793e2ca`
 >
@@ -8,7 +10,7 @@
 >
 > 缺陷：[Issue #22](https://github.com/Aaron-AVC/video-summary-assistant/issues/22) · [脱敏事故记录](../reviews/2026-11-18-y06-provider-502-diagnostic.md) · [验收矩阵](2026-11-18-y06-final-resume-acceptance.md)
 >
-> M1 的类型化阶段/错误和 M2 的内存检查点、身份门禁及淘汰逻辑已实施；M3 的显式恢复 UI、恢复准入和 Final-only 请求尚未实施。当前工作不修改 `LICENSE`、不发布、不触发 Provider 真实请求，也未增加数据库表、扩展权限或自动付费重试。
+> M1 的类型化阶段/错误、M2 的内存检查点与身份门禁、M3 的显式恢复 UI、恢复准入和 Final-only 请求均已实施。当前工作不修改 `LICENSE`、不发布、不触发 Provider 真实请求，也未增加数据库表、扩展权限或自动付费重试。
 
 ## 1. 用户目标与事故证据
 
@@ -121,11 +123,11 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | 里程碑 | 状态 | 实际输出 / 后续边界 | 依赖 |
 | --- | --- | --- | --- |
 | D0 | `done` | 设计、验收矩阵、风险和测试门禁 | 不改代码 |
-| M1 | `done` | 精确 `map/reduction/final/repair` 事件和可分类 HTTP 错误；不改变请求行为 | 失败注入 RED→GREEN |
-| M2 | `in_review` | 30 分钟 / 256 KiB 的单一内存检查点、完整性/身份/generation/lease 校验、真实 Reduction 接缝、Provider 二次身份校验及跨面板失效 | M1；等待 Draft PR 与独立审查 |
-| M3 | `not_authorized` | 显式恢复 UI、任务准入、0×Map/0×Reduction 的 Final-only 请求及恢复后的保存/发布均未实施 | M2 审查后另行授权 |
+| M1 | `merged` | 精确 `map/reduction/final/repair` 事件和可分类 HTTP 错误；不改变请求行为 | PR #25 已合并为 `7c5adbad7e75fa730c6b996c844ce085763ae15e` |
+| M2 | `merged` | 30 分钟 / 256 KiB 的单一内存检查点、完整性/身份/generation/lease 校验、真实 Reduction 接缝、Provider 二次身份校验及跨面板失效 | PR #26 已合并为 `e01572decbc5454560f48c8bfcbe9716219f0ab2` |
+| M3 | `implemented / directed_review_passed` | 手动「继续最终总结」、双身份恢复准入、Final-only 请求与共用持久化已落地；F-01～F-04 定向修复通过独立复核，黄金恢复及 AC-18 刷新/关闭重开浏览器 Smoke PASS | Draft PR #27；等待最终 HEAD 独立核验及用户合并授权，未开始 M4/M5 |
 | M4 | `pending` | M2 已覆盖部分身份、隐私和损坏输入回归；完整恢复流、取消竞争和浏览器 Smoke 依赖 M3 | M3 |
-| M5 | `in_review` | 候选 SHA 的 targeted/full test、typecheck、build、`git diff --check` 与 Chrome for Testing 产物门禁已执行；最终 SHA 门禁和独立审查另记 | M2/M3 各自范围 |
+| M5 | `pending` | 本里程碑未启动；M3 收尾门禁属于本次候选 HEAD 的工程验证，不视为启动 M5 | 未授权 |
 
 **不批准的后续议题**：跨刷新持久化检查点；Map 阶段续跑；自助设置重试次数 / `Retry-After` 自动退避；费用估算 UI。需另立 PR，评估数据库 Schema、导出/删除、秘钥修订和用户可见的计费提示。
 
@@ -142,6 +144,20 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | 2026-11-18 | `in_review`（M2 检查点） | 恢复固定 WIP 后核验：`runAnalysis` 在真实 Final 前准备候选，只有首次 Final 的 502/503/504/timeout 可发布；首个响应、不可恢复失败、prepare/promote 异常均完整 discard。控制器不持有恢复请求能力 | Draft PR 与独立代码审查；不得把内存 `available` 当成 M3 已可点击恢复 |
 | 2026-11-18 | `in_review`（Reduction 接缝） | 新增真实 `runAnalysis + FinalResumeCheckpointController` 集成测试，覆盖一级和两级 Reduction、502 发布、原始 Map 摘要保留、归并 ID/范围/摘要与 Final Prompt 身份、异常完全失效；未调用恢复请求 | 提交 `bb778859a7a52f703d42782a0e10294c225e74fe`；4 pass / 0 fail / 62 assertions |
 | 2026-11-18 | `in_review`（Provider 竞态） | 第二次身份校验除 `apiKey + credentialRevision + profileUpdatedAt` 外，直接比较 baseUrl/model/generationTimeoutSec，封堵同毫秒时间戳不变的执行配置替换；metadata-only 保存不再回写旧 secrets 整表，避免跨面板覆盖新 key/revision | 提交 `44429c6c2061bd900f0558a757e3ccab9868d32c`；两项均有独立 RED→GREEN 日志 |
+| 2026-11-19 | `authorized`（M3） | 维护者明确授权 M3：仅做手动 Final-only 恢复闭环及必要安全测试；不做自动重试、Map 断点续跑、跨刷新恢复、新权限或数据库迁移 | Draft PR 与独立审查 |
+| 2026-11-19 | `in_review`（M3 双身份准入） | 新增 `acquireForResume`：只把执行作用域的 `taskId`/`workspaceEpoch` 替换为检查点不可变来源值，其余身份字段仍严格比较；普通 `acquire()` 行为不变，因此未放宽 M2 匹配。恢复另有独立任务准入、AbortSignal 与行内 currentness guard | 17 项双身份 RED→GREEN |
+| 2026-11-19 | `in_review`（M3 Final-only 执行） | 抽取共用 `structured-analysis`（Prompt 组帧、JSON 解析、Schema 校验、字幕归一化、至多一次 Repair、取消），`runFinalOnlyAnalysis` 只发冻结的 Final 请求并保留 `strategy`/`initialChunkCount`/`reductionLevels`/`chunkSummaries` 形状 | 7 项执行测试；普通分析 48 项回归保持 PASS |
+| 2026-11-19 | `in_review`（M3 恢复编排） | 固定安全顺序：任务准入 → 实时来源 → 重新读取字幕 → Provider 配置 → 检查点身份 → 精确缓存 → 唯一 lease → 请求前/落盘前二次 guard。身份不一致、取消、过期、租约冲突一律 fail closed 且 0 次模型请求 | 17 项协调器测试，覆盖 A/B/C/D/E 五分支 |
+| 2026-11-19 | `in_review`（M3 共用持久化） | 把 Video Record、Transcript Snapshot、Analysis Run、Segments、Recent Analysis、Analysis Cache 抽为 `persistCompletedAnalysis`，普通完成与恢复完成共用；缓存命中时保持 nullable `analysisRunId` | 侧边栏与历史 137 项回归 PASS |
+| 2026-11-19 | `in_review`（M3 黄金流程） | 真实 `runAnalysis`+真实检查点+纯 Mock Provider：5 Map → Final 502 → 不点继续无新请求 → 手动继续 0 Map/0 Reduction/1 Final 200 → 保存 → 检查点销毁；另覆盖一/两级 Reduction 与再次 503 需再次点击 | 4 项黄金流程测试（AC-01/02/03/06/29） |
+| 2026-11-19 | `in_review`（M3 UI） | Overview 失败区新增独立「继续最终总结」入口与「完整重新生成」分流；处理中禁用并显示「正在继续最终总结」，落盘阶段显示「正在保存」；TTL 到期、视频/分P/字幕/Provider/预设变化自动失效；暴露的只有脱敏 HTTP 状态 | 10 项可用性 + 7 项组件 + 7 项 i18n 测试 |
+| 2026-11-19 | `in_review`（M3 门禁） | 全量 1605 pass / 0 fail / 5797 assertions（115 文件）；`typecheck` 与 `git diff --check` 退出 0；Chrome for Testing 156.0.8078.73 MV3 产物门禁 PASS | Side Panel 交互 Smoke 仍 NOT RUN（见验收矩阵说明） |
+| 2026-11-19 | `in_review`（M3 定向修复 F-01） | `lease.validate(currentContext)` 改为比较**传入的最新上下文**，不再使用获取时捕获的 `compareContext`；`acquireWith` 新增 `resumeScoped` 获取期标记，只有 `acquireForResume` 取得的租约才在 validate 内对 `taskId`/`workspaceEpoch` 做来源归一化，普通 `acquire()` 全程严格比较、零归一化。另收紧为 fail closed：过期/执行失效/记录校验异常一律 invalidate 并返回 false | 28 项新增断言；RED 18 fail → GREEN 111 pass（含 M2 回归）；普通 acquire 严格契约不变有专项证明测试 |
+| 2026-11-19 | `in_review`（M3 定向修复 F-02） | Side Panel `readLiveSource` 原先把 readiness 取自当前 `videoContextRef`（可能是新视频 B），身份却取自任务快照（旧视频 A），构成混用。新增纯函数 `assertLiveSourceMatchesTask`：全部身份字段来自**同一次运行时读取**（含新增 `activeTabIdRef`），再与冻结快照逐字段严格比对 tab/platform/video/part/contentKey，任何不一致立即抛 `FinalResumeSourceMismatchError`（只带字段名，不带内容值）。`finalCheckpointDurationRef` 同时改为按 `contentKey` 作用域，避免旧时长混入新任务身份 | 覆盖 YouTube A→B→A、Bilibili P1→P2→P1、await 期间切换来源；RED 2 fail → GREEN 13 pass |
+| 2026-11-19 | `in_review`（M3 定向修复 F-03） | 缓存快路径原先在 `acquireForResume` **之前**执行，只检查了 `state === "available"`，未验证身份/完整性/TTL，可能为 B 发布属于 A 的可用检查点结果，或把过期检查点当缓存命中。改为「租约先行」：`acquireForResume` 通过后才查精确缓存，命中走 `lease.destroy()` 后发布（非 `release()`），保持 0 次 AI 请求与 nullable `analysisRunId`；过期检查点返回 `expired` 而非 `cached` | RED 3 fail（`Received: "cached"`）→ GREEN；缓存命中零模型请求有显式断言 |
+| 2026-11-19 | `in_review`（M3 定向修复 F-04） | Provider 配置在异步缓存查询与租约获取之前解析，Final 实际使用的是早先读到的 `apiKey`，Final 之后仅用捕获的旧 context 调 `validate`，跨面板轮换可绕过校验。改为三次**真实重采集**（准入、Final 前、落盘前），每轮重读 tab/视频/字幕/Provider，并以新 context 调 `lease.validate`；新增 `executionTargetMatches` 逐项比较 baseUrl/model/timeout/`credentialRevision`/`apiKey`，不一致即销毁租约、`identity-mismatch`、零额外模型请求 | RED 2 fail（`Received: "completed"`）→ GREEN；`analysisRunId` 与 `credentialRevision` 全链路可追溯 |
+| 2026-11-19 | `in_review`（M3 定向修复 NOTE） | ① `transcriptCapturedAt` 原在恢复路径复用 `completedAt`，与普通路径「字幕真实捕获时刻」语义漂移；改为 `FinalResumeTranscript.capturedAt` 由真实采集点提供，落盘使用最后一次真实采集的捕获时刻。② UI 由固定 30s 轮询改为对齐真实 `expiresAt` 的调度器（`createFinalResumeTtlScheduler`），新检查点改变 `expiresAt` 自动重排。③ 任务释放瞬间即刷新（`shouldRefreshFinalResumeOnTaskRelease`），修复首次 Final 失败后按钮不能及时回到 `available` | RED 5 fail（`Expected: 1740000, Received: 30000`）→ GREEN 17 pass；`getSnapshot` 保持纯读语义 |
 | 2026-11-18 | `in_review`（候选门禁） | 改写前候选 `00a2a2df1287aabde9449d5fdb6f177426dd6170`：全量 1517 pass / 0 fail / 5371 assertions；typecheck、build、`git diff --check` 退出 0；Chrome for Testing 156.0.8078.73 的 MV3 产物门禁 PASS | 最终分支 SHA 必须重跑全量门禁；独立审查和 M3 恢复执行仍为 NOT RUN |
+| 2026-11-19 | `directed_review_passed`（M3） | F-01～F-04 获独立定向复核 CLOSED；`87ea663` 的 1684 项自动化基线与成功恢复 Smoke 已审阅。当前收尾补齐真实刷新和关闭重开：恢复 UI 不复活、无自动请求、无中间摘要或检查点持久化；关闭重开保留正常历史且新分析成功 | 独立最终 HEAD 核验与用户合并授权待完成；M4/M5 未启动 |
 
 [返回文档索引](../README.md)

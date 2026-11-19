@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react"
 
 import { AnalysisToolbar } from "@/features/analysis/components/analysis-toolbar"
+import { FinalResumePanel } from "@/features/analysis/components/final-resume-panel"
 import { KeyPointsList } from "@/features/analysis/components/key-points-list"
 import { SegmentTimeline } from "@/features/analysis/components/segment-timeline"
 import { SummaryCard } from "@/features/analysis/components/summary-card"
@@ -21,6 +22,7 @@ import {
   RecentAnalysisList,
   type RecentAnalysisListItem,
 } from "@/features/history/components/recent-analysis-list"
+import type { FinalResumeView } from "@/sidepanel/analysis/final-resume-availability"
 import type { AnalysisPhase } from "@/sidepanel/lib/sidepanel-ux"
 import { useI18n } from "@/lib/i18n/i18n-provider"
 
@@ -57,6 +59,12 @@ type OverviewTabProps = {
   currentTimestamp?: number | null
   knowledgeHandlers?: KnowledgePanelHandlers
   markdownExport?: MarkdownExportPanelProps
+  finalResume?: {
+    view: FinalResumeView
+    onResume: () => void
+    onRegenerate: () => void
+    onCancel: () => void
+  } | null
 }
 
 export function OverviewTab({
@@ -92,6 +100,7 @@ export function OverviewTab({
   currentTimestamp = null,
   knowledgeHandlers,
   markdownExport,
+  finalResume = null,
 }: OverviewTabProps) {
   const { t } = useI18n()
   const chapters = analysis?.chapters.map((chapter, index) => ({
@@ -115,6 +124,16 @@ export function OverviewTab({
         onCancel={onCancel}
         onConfigureProvider={onConfigureProvider}
       />
+      {finalResume ? (
+        <FinalResumePanel
+          view={finalResume.view}
+          errorMessage={analysisError}
+          videoTitle={activeVideoId}
+          onResume={finalResume.onResume}
+          onRegenerate={finalResume.onRegenerate}
+          onCancel={finalResume.onCancel}
+        />
+      ) : null}
       <div className="grid min-w-0 gap-3 min-[720px]:grid-cols-[1.15fr_0.85fr]">
         <SummaryCard
           summary={analysis?.summary ?? null}

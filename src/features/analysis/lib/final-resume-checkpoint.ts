@@ -144,7 +144,31 @@ export type FinalCheckpointLease = {
 
 export type FinalCheckpointAcquisition =
   | { kind: "acquired"; lease: FinalCheckpointLease }
-  | { kind: "unavailable" | "lease-unavailable" | "expired" | "identity-mismatch" | "integrity-failed" | "invalidated" | "destroyed" }
+  | { kind: "unavailable" | "lease-unavailable" | "expired" | "identity-mismatch" | "integrity-failed" | "invalidated" | "destroyed" | "execution-superseded" }
+
+/**
+ * A resume always runs under a new `AnalysisTaskController` task id and may have
+ * advanced the workspace epoch since the checkpoint was created.
+ *
+ * The checkpoint's own identity stays immutable and authoritative for the data
+ * it protects. Only these two execution-scoped fields are substituted with the
+ * original source values for the purpose of comparison; every other identity
+ * field is still compared strictly, so a resume can never borrow a checkpoint
+ * from a different video, part, transcript, provider configuration or plan.
+ */
+export const RESUME_EXECUTION_IDENTITY_FIELDS = ["taskId", "workspaceEpoch"] as const
+
+export type FinalCheckpointResumeRequest = {
+  /** Context describing the *current* execution, including its fresh task id. */
+  context: FinalCheckpointContext
+  /**
+   * Live guard for the current execution: the analysis task admission and abort
+   * ownership. It is consulted before validation and again before each lease
+   * validation so a superseded task can never issue a model request.
+   */
+  isCurrentExecution: () => boolean
+}
+
 
 export type FinalCheckpointCandidateAttempt = {
   generation: number
@@ -158,6 +182,12 @@ export type FinalResumeCheckpointController = {
   beginCandidate(input: FinalCheckpointCandidateInput): Promise<FinalCheckpointCandidateAttempt | null>
   observeContext(context: FinalCheckpointContext): Promise<void>
   acquire(context: FinalCheckpointContext): Promise<FinalCheckpointAcquisition>
+  /**
+   * Acquires the single resume lease under a live execution guard. The current
+   * task id and workspace epoch are replaced by the original source values only
+   * for identity comparison; every other field must still match exactly.
+   */
+  acquireForResume(request: FinalCheckpointResumeRequest): Promise<FinalCheckpointAcquisition>
   getMetadata(): FinalCheckpointMetadata
   handleDestructiveMutation(mutation: DestructiveMutation): boolean
   invalidate(reason: string): void
@@ -492,6 +522,29 @@ function sanitizeReason(reason: string): string {
   return /^[a-z0-9:-]{1,64}$/.test(reason) ? reason : "invalidated"
 }
 
+/**
+ * Builds the context actually compared during a resume.
+ *
+ * A resume necessarily runs under a new task id (and possibly a new workspace
+ * epoch), so those two execution-scoped fields are taken from the checkpoint's
+ * immutable source identity. Every other field keeps the *live* value, which is
+ * what still enforces exact video, part, transcript, provider, preset, budget
+ * and plan matching.
+ */
+export function buildResumeComparisonContext(
+  context: FinalCheckpointContext,
+  identity: Pick<FinalCheckpointIdentity, "sourceTaskId" | "workspaceEpoch">,
+): FinalCheckpointContext {
+  return {
+    ...context,
+    source: {
+      ...context.source,
+      taskId: identity.sourceTaskId,
+      workspaceEpoch: identity.workspaceEpoch,
+    },
+  }
+}
+
 export function createFinalResumeCheckpointController(options: {
   now?: () => number
   randomUUID?: () => string
@@ -516,8 +569,25 @@ export function createFinalResumeCheckpointController(options: {
 
   const expired = (record: FinalCheckpointRecord): boolean => now() >= record.expiresAt
 
-  const acquire = async (context: FinalCheckpointContext): Promise<FinalCheckpointAcquisition> => {
+  /**
+   * Shared acquisition path. `compareContext` supplies the context used for the
+   * strict identity comparison and `isCurrentExecution` the live task guard;
+   * both are identity-preserving for a normal acquire.
+   *
+   * `resumeScoped` records whether this acquisition came from
+   * `acquireForResume`. Only a resume acquisition may normalize the two
+   * execution-scoped identity fields later, inside `lease.validate`, so that a
+   * live context can be re-checked after the Final request. A plain `acquire`
+   * keeps the unnormalized strict contract for both acquisition and every
+   * subsequent validation.
+   */
+  const acquireWith = async (
+    compareContext: FinalCheckpointContext,
+    isCurrentExecution: () => boolean,
+    resumeScoped: boolean,
+  ): Promise<FinalCheckpointAcquisition> => {
     if (destroyed) return { kind: "destroyed" }
+    if (!isCurrentExecution()) return { kind: "execution-superseded" }
     const acquiredEntry = entry
     if (!acquiredEntry) return { kind: "unavailable" }
     if (acquiredEntry.state === "leased") return { kind: "lease-unavailable" }
@@ -545,7 +615,15 @@ export function createFinalResumeCheckpointController(options: {
       invalidate("integrity-failed")
       return { kind: "integrity-failed" }
     }
-    const identityValid = await contextMatchesRecord(context, acquiredEntry.record, digest)
+    if (!isCurrentExecution()) {
+      if (stillOwnsLease()) {
+        leaseActive = false
+        acquiredEntry.leaseId = null
+        acquiredEntry.state = "available"
+      }
+      return { kind: "execution-superseded" }
+    }
+    const identityValid = await contextMatchesRecord(compareContext, acquiredEntry.record, digest)
     if (destroyed) return { kind: "destroyed" }
     if (!isCurrent(acquiredGeneration, acquiredEntry)) return { kind: "invalidated" }
     if (!identityValid) {
@@ -563,12 +641,41 @@ export function createFinalResumeCheckpointController(options: {
       identity: acquiredEntry.record.identity,
       payload: acquiredEntry.record.payload,
       async validate(currentContext) {
-        if (!stillOwnsLease() || expired(acquiredEntry.record)) return false
-        const valid = await verifyFinalCheckpointRecord(acquiredEntry.record, digest)
-          && await contextMatchesRecord(currentContext, acquiredEntry.record, digest)
         if (!stillOwnsLease()) return false
-        if (!valid || expired(acquiredEntry.record)) {
-          invalidate(valid ? "expired" : "lease-validation-failed")
+        if (expired(acquiredEntry.record)) {
+          invalidate("expired")
+          return false
+        }
+        if (!isCurrentExecution()) {
+          invalidate("execution-superseded")
+          return false
+        }
+        // F-01: compare the context the caller just supplied, never the context
+        // captured at acquisition time. A resume lease additionally substitutes
+        // only its two execution-scoped fields (task id and workspace epoch)
+        // with the checkpoint's immutable source values; a plain acquire lease
+        // is compared byte-for-byte with no normalization at all.
+        let valid = false
+        try {
+          const comparisonContext = resumeScoped
+            ? buildResumeComparisonContext(currentContext, acquiredEntry.record.identity)
+            : currentContext
+          valid = await verifyFinalCheckpointRecord(acquiredEntry.record, digest)
+            && await contextMatchesRecord(comparisonContext, acquiredEntry.record, digest)
+        } catch {
+          valid = false
+        }
+        if (!stillOwnsLease()) return false
+        if (!isCurrentExecution()) {
+          invalidate("execution-superseded")
+          return false
+        }
+        if (!valid) {
+          invalidate("lease-validation-failed")
+          return false
+        }
+        if (expired(acquiredEntry.record)) {
+          invalidate("expired")
           return false
         }
         return true
@@ -588,6 +695,9 @@ export function createFinalResumeCheckpointController(options: {
     }
     return { kind: "acquired", lease }
   }
+
+  const acquire = async (context: FinalCheckpointContext): Promise<FinalCheckpointAcquisition> =>
+    acquireWith(context, () => true, false)
 
   return {
     async beginCandidate(input) {
@@ -669,6 +779,18 @@ export function createFinalResumeCheckpointController(options: {
     },
 
     acquire,
+
+    async acquireForResume({ context, isCurrentExecution }) {
+      if (destroyed) return { kind: "destroyed" }
+      if (!isCurrentExecution()) return { kind: "execution-superseded" }
+      const declared = entry
+      if (!declared) return { kind: "unavailable" }
+      return acquireWith(
+        buildResumeComparisonContext(context, declared.record.identity),
+        isCurrentExecution,
+        true,
+      )
+    },
 
     getMetadata() {
       if (!entry) {

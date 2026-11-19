@@ -302,6 +302,7 @@ function resumeDependencies(harness: GoldenHarness, overrides: Partial<FinalResu
     loadTranscript: async () => ({
       transcript: harness.transcript,
       fingerprint: await computeTranscriptFingerprint(harness.scenario.cues),
+      capturedAt: "2026-01-01T00:19:59.000Z",
     }),
     resolveProvider: async () => ({
       apiKey: "sk-fixture-never-real",

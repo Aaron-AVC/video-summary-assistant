@@ -13,6 +13,7 @@ import type { AnalysisTaskSnapshot } from "@/features/analysis/lib/analysis-task
 import {
   createFinalResumeCheckpointController,
   FINAL_CHECKPOINT_PLANNING_VERSION,
+  FINAL_CHECKPOINT_TTL_MS,
   type FinalCheckpointContext,
   type FinalResumeCheckpointController,
 } from "@/features/analysis/lib/final-resume-checkpoint"
@@ -42,6 +43,8 @@ const ORIGINAL_TASK_ID = "task-original"
 const RESUME_TASK_ID = "task-resume-2"
 const ORIGINAL_EPOCH = 7
 const RESUME_EPOCH = 19
+/** Deliberately different from the coordinator's `now()` completion timestamp. */
+const CAPTURED_AT = "2026-01-01T00:19:59.000Z"
 
 const cues: TranscriptCue[] = [
   { startSec: 0, endSec: 10, text: "First cue." },
@@ -223,6 +226,7 @@ async function createHarness(
     loadTranscript: async () => ({
       transcript: transcriptFixture(),
       fingerprint: await computeTranscriptFingerprint(cues),
+      capturedAt: CAPTURED_AT,
     }),
     resolveProvider: async () => providerFixture,
     getAnalysisCache: async () => null,
@@ -351,6 +355,7 @@ describe("final resume coordinator", () => {
       loadTranscript: async () => ({
         transcript: transcriptFixture(),
         fingerprint: "changed-fingerprint",
+        capturedAt: CAPTURED_AT,
       }),
     })
 
@@ -524,5 +529,284 @@ describe("final resume coordinator", () => {
 
     expect(result.kind).toBe("unavailable")
     expect(harness.calls).toEqual([])
+  })
+})
+
+function cacheEntityFixture(overrides: Partial<AnalysisCacheEntity> = {}): AnalysisCacheEntity {
+  return {
+    cacheKey: "cache-key",
+    contentKey: CONTENT_KEY,
+    platform: "youtube",
+    videoId: "video-resume",
+    partId: null,
+    transcriptFingerprint: "",
+    analysisSchemaVersion: VIDEO_ANALYSIS_SCHEMA_VERSION,
+    analysisPromptVersion: VIDEO_ANALYSIS_PROMPT_VERSION,
+    providerProfileId: PROVIDER_ID,
+    providerBaseUrl: BASE_URL,
+    providerModel: MODEL,
+    analysisRunId: null,
+    analysis: analysisFixture(),
+    createdAt: "2025-12-31T00:00:00.000Z",
+    updatedAt: "2025-12-31T00:00:00.000Z",
+    ...overrides,
+  }
+}
+
+function parseDeferred() {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { gate, release }
+}
+
+describe("final resume coordinator F-03: the lease precedes the cache fast path", () => {
+  it("F-03-a refuses a cached safety net owned by another checkpoint (no publication, zero model calls)", async () => {
+    const fingerprint = await computeTranscriptFingerprint(cues)
+    const harness = await createHarness({
+      // The live request now points at video B while the available checkpoint
+      // still belongs to video A.
+      readLiveSource: async () => ({
+        taskSnapshot: taskSnapshotFixture({
+          taskId: RESUME_TASK_ID,
+          contentKey: "youtube:video-other",
+          videoId: "video-other",
+        }),
+        sourceVideo: sourceVideoFixture({
+          contentKey: "youtube:video-other",
+          videoId: "video-other",
+        }),
+        workspaceEpoch: RESUME_EPOCH,
+      }),
+      // ... and a perfectly matching cache row exists for B.
+      getAnalysisCache: async () => cacheEntityFixture({
+        contentKey: "youtube:video-other",
+        videoId: "video-other",
+        transcriptFingerprint: fingerprint,
+      }),
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("identity-mismatch")
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+    // The mismatched checkpoint must not be rewritten as a cache settlement.
+    expect(harness.controller.getMetadata().invalidationReason).not.toBe("cache-satisfied")
+    expect(harness.controller.getMetadata().state).not.toBe("leased")
+  })
+
+  it("F-03-b reports expired instead of publishing a matching cache for an expired checkpoint", async () => {
+    let clock = Date.parse("2026-01-01T00:00:00.000Z")
+    const controller = createFinalResumeCheckpointController({ now: () => clock })
+    const fingerprint = await computeTranscriptFingerprint(cues)
+    const harness = await createHarness({
+      getAnalysisCache: async () => cacheEntityFixture({ transcriptFingerprint: fingerprint }),
+    }, controller)
+
+    // Push the checkpoint past its 30 minute TTL before the resume runs.
+    clock += FINAL_CHECKPOINT_TTL_MS + 1
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("expired")
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).not.toBe("available")
+  })
+
+  it("F-03-c publishes an exact cache hit, makes zero model requests and destroys the checkpoint", async () => {
+    const fingerprint = await computeTranscriptFingerprint(cues)
+    const harness = await createHarness({
+      getAnalysisCache: async () => cacheEntityFixture({ transcriptFingerprint: fingerprint }),
+    })
+
+    // The cache fast path is only legitimate after the single lease proved the
+    // checkpoint belongs to this live request; record that it really happened.
+    let acquisitions = 0
+    const acquireForResume = harness.controller.acquireForResume.bind(harness.controller)
+    harness.controller.acquireForResume = async (resumeRequest) => {
+      acquisitions += 1
+      return acquireForResume(resumeRequest)
+    }
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(acquisitions).toBe(1)
+    expect(result.kind).toBe("cached")
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+    // A cache hit ends the resume opportunity: the checkpoint must be gone, not
+    // just released back into a clickable "available" state.
+    expect(harness.controller.getMetadata().state).not.toBe("available")
+    if (result.kind === "cached") {
+      expect(result.publication.analysisRunId).toBeNull()
+      expect(result.publication.analysis).toEqual(analysisFixture())
+    }
+  })
+})
+
+describe("final resume coordinator F-04: credentials are re-verified before use", () => {
+  it("F-04-a aborts before the Final request when the provider rotated during the cache lookup", async () => {
+    const providerState: { current: FinalResumeProvider } = { current: { ...providerFixture } }
+    const harness = await createHarness({
+      resolveProvider: async () => ({ ...providerState.current }),
+      // Pause deterministically at the asynchronous cache lookup, rotate the
+      // stored credential (model/endpoint/key/revision) before the storage
+      // invalidation notification could ever fire, then let the resume go.
+      getAnalysisCache: async () => {
+        providerState.current = {
+          ...providerState.current,
+          apiKey: "sk-rotated-key",
+          credentialRevision: "credential-revision-2",
+          profileBaseUrl: "https://rotated.example.com/v1",
+          profileModel: "rotated-model",
+        }
+        return null
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("identity-mismatch")
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).not.toBe("available")
+  })
+
+  it("F-04-b refuses to persist when the credential revision rotates after the Final request", async () => {
+    const providerState: { current: FinalResumeProvider } = { current: { ...providerFixture } }
+    const harness = await createHarness({
+      resolveProvider: async () => ({ ...providerState.current }),
+      runFinalOnlyAnalysis: async () => {
+        harness.calls.push("final")
+        // Rotate the stored credential while the resumed Final is finishing,
+        // i.e. after the response but before the completion write.
+        providerState.current = {
+          ...providerState.current,
+          credentialRevision: "credential-revision-2",
+        }
+        return { analysis: analysisFixture(), repairAttempted: false, rawResponse: "{}" }
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("identity-mismatch")
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).not.toBe("available")
+  })
+})
+
+describe("final resume coordinator F-01: the live source is re-captured, not just re-checked", () => {
+  it("re-reads the live source, transcript and provider before the Final request and before persistence", async () => {
+    let liveReads = 0
+    let transcriptLoads = 0
+    let providerReads = 0
+    const harness = await createHarness({
+      readLiveSource: async () => {
+        liveReads += 1
+        return {
+          taskSnapshot: taskSnapshotFixture({ taskId: RESUME_TASK_ID }),
+          sourceVideo: sourceVideoFixture(),
+          workspaceEpoch: RESUME_EPOCH,
+        }
+      },
+      loadTranscript: async () => {
+        transcriptLoads += 1
+        return {
+          transcript: transcriptFixture(),
+          fingerprint: await computeTranscriptFingerprint(cues),
+          capturedAt: CAPTURED_AT,
+        }
+      },
+      resolveProvider: async () => {
+        providerReads += 1
+        return { ...providerFixture }
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("completed")
+    // Admission, pre-Final and pre-persistence: a real re-capture each time.
+    expect(liveReads).toBe(3)
+    expect(transcriptLoads).toBe(3)
+    expect(providerReads).toBe(3)
+  })
+
+  it("fails closed with zero model requests when the live transcript changes after admission", async () => {
+    let loads = 0
+    const harness = await createHarness({
+      loadTranscript: async () => {
+        loads += 1
+        // The second (pre-Final) capture sees a different transcript.
+        return {
+          transcript: transcriptFixture(),
+          fingerprint: loads === 1
+            ? await computeTranscriptFingerprint(cues)
+            : "changed-fingerprint-after-admission",
+          capturedAt: CAPTURED_AT,
+        }
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("identity-mismatch")
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+  })
+})
+
+describe("final resume coordinator transcript capture timestamp", () => {
+  it("persists the real transcript acquisition time, not the save completion time", async () => {
+    const persisted: Array<{ transcriptCapturedAt?: string, completedAt?: string }> = []
+    const harness = await createHarness({
+      loadTranscript: async () => ({
+        transcript: transcriptFixture(),
+        fingerprint: await computeTranscriptFingerprint(cues),
+        capturedAt: CAPTURED_AT,
+      }),
+      persistCompletedAnalysis: async (input) => {
+        persisted.push(input as unknown as { transcriptCapturedAt: string, completedAt: string })
+        harness.saveCalls.push("persist")
+        return { analysisRunId: "run-resumed" }
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("completed")
+    expect(persisted).toHaveLength(1)
+    expect(persisted[0]!.transcriptCapturedAt).toBe(CAPTURED_AT)
+    expect(persisted[0]!.completedAt).toBe("2026-01-01T00:30:00.000Z")
+    expect(persisted[0]!.transcriptCapturedAt).not.toBe(persisted[0]!.completedAt)
+  })
+
+  it("persists the last real capture when the transcript is re-acquired before the write", async () => {
+    let loads = 0
+    const persisted: Array<{ transcriptCapturedAt?: string }> = []
+    const harness = await createHarness({
+      loadTranscript: async () => {
+        loads += 1
+        return {
+          transcript: transcriptFixture(),
+          fingerprint: await computeTranscriptFingerprint(cues),
+          capturedAt: loads === 1 ? "2026-01-01T00:10:00.000Z" : "2026-01-01T00:29:00.000Z",
+        }
+      },
+      persistCompletedAnalysis: async (input) => {
+        persisted.push(input as unknown as { transcriptCapturedAt: string })
+        return { analysisRunId: "run-resumed" }
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("completed")
+    expect(persisted[0]!.transcriptCapturedAt).toBe("2026-01-01T00:29:00.000Z")
   })
 })

@@ -100,6 +100,45 @@ function createSecretWriteRace() {
   }
 }
 
+function createSnapshotReadRace() {
+  const { adapter, store } = createAdapter()
+  const readStarted = deferred()
+  const releaseRead = deferred()
+  let raceEnabled = false
+  let firstSnapshotRead = true
+  const lockManager = createTestSettingsStorageLockManager()
+  const gatedAdapter: SettingsStorageAdapter = {
+    async get<T>(keys: string[]): Promise<Partial<Record<string, T>>> {
+      const snapshot = await adapter.get<T>(keys)
+      if (raceEnabled && firstSnapshotRead && keys.includes(SETTINGS_KEYS.theme)) {
+        firstSnapshotRead = false
+        readStarted.resolve()
+        await releaseRead.promise
+      }
+      return snapshot
+    },
+    set: (values) => adapter.set(values),
+    remove: (keys) => adapter.remove(keys),
+  }
+  const seed = createSettingsStorage(adapter, { lockManager })
+  const panelA = createSettingsStorage(gatedAdapter, { lockManager })
+  const panelB = createSettingsStorage(gatedAdapter, { lockManager })
+
+  return {
+    store,
+    panelA,
+    panelB,
+    readStarted: readStarted.promise,
+    releaseRead: releaseRead.resolve,
+    async seedInvalidDefault() {
+      await seed.saveProviderConfig(providerInput("provider-p", "sk-p-old"))
+      await seed.saveProviderConfig(providerInput("provider-q", "sk-q-old"))
+      store.set(SETTINGS_KEYS.defaultProviderId, "provider-missing")
+      raceEnabled = true
+    },
+  }
+}
+
 describe("provider credential cross-panel serialization", () => {
   it("preserves both key replacements and revisions when panels edit different profiles", async () => {
     const race = createSecretWriteRace()
@@ -263,5 +302,49 @@ describe("provider credential cross-panel serialization", () => {
     expect(store.get(SETTINGS_KEYS.providerProfiles)).toBeUndefined()
     expect(store.get(SETTINGS_KEYS.providerSecrets)).toBeUndefined()
     expect(lockManager.maxActive).toBe(1)
+  })
+})
+
+describe("provider default read normalization", () => {
+  it("does not overwrite another panel's default from a delayed snapshot read", async () => {
+    const race = createSnapshotReadRace()
+    await race.seedInvalidDefault()
+
+    const reading = race.panelA.getSettingsSnapshot()
+    await race.readStarted
+    await race.panelB.setDefaultProviderId("provider-q")
+    race.releaseRead()
+    const snapshot = await reading
+
+    expect(snapshot.defaultProviderId).toBe("provider-p")
+    expect(race.store.get(SETTINGS_KEYS.defaultProviderId)).toBe("provider-q")
+  })
+
+  it("does not recreate a default key when clear-settings wins a snapshot read race", async () => {
+    const race = createSnapshotReadRace()
+    await race.seedInvalidDefault()
+
+    const reading = race.panelA.getSettingsSnapshot()
+    await race.readStarted
+    await race.panelB.clearSettings()
+    race.releaseRead()
+    await reading
+
+    expect(race.store.has(SETTINGS_KEYS.defaultProviderId)).toBe(false)
+    expect(race.store.has(SETTINGS_KEYS.providerProfiles)).toBe(false)
+    expect(race.store.has(SETTINGS_KEYS.providerSecrets)).toBe(false)
+  })
+
+  it("fails explicitly without Web Locks without repairing the stored default", async () => {
+    const { adapter, store } = createAdapter()
+    const seed = createSettingsStorage(adapter, {
+      lockManager: createTestSettingsStorageLockManager(),
+    })
+    await seed.saveProviderConfig(providerInput("provider-p", "sk-p-old"))
+    store.set(SETTINGS_KEYS.defaultProviderId, "provider-missing")
+    const withoutLocks = createSettingsStorage(adapter, { lockManager: null })
+
+    await expect(withoutLocks.getSettingsSnapshot()).rejects.toThrow("Web Locks")
+    expect(store.get(SETTINGS_KEYS.defaultProviderId)).toBe("provider-missing")
   })
 })

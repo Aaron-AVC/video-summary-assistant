@@ -361,10 +361,6 @@ export function createSettingsStorage(
       ? requestedDefault
       : profiles[0]?.id ?? null
 
-    if (defaultProviderId !== requestedDefault) {
-      await adapter.set({ [SETTINGS_KEYS.defaultProviderId]: defaultProviderId })
-    }
-
     const providerConfigs = profiles.map((profile) => ({
       ...profile,
       isDefault: profile.id === defaultProviderId,

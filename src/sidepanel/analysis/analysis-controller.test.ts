@@ -357,7 +357,10 @@ describe("analysis controller — common prefix", () => {
     const guardIndex = harness.events.indexOf("guard")
     expect(providerIndex).toBeGreaterThan(-1)
     expect(guardIndex).toBeGreaterThan(providerIndex)
-    expect(extras.guardCalls).toBe(2)
+    // Provider resolution, cache lookup, then the model boundary are separate
+    // await points. A cancellation in any of them must stop the next stage.
+    expect(extras.guardCalls).toBe(3)
+    expect(harness.events.lastIndexOf("guard")).toBeGreaterThan(harness.events.indexOf("getAnalysisCache"))
   })
 
   it("D. persists the exact task transcript cache payload", async () => {
@@ -487,6 +490,28 @@ describe("analysis controller — analysis cache", () => {
 
     expect(result.kind).toBe("completed")
     expect(harness.calls.runAnalysis).toHaveLength(1)
+  })
+})
+
+describe("M4 cancellation before model execution", () => {
+  it("does not start the model when cancellation lands during the cache lookup", async () => {
+    const abort = new AbortController()
+    const harness = createHarness({
+      overrides: {
+        getAnalysisCache: async () => {
+          abort.abort()
+          return null
+        },
+      },
+    })
+    const { request } = createRequest(harness.events, { signal: abort.signal })
+
+    await expect(harness.controller.runExecutionTask(request)).rejects.toMatchObject({
+      name: "AnalysisAbortedError",
+    })
+    expect(harness.calls.runAnalysis).toHaveLength(0)
+    expect(harness.calls.saveAnalysisRun).toHaveLength(0)
+    expect(harness.calls.saveAnalysisCache).toHaveLength(0)
   })
 })
 

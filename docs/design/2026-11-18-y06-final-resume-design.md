@@ -1,8 +1,10 @@
 # Y-06 / Issue #22 — 最终结构化总结失败后的会话内恢复设计
 
-> **M1 / M2 MERGED · M3 IMPLEMENTED / DIRECTED REVIEW PASSED · FINAL MERGE APPROVAL PENDING** · 当前状态更新 2026-11-19
+> **M1 / M2 / M3 MERGED · M4 RECONSTRUCTED CANDIDATE / READY FOR FINAL REVIEW** · 当前状态更新 2026-11-21
 >
-> M1 已由 PR #25 合并（`7c5adbad7e75fa730c6b996c844ce085763ae15e`），M2 已由 PR #26 合并（`e01572decbc5454560f48c8bfcbe9716219f0ab2`）。M3 Draft PR #27 的 F-01～F-04 已通过独立定向复核；最终 HEAD 的独立核验与合并授权仍待完成。
+> M1 已由 PR #25 合并（`7c5adbad7e75fa730c6b996c844ce085763ae15e`），M2 已由 PR #26 合并（`e01572decbc5454560f48c8bfcbe9716219f0ab2`），M3 已由 PR #27 合并。M4 固定基线为 `1bea4bc8f66525ca2edb248b185a8abf18ff3658`，本地分支为 `feat/y06-m4-reconstructed-finalization-20261121`。
+>
+> M4-R02 为 **RECONSTRUCTED CANDIDATE**，不是异常前的字节级原件；M4-R03 **PASS**，R02-F01 **CLOSED**，M4 等待独立最终审查。原异常 Worktree 与恢复证据继续保留为历史记录；M4 尚未推送、合并，M5 尚未启动。
 >
 > 创建日期：2026-11-18 · 建议优先级：P1 · 原设计基线：`main@b42b7fffe05661fa1155a30af60874ab5793e2ca`
 >
@@ -125,9 +127,9 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | D0 | `done` | 设计、验收矩阵、风险和测试门禁 | 不改代码 |
 | M1 | `merged` | 精确 `map/reduction/final/repair` 事件和可分类 HTTP 错误；不改变请求行为 | PR #25 已合并为 `7c5adbad7e75fa730c6b996c844ce085763ae15e` |
 | M2 | `merged` | 30 分钟 / 256 KiB 的单一内存检查点、完整性/身份/generation/lease 校验、真实 Reduction 接缝、Provider 二次身份校验及跨面板失效 | PR #26 已合并为 `e01572decbc5454560f48c8bfcbe9716219f0ab2` |
-| M3 | `implemented / directed_review_passed` | 手动「继续最终总结」、双身份恢复准入、Final-only 请求与共用持久化已落地；F-01～F-04 定向修复通过独立复核，黄金恢复及 AC-18 刷新/关闭重开浏览器 Smoke PASS | Draft PR #27；等待最终 HEAD 独立核验及用户合并授权，未开始 M4/M5 |
-| M4 | `pending` | M2 已覆盖部分身份、隐私和损坏输入回归；完整恢复流、取消竞争和浏览器 Smoke 依赖 M3 | M3 |
-| M5 | `pending` | 本里程碑未启动；M3 收尾门禁属于本次候选 HEAD 的工程验证，不视为启动 M5 | 未授权 |
+| M3 | `merged` | 手动「继续最终总结」、双身份恢复准入、Final-only 请求与共用持久化已落地；F-01～F-04 定向修复通过独立复核，黄金恢复及 AC-18 刷新/关闭重开浏览器 Smoke PASS | PR #27 已合并 |
+| M4 | `reconstructed_candidate / ready_for_final_review` | M4-R02 隔离重建五文件；M4-R03 修复 R02-F01 并 PASS。源码仍为重建候选，不是异常前字节级原件；等待独立最终审查，尚未推送、合并 | M3 已合并 |
+| M5 | `pending` | 本里程碑未启动；M4 隔离重建、修复与最终门禁属于 M4 范围，不视为启动 M5 | 未授权 |
 
 **不批准的后续议题**：跨刷新持久化检查点；Map 阶段续跑；自助设置重试次数 / `Retry-After` 自动退避；费用估算 UI。需另立 PR，评估数据库 Schema、导出/删除、秘钥修订和用户可见的计费提示。
 
@@ -159,5 +161,8 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | 2026-11-19 | `in_review`（M3 定向修复 NOTE） | ① `transcriptCapturedAt` 原在恢复路径复用 `completedAt`，与普通路径「字幕真实捕获时刻」语义漂移；改为 `FinalResumeTranscript.capturedAt` 由真实采集点提供，落盘使用最后一次真实采集的捕获时刻。② UI 由固定 30s 轮询改为对齐真实 `expiresAt` 的调度器（`createFinalResumeTtlScheduler`），新检查点改变 `expiresAt` 自动重排。③ 任务释放瞬间即刷新（`shouldRefreshFinalResumeOnTaskRelease`），修复首次 Final 失败后按钮不能及时回到 `available` | RED 5 fail（`Expected: 1740000, Received: 30000`）→ GREEN 17 pass；`getSnapshot` 保持纯读语义 |
 | 2026-11-18 | `in_review`（候选门禁） | 改写前候选 `00a2a2df1287aabde9449d5fdb6f177426dd6170`：全量 1517 pass / 0 fail / 5371 assertions；typecheck、build、`git diff --check` 退出 0；Chrome for Testing 156.0.8078.73 的 MV3 产物门禁 PASS | 最终分支 SHA 必须重跑全量门禁；独立审查和 M3 恢复执行仍为 NOT RUN |
 | 2026-11-19 | `directed_review_passed`（M3） | F-01～F-04 获独立定向复核 CLOSED；`87ea663` 的 1684 项自动化基线与成功恢复 Smoke 已审阅。当前收尾补齐真实刷新和关闭重开：恢复 UI 不复活、无自动请求、无中间摘要或检查点持久化；关闭重开保留正常历史且新分析成功 | 独立最终 HEAD 核验与用户合并授权待完成；M4/M5 未启动 |
+| 2026-11-21 | `reconstructed_candidate`（M4-R02） | 在 `D:/files/vsa-m4-rebuild-20261120` 从固定基线重建五文件安全回归；原异常 Worktree、正式 main、其他 Worktree、Stash 与既有证据未修改。R02 五文件历史 SHA256 与 Diff 保存在仓库外 `D:/files/vsa-m4-rebuild-evidence-20261120/M4-R02-reconstruction-report.md` 和 `final-sha256.txt`；源码不是异常前字节级原件 | M4-R03 定向审查 |
+| 2026-11-21 | `PASS / R02-F01 CLOSED`（M4-R03） | Final 已收到后 Repair HTTP 503 曾被误判为 `final-retryable`；现优先返回 `structured-output-failed` 并销毁检查点。用户取消优先、原始 TTL、无响应瞬时失败及身份门禁不变。定向用例 RED `final-retryable` → GREEN `structured-output-failed`；独立复审 CLOSED | M4 等待独立最终审查；不宣称找回字节级原件 |
+| 2026-11-21 | `ready_for_final_review`（M4-R04） | 在 `feat/y06-m4-reconstructed-finalization-20261121` 复核同一五文件并重新执行门禁：1700 pass / 0 fail / 6123 assertions（116 文件）、TypeScript、Build、diff check、CfT Artifact Gate 与八组 Chrome Smoke 全 PASS。命令、退出码和原始日志位于 `D:/files/vsa-m4-rebuild-evidence-20261120/R04/` | 仅本地原子提交；尚未推送、合并，M5 尚未启动 |
 
 [返回文档索引](../README.md)

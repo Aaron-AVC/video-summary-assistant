@@ -21,6 +21,7 @@ import {
   type FinalResumeCheckpointController,
 } from "@/features/analysis/lib/final-resume-checkpoint"
 import type { RunAnalysisOptions, RunAnalysisResult, AnalysisProgressEvent } from "@/features/analysis/lib/run-analysis"
+import { throwIfAborted } from "@/features/analysis/lib/structured-analysis"
 import type { SaveAnalysisRunInput } from "@/features/history/lib/history-repository"
 import { persistIfSupportedPlatform } from "@/features/platform/persistence-compat"
 import type { VideoInfo, VideoPlatform, VideoTranscript } from "@/features/platform/types"
@@ -355,6 +356,11 @@ export function createAnalysisController(
         }
       }
     }
+
+    // Cancellation may land while the asynchronous cache lookup is in flight.
+    // Check before the model boundary, not only after a completed model call.
+    throwIfAborted(signal)
+    ensureTaskCurrent()
 
     const checkpointRequest = request.finalCheckpoint
     let finalCheckpointHooks: RunAnalysisOptions["finalCheckpoint"]

@@ -328,6 +328,13 @@ export function createFinalResumeCoordinator(
         return settleCaptureFailure(error)
       }
 
+      // The lease can expire while the asynchronous cache lookup is in flight.
+      // Recheck it with the already-captured admission identity before allowing
+      // the zero-model fast path to publish or destroy the checkpoint as cached.
+      if (!await validateLease(admission.context)) {
+        return destroyAnd({ kind: "expired" })
+      }
+
       if (cached?.analysis && isExactCurrentAnalysis({
         contentKey: cached.contentKey,
         transcriptFingerprint: cached.transcriptFingerprint,
@@ -403,19 +410,23 @@ export function createFinalResumeCoordinator(
         if (signal.aborted || error instanceof AnalysisAbortedError) {
           return destroyAnd({ kind: "cancelled" })
         }
-        // C. A returned response whose structure failed is not a network fault.
+        // C. Once a response arrived, a later parse or Repair failure is not a
+        // transient Final request failure, even when Repair returns HTTP 503.
         if (responseReceived) {
           return destroyAnd({ kind: "structured-output-failed", error })
         }
-        // D. Identity, auth, rate-limit or other ineligible failures end resume.
-        if (!isFinalFailureEligibleForCheckpoint(error)) {
-          return destroyAnd({ kind: "fatal-failure", error })
+        // A transient response can arrive after the original 30-minute TTL.
+        // Such a response must never release the lease into a fresh clickable
+        // retry, even if the UI has not run its next expiry refresh yet.
+        if (isFinalFailureEligibleForCheckpoint(error)) {
+          terminal = true
+          lease.release()
+          return request.checkpointMetadata().state === "available"
+            ? { kind: "final-retryable", error }
+            : destroyAnd({ kind: "expired" })
         }
-        // A. Another qualified transient failure keeps the original TTL and
-        // still requires an explicit new click.
-        terminal = true
-        lease.release()
-        return { kind: "final-retryable", error }
+        // D. Identity, auth, rate-limit or other ineligible failures end resume.
+        return destroyAnd({ kind: "fatal-failure", error })
       }
 
       // 7. Last guards immediately before the write.

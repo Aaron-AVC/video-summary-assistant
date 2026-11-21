@@ -478,6 +478,39 @@ describe("final resume coordinator", () => {
     expect(harness.controller.getMetadata().state).toBe("empty")
   })
 
+  it("discards the checkpoint when Repair fails with HTTP 503 after the Final response", async () => {
+    let responseReceived = false
+    const harness = await createHarness({
+      runFinalOnlyAnalysis: async (input) => {
+        harness.calls.push("final")
+        input.onFinalResponseReceived?.()
+        responseReceived = true
+        throw new OpenAICompatibleClientError("Repair upstream unavailable", {
+          kind: "http",
+          status: 503,
+        })
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(responseReceived).toBe(true)
+    expect(result).toEqual({
+      kind: "structured-output-failed",
+      error: new OpenAICompatibleClientError("Repair upstream unavailable", {
+        kind: "http",
+        status: 503,
+      }),
+    })
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
+    const secondAttempt = await coordinatorFor(harness).resume(harness.request)
+    expect(secondAttempt.kind).toBe("unavailable")
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+  })
+
   it("discards the checkpoint on non-retryable provider failures", async () => {
     const harness = await createHarness({
       runFinalOnlyAnalysis: async () => {
@@ -758,6 +791,278 @@ describe("final resume coordinator F-01: the live source is re-captured, not jus
     expect(result.kind).toBe("identity-mismatch")
     expect(harness.calls).toEqual([])
     expect(harness.saveCalls).toEqual([])
+  })
+})
+
+describe("M4 cancellation, supersession and TTL races", () => {
+  it("expires during the cache lookup instead of publishing a stale cached result", async () => {
+    let clock = Date.parse("2026-01-01T00:00:00.000Z")
+    const controller = createFinalResumeCheckpointController({ now: () => clock })
+    const fingerprint = await computeTranscriptFingerprint(cues)
+    const cacheRead = parseDeferred()
+    const harness = await createHarness({
+      getAnalysisCache: async () => {
+        clock += FINAL_CHECKPOINT_TTL_MS
+        cacheRead.release()
+        return cacheEntityFixture({ transcriptFingerprint: fingerprint })
+      },
+    }, controller)
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+    await cacheRead.gate
+
+    expect(result.kind).toBe("expired")
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
+  })
+
+  it("does not publish a late successful Final after cancellation", async () => {
+    const abort = new AbortController()
+    const response = parseDeferred()
+    const requestStarted = parseDeferred()
+    const harness = await createHarness({
+      runFinalOnlyAnalysis: async () => {
+        harness.calls.push("final")
+        requestStarted.release()
+        // Deliberately model a provider that ignores AbortSignal and returns a
+        // valid result after the user cancelled the request.
+        await response.gate
+        return { analysis: analysisFixture(), repairAttempted: false, rawResponse: "{}" }
+      },
+    })
+    harness.request.signal = abort.signal
+    const resume = coordinatorFor(harness).resume(harness.request)
+
+    await requestStarted.gate
+    abort.abort()
+    response.release()
+    const result = await resume
+
+    expect(result.kind).toBe("cancelled")
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
+  })
+
+  it("does not publish a late successful Final after task supersession without an abort", async () => {
+    const response = parseDeferred()
+    const requestStarted = parseDeferred()
+    let current = true
+    const harness = await createHarness({
+      runFinalOnlyAnalysis: async () => {
+        harness.calls.push("final")
+        requestStarted.release()
+        await response.gate
+        return { analysis: analysisFixture(), repairAttempted: false, rawResponse: "{}" }
+      },
+    })
+    harness.request.ensureTaskCurrent = () => {
+      if (!current) throw new Error("task was replaced")
+    }
+    const resume = coordinatorFor(harness).resume(harness.request)
+
+    await requestStarted.gate
+    current = false
+    response.release()
+    const result = await resume
+
+    expect(result.kind).toBe("execution-superseded")
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
+  })
+
+  it("expires a retryable Final response while the provider request is in flight", async () => {
+    let clock = Date.parse("2026-01-01T00:00:00.000Z")
+    const controller = createFinalResumeCheckpointController({ now: () => clock })
+    const harness = await createHarness({
+      runFinalOnlyAnalysis: async () => {
+        harness.calls.push("final")
+        clock += FINAL_CHECKPOINT_TTL_MS
+        throw transientFailure
+      },
+    }, controller)
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("expired")
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
+  })
+
+  it.each([502, 503, 504])("keeps an in-flight HTTP %s retryable only while the original TTL is valid", async (status) => {
+    const harness = await createHarness({
+      runFinalOnlyAnalysis: async () => {
+        harness.calls.push("final")
+        throw new OpenAICompatibleClientError("temporary upstream", { kind: "http", status })
+      },
+    })
+
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(result.kind).toBe("final-retryable")
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("available")
+  })
+})
+
+describe("M4 source and provider changes across real await boundaries", () => {
+  it("does not resurrect YouTube A after the transcript read observes B then A", async () => {
+    let currentVideo = sourceVideoFixture()
+    const transcriptRead = parseDeferred()
+    let loads = 0
+    const harness = await createHarness({
+      readLiveSource: async () => ({
+        taskSnapshot: taskSnapshotFixture({ taskId: RESUME_TASK_ID }),
+        sourceVideo: currentVideo,
+        workspaceEpoch: RESUME_EPOCH,
+      }),
+      loadTranscript: async () => {
+        loads += 1
+        if (loads === 1) {
+          currentVideo = sourceVideoFixture({ videoId: "video-b", contentKey: "youtube:video-b" })
+          const changed = await checkpointContext()
+          changed.source.videoId = "video-b"
+          changed.source.contentKey = "youtube:video-b"
+          await harness.controller.observeContext(changed)
+          transcriptRead.release()
+        }
+        return {
+          transcript: transcriptFixture(),
+          fingerprint: await computeTranscriptFingerprint(cues),
+          capturedAt: CAPTURED_AT,
+        }
+      },
+    })
+    const resume = coordinatorFor(harness).resume(harness.request)
+    await transcriptRead.gate
+    currentVideo = sourceVideoFixture()
+    const result = await resume
+
+    expect(result.kind).toMatch(/identity-mismatch|unavailable/)
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
+  })
+
+  it("does not resurrect Bilibili P1 after the provider read observes P2 then P1", async () => {
+    const originalContext = await checkpointContext()
+    const controller = createFinalResumeCheckpointController()
+    const p1Context: FinalCheckpointContext = {
+      ...originalContext,
+      source: {
+        ...originalContext.source,
+        platform: "bilibili",
+        videoId: "BV1xx",
+        partId: "1",
+        contentKey: "bilibili:BV1xx:1",
+      },
+    }
+    await publishAvailableCheckpoint(controller)
+    const p1Candidate = await controller.beginCandidate({
+      context: p1Context,
+      execution: {
+        strategy: "map-reduce",
+        videoId: "BV1xx",
+        initialChunkCount: 2,
+        reductionLevels: 0,
+        mapPlan: [
+          { id: "chunk-1", index: 0, startSec: 0, endSec: 10, cueStartIndex: 0, cueEndIndex: 1 },
+          { id: "chunk-2", index: 1, startSec: 10, endSec: 20, cueStartIndex: 1, cueEndIndex: 2 },
+        ],
+        chunkSummaries: [
+          { chunkId: "chunk-1", startSec: 0, endSec: 10, summary: "P1 map one." },
+          { chunkId: "chunk-2", startSec: 10, endSec: 20, summary: "P1 map two." },
+        ],
+        finalInputSummaries: [
+          { chunkId: "chunk-1", startSec: 0, endSec: 10, summary: "P1 map one." },
+          { chunkId: "chunk-2", startSec: 10, endSec: 20, summary: "P1 map two." },
+        ],
+        finalInputMapChunkIds: [["chunk-1"], ["chunk-2"]],
+        finalPrompt,
+      },
+    })
+    expect(p1Candidate).not.toBeNull()
+    expect(await p1Candidate!.promoteFinalFailure(transientFailure)).toBe(true)
+    // The fixture's original source is A; the lifecycle must observe P2 before
+    // a later P1 recapture. This first mismatch invalidates the checkpoint.
+    await controller.observeContext({
+      ...p1Context,
+      source: { ...p1Context.source, partId: "2", contentKey: "bilibili:BV1xx:2" },
+    })
+    const providerRead = parseDeferred()
+    let reads = 0
+    const harness = await createHarness({
+      readLiveSource: async () => ({
+        taskSnapshot: taskSnapshotFixture({
+          taskId: RESUME_TASK_ID,
+          platform: "bilibili",
+          videoId: "BV1xx",
+          partId: "1",
+          contentKey: "bilibili:BV1xx:1",
+        }),
+        sourceVideo: sourceVideoFixture({
+          platform: "bilibili",
+          videoId: "BV1xx",
+          partId: "1",
+          contentKey: "bilibili:BV1xx:1",
+        }),
+        workspaceEpoch: RESUME_EPOCH,
+      }),
+      resolveProvider: async () => {
+        reads += 1
+        if (reads === 1) providerRead.release()
+        return providerFixture
+      },
+    }, controller)
+    harness.request.taskSnapshot = taskSnapshotFixture({
+      taskId: RESUME_TASK_ID,
+      platform: "bilibili",
+      videoId: "BV1xx",
+      partId: "1",
+      contentKey: "bilibili:BV1xx:1",
+    })
+    const resume = coordinatorFor(harness).resume(harness.request)
+    await providerRead.gate
+    const result = await resume
+
+    expect(result.kind).toMatch(/identity-mismatch|unavailable/)
+    expect(harness.calls).toEqual([])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
+  })
+
+  it.each([
+    ["apiKey", { apiKey: "sk-rotated-never-real" }],
+    ["credentialRevision", { credentialRevision: "credential-revision-2" }],
+    ["model", { profileModel: "model-rotated" }],
+    ["endpoint", { profileBaseUrl: "https://rotated.example.com/v1" }],
+    ["timeout", { profileGenerationTimeoutSec: TIMEOUT_SEC + 1 }],
+  ])("rejects a post-Final %s rotation before any persistence", async (_field, rotation) => {
+    let current = { ...providerFixture }
+    let reads = 0
+    const harness = await createHarness({
+      resolveProvider: async () => {
+        reads += 1
+        return { ...current }
+      },
+      runFinalOnlyAnalysis: async () => {
+        harness.calls.push("final")
+        current = { ...current, ...rotation }
+        return { analysis: analysisFixture(), repairAttempted: false, rawResponse: "{}" }
+      },
+    })
+    const result = await coordinatorFor(harness).resume(harness.request)
+
+    expect(reads).toBe(3)
+
+    expect(result.kind).toBe("identity-mismatch")
+    expect(harness.calls).toEqual(["final"])
+    expect(harness.saveCalls).toEqual([])
+    expect(harness.controller.getMetadata().state).toBe("empty")
   })
 })
 

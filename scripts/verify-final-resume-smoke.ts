@@ -97,7 +97,7 @@ import {
   waitForDevToolsPort,
 } from "./lib/cdp-client"
 
-type SmokeScenario = "golden" | "refresh" | "reopen"
+type SmokeScenario = "golden" | "refresh" | "reopen" | "cancel" | "source-switch" | "tab-switch" | "destructive" | "retry"
 
 type CliOptions = {
   artifactDir: string
@@ -123,10 +123,10 @@ function parseArgs(argv: string[]): CliOptions {
       keepProfile = true
     } else if (arg === "--scenario") {
       const value = argv[index + 1] ?? ""
-      if (value !== "golden" && value !== "refresh" && value !== "reopen") {
-        throw new Error("--scenario must be golden, refresh, or reopen.")
+      if (!["golden", "refresh", "reopen", "cancel", "source-switch", "tab-switch", "destructive", "retry"].includes(value)) {
+        throw new Error("--scenario must be golden, refresh, reopen, cancel, source-switch, tab-switch, destructive, or retry.")
       }
-      scenario = value
+      scenario = value as SmokeScenario
       index += 1
     } else {
       throw new Error(`Unknown argument: ${arg}`)
@@ -177,14 +177,36 @@ const VALID_ANALYSIS = JSON.stringify({
 
 type ProviderKind = "map" | "reduction" | "final" | "repair" | "models"
 type ProviderCall = { kind: ProviderKind, status: number, index: number }
+type Deferred = { promise: Promise<void>, release: () => void }
+
+function deferred(): Deferred {
+  let release!: () => void
+  const promise = new Promise<void>((resolve) => { release = resolve })
+  return { promise, release }
+}
 
 type SmokeState = {
   calls: ProviderCall[]
   /** Consume the first failure only when explicitly starting a retryable run. */
   failFirstFinal: boolean
+  /** Reserved for a later scenario; the common first failure remains HTTP 502. */
+  finalSequence: Array<502 | 503 | 504 | "invalid">
   /** Which CDP session's Fetch domain answered each intercepted class. */
   interceptTargets: Record<string, string>
   interceptCounts: Record<string, number>
+  /** Test-side gates; never exposed to the production page or extension. */
+  holdCancelFinal: Deferred | null
+  holdLateFinal: Deferred | null
+  cancelFinalStarted: Deferred
+  lateFinalStarted: Deferred
+  resumeTransientStatus: 503 | 504 | null
+  resumeTransientRemaining: number
+  /** Arm before cancellation/clearing so a delayed response stays intercepted. */
+  releaseHeldResponse: Deferred | null
+  heldFinalActive: boolean
+  heldFinalRequest: { sessionId: string, requestId: string } | null
+  heldFinalFulfilled: boolean
+  heldFinalError: string | null
 }
 
 const TIMEDTEXT_PATH = "/api/timedtext"
@@ -423,6 +445,19 @@ function respondToIntercepted(
       // Keep the raw body for classification.
     }
     const kind = classifyPrompt(promptText)
+    if (kind === "final" && state.finalSequence.length > 0) {
+      const next = state.finalSequence.shift()!
+      if (next === "invalid") {
+        state.calls.push({ kind, status: 200, index: state.calls.length })
+        return json(JSON.stringify({ choices: [{ message: { role: "assistant", content: "{}" } }] }))
+      }
+      state.calls.push({ kind, status: next, index: state.calls.length })
+      return {
+        status: next,
+        headers: [{ name: "content-type", value: "application/json; charset=utf-8" }],
+        body: JSON.stringify({ error: { message: "temporary upstream" } }),
+      }
+    }
     if (kind === "final" && state.failFirstFinal) {
       state.failFirstFinal = false
       state.calls.push({ kind, status: 502, index: state.calls.length })
@@ -430,6 +465,27 @@ function respondToIntercepted(
         status: 502,
         headers: [{ name: "content-type", value: "text/html; charset=utf-8" }],
         body: "<html><body>upstream error</body></html>",
+      }
+    }
+    if (kind === "final" && state.holdCancelFinal) {
+      state.cancelFinalStarted.release()
+      return { status: 0, headers: [], body: "" }
+    }
+    if (kind === "final" && state.holdLateFinal) {
+      // Destructive-phase gating is armed only after the retryable failure has
+      // been delivered. The first resume must return 503, not a success.
+      if (state.resumeTransientRemaining === 0) state.lateFinalStarted.release()
+      return { status: 0, headers: [], body: "" }
+    }
+    if (kind === "final" && state.resumeTransientRemaining > 0
+      && !state.holdCancelFinal && !state.holdLateFinal) {
+      state.resumeTransientRemaining -= 1
+      const status = state.resumeTransientStatus ?? 503
+      state.calls.push({ kind, status, index: state.calls.length })
+      return {
+        status,
+        headers: [{ name: "content-type", value: "application/json; charset=utf-8" }],
+        body: JSON.stringify({ error: { message: "temporary upstream" } }),
       }
     }
     state.calls.push({ kind, status: 200, index: state.calls.length })
@@ -455,8 +511,20 @@ async function main() {
     // Reopen first seeds a normal successful history record. Its independent
     // 502 is armed only after that seed has been saved and its panel closed.
     failFirstFinal: options.scenario === "reopen" ? false : true,
+    finalSequence: [],
     interceptTargets: {},
     interceptCounts: {},
+    holdCancelFinal: options.scenario === "cancel" ? deferred() : null,
+    holdLateFinal: null,
+    cancelFinalStarted: deferred(),
+    lateFinalStarted: deferred(),
+    resumeTransientStatus: options.scenario === "retry" ? 503 : null,
+    resumeTransientRemaining: 0,
+    releaseHeldResponse: null,
+    heldFinalActive: false,
+    heldFinalRequest: null,
+    heldFinalFulfilled: false,
+    heldFinalError: null,
   }
 
   const profileDir = mkdtempSync(join(tmpdir(), "vsa-m3-smoke-"))
@@ -531,12 +599,38 @@ async function main() {
             : "other"
       state.interceptTargets[label] = sessionKind
       state.interceptCounts[label] = (state.interceptCounts[label] ?? 0) + 1
-      void cdp!.send("Fetch.fulfillRequest", {
-        requestId,
-        responseCode: result.status,
-        responseHeaders: result.headers,
-        body: Buffer.from(result.body).toString("base64"),
-      }, sessionId).catch(() => undefined)
+      const fulfill = async () => {
+        // Only a genuine Final can use the hold sentinel; Map/Reduction must
+        // retain their own classification and never acquire the held gate.
+        const heldFinal = result.status === 0 && label === "provider"
+          && (state.holdCancelFinal !== null || state.holdLateFinal !== null)
+        if (heldFinal && state.releaseHeldResponse) {
+          state.heldFinalActive = true
+          state.heldFinalRequest = { sessionId, requestId }
+          await state.releaseHeldResponse.promise
+          state.heldFinalActive = false
+        }
+        const deliveredStatus = heldFinal ? 200 : result.status
+        const deliveredBody = heldFinal ? providerBody("final") : result.body
+        const deliveredHeaders = heldFinal
+          ? [{ name: "content-type", value: "application/json; charset=utf-8" }]
+          : result.headers
+        try {
+          await cdp!.send("Fetch.fulfillRequest", {
+            requestId,
+            responseCode: deliveredStatus,
+            responseHeaders: deliveredHeaders,
+            body: Buffer.from(deliveredBody).toString("base64"),
+          }, sessionId)
+          if (heldFinal) {
+            state.heldFinalFulfilled = true
+            state.calls.push({ kind: "final", status: deliveredStatus, index: state.calls.length })
+          }
+        } catch (error) {
+          if (heldFinal) state.heldFinalError = String(error)
+        }
+      }
+      void fulfill()
     })
 
     steps.push("create-page")
@@ -958,7 +1052,7 @@ async function main() {
       `an unavailable resume panel must not coexist with the continue button: ${resumeButtonState}`,
     )
 
-    if (options.scenario !== "golden") {
+    if (options.scenario === "refresh" || options.scenario === "reopen") {
       await runLifecycleScenario({
         cdp,
         evidence,
@@ -983,6 +1077,27 @@ async function main() {
     await Bun.sleep(2000)
     expect(state.calls.length === firstPassCalls.length,
       `the retryable failure must not issue a request before the explicit click: ${JSON.stringify(state.calls)}`)
+    if (options.scenario !== "golden") {
+      await runNegativeScenario({
+        cdp,
+        evidence,
+        state,
+        steps,
+        scenario: options.scenario as "cancel" | "source-switch" | "tab-switch" | "destructive" | "retry",
+        extensionId,
+        pageSession,
+        originalSideTargetId,
+        sideSession,
+        sessionKinds,
+      })
+      evidence["interceptTargets"] = state.interceptTargets
+      evidence["interceptCounts"] = state.interceptCounts
+      evidence["pageErrors"] = pageErrors.slice(0, 5)
+      evidence["result"] = "PASS"
+      console.log(`@@SMOKE_EVIDENCE@@${JSON.stringify(evidence)}`)
+      return
+    }
+
     const callsBeforeResume = state.calls.length
     const clickedResume = await evaluate<boolean>(cdp, sideSession, `(() => {
       const button = document.querySelector('[data-testid="final-resume-continue"]');
@@ -1205,6 +1320,279 @@ async function main() {
   }
 }
 
+/* ------------------------------------------------------ M4 negative browser */
+
+async function clickTestButton(cdp: CdpConnection, session: string, testId: string): Promise<void> {
+  const clicked = await evaluate<boolean>(cdp, session, `(() => {
+    const button = document.querySelector('[data-testid="${testId}"]');
+    if (!button || button.disabled) return false;
+    button.click();
+    return true;
+  })()`)
+  expect(clicked, `expected enabled button ${testId}`)
+}
+
+async function auditNegativePrivacy(cdp: CdpConnection, session: string): Promise<Record<string, boolean>> {
+  const audit = await evaluate<Record<string, boolean>>(cdp, session, `(() => {
+    const text = document.documentElement.outerHTML;
+    const entries = Object.entries(localStorage).concat(Object.entries(sessionStorage));
+    return {
+      domApiKey: text.includes("sk-smoke-fixture"),
+      domMapSummary: text.includes("stub chunk summary"),
+      domPrompt: text.includes("You are a structured video analyst"),
+      webStorageMapSummary: JSON.stringify(entries).includes("stub chunk summary"),
+    };
+  })()`)
+  for (const [key, leaked] of Object.entries(audit)) expect(!leaked, `privacy assertion ${key}`)
+  return audit
+}
+
+async function waitForResumeCta(cdp: CdpConnection, session: string, enabled: boolean): Promise<void> {
+  await poll(async () => evaluate<string>(cdp!, session, `(() => {
+    const button = document.querySelector('[data-testid="final-resume-continue"]');
+    return JSON.stringify({ present: Boolean(button), disabled: button ? button.disabled : null });
+  })()`).then((raw) => {
+    const state = JSON.parse(raw) as { present: boolean, disabled: boolean | null }
+    return state.present && state.disabled === !enabled ? raw : null
+  }), 45_000, `resume CTA enabled=${enabled}`)
+}
+
+async function runNegativeScenario(input: LifecycleInput): Promise<void> {
+  const { cdp, evidence, state, steps, scenario, extensionId, pageSession } = input
+  const beforeCalls = state.calls.length
+  if (scenario === "cancel") {
+    steps.push("resume-final-pending")
+    state.releaseHeldResponse = deferred()
+    await clickTestButton(cdp, input.sideSession, "final-resume-continue")
+    await state.cancelFinalStarted.promise
+    expect(state.calls.filter((call) => call.kind === "final").length === 1,
+      "the initial 502 must be the only completed Final before cancellation")
+    evidence["pendingResumeFinal"] = {
+      intercepted: true,
+      completedProviderCalls: state.calls.length,
+      initialCalls: beforeCalls,
+    }
+    steps.push("cancel-pending-resume")
+    await evaluate(cdp, input.sideSession, `(() => {
+      const button = [...document.querySelectorAll("button")].find((node) => /^(取消|Cancel)$/.test((node.textContent || "").trim()));
+      if (!button) throw new Error("pending resume Cancel button missing");
+      button.click();
+      return true;
+    })()`)
+    state.holdCancelFinal = null
+    state.holdLateFinal = null
+    state.releaseHeldResponse.release()
+    await Bun.sleep(1500)
+    evidence["heldFinalDelivery"] = {
+      request: state.heldFinalRequest,
+      fulfilled: state.heldFinalFulfilled,
+      error: state.heldFinalError,
+      lateSuccessScope: "NOT RUN (browser abort discards the interception); deterministic coordinator test covers an abort-ignoring late success",
+    }
+    if (!state.heldFinalFulfilled && state.heldFinalRequest) {
+      const delivery = await cdp.send("Fetch.fulfillRequest", {
+        requestId: state.heldFinalRequest.requestId,
+        responseCode: 200,
+        responseHeaders: [{ name: "content-type", value: "application/json; charset=utf-8" }],
+        body: Buffer.from(providerBody("final")).toString("base64"),
+      }, state.heldFinalRequest.sessionId).then(() => true, (error) => String(error))
+      evidence["manualLateFulfillResult"] = delivery
+    }
+    const audit = assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession))
+    expect((audit.stores?.analysisRuns?.count ?? -1) === 0,
+      "a cancelled late Final must not create a completed run")
+    expect(state.calls.filter((call) => call.kind === "final").length === 1,
+      "a real browser abort must not deliver a new billable Final response")
+    const cancelledSurface = JSON.parse(await readResumeSurface(cdp, input.sideSession)) as Record<string, boolean>
+    expect(!cancelledSurface.continueButton && !cancelledSurface.resumePanel
+      && !cancelledSurface.unavailable && !cancelledSurface.regenerateButton,
+    `cancel must remove the actionable checkpoint UI: ${JSON.stringify(cancelledSurface)}`)
+    evidence["afterLateSuccess"] = {
+      calls: [...state.calls],
+      surface: await readResumeSurface(cdp, input.sideSession),
+      persistence: await readPersistenceAudit(cdp, input.sideSession),
+      privacy: await auditNegativePrivacy(cdp, input.sideSession),
+    }
+    expect(state.calls.length === beforeCalls,
+      "cancellation must not complete another billable provider response")
+    return
+  }
+
+  if (scenario === "source-switch" || scenario === "tab-switch") {
+    steps.push(scenario === "tab-switch" ? "switch-tab-before-resume" : "switch-source-before-resume")
+    let otherPageSession = pageSession
+    if (scenario === "tab-switch") {
+      const otherTab = await sendNamed(cdp, "Target.createTarget", {
+        url: `${STUB_ORIGIN}/watch?v=${VIDEO_ID}`,
+      })
+      otherPageSession = await attach(cdp, String(otherTab.result?.targetId))
+      input.sessionKinds.set(otherPageSession, "page")
+      await sendNamed(cdp, "Page.enable", {}, otherPageSession)
+      await sendNamed(cdp, "Fetch.enable", {
+        patterns: [
+          { urlPattern: `${STUB_ORIGIN}/watch*`, requestStage: "Request" },
+          { urlPattern: `${STUB_ORIGIN}${TIMEDTEXT_PATH}*`, requestStage: "Request" },
+        ],
+      }, otherPageSession)
+      await evaluate(cdp, otherPageSession, playerSurfaceScript())
+    } else {
+      await sendNamed(cdp, "Page.navigate", { url: `${STUB_ORIGIN}/watch?v=smokeVideo2` }, otherPageSession)
+      await evaluate(cdp, otherPageSession, playerSurfaceScript("smokeVideo2"))
+    }
+    await settleActiveVideo(cdp, input.sideSession, otherPageSession)
+    await Bun.sleep(1200)
+    const afterB = await readResumeSurface(cdp, input.sideSession)
+    evidence["afterSourceB"] = { surface: afterB, calls: [...state.calls] }
+    assertNoResumeSurface(afterB)
+    steps.push("return-source-a")
+    await settleActiveVideo(cdp, input.sideSession, pageSession)
+    await Bun.sleep(1200)
+    const afterA = await readResumeSurface(cdp, input.sideSession)
+    evidence["afterReturnA"] = { surface: afterA, calls: [...state.calls] }
+    assertNoResumeSurface(afterA)
+    expect(state.calls.length === beforeCalls,
+      "A→B→A or a same-video tab switch must not issue an automatic Final")
+    assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession))
+    return
+  }
+
+  if (scenario === "retry") {
+    state.resumeTransientRemaining = 1
+    steps.push("double-click-resume")
+    await evaluate(cdp, input.sideSession, `(() => {
+      const button = document.querySelector('[data-testid="final-resume-continue"]');
+      button.click();
+      button.click();
+      button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      return true;
+    })()`)
+    await waitForResumeCta(cdp, input.sideSession, true)
+    await Bun.sleep(2000)
+    const callsAfterFirstRetry = state.calls.length
+    expect(callsAfterFirstRetry === beforeCalls + 1,
+      "double-click must issue exactly one Final request")
+    expect(state.calls.at(-1)?.status === 503,
+      "the resumed request must receive the injected transient 503")
+    evidence["afterDoubleClick503"] = {
+      calls: [...state.calls],
+      surface: await readResumeSurface(cdp, input.sideSession),
+    }
+    steps.push("explicit-retry-after-transient")
+    await clickTestButton(cdp, input.sideSession, "final-resume-continue")
+    await poll(async () => evaluate<string>(cdp!, input.sideSession, "document.body?.innerText || ''")
+      .then((text) => /Smoke resume summary/.test(text) ? true : null), 180_000, "explicit transient retry success")
+    await Bun.sleep(1000)
+    const callsAfterSuccess = state.calls.length
+    expect(callsAfterSuccess === callsAfterFirstRetry + 1,
+      "the second explicit click must issue exactly one more Final, with no auto retry")
+    expect(state.calls.at(-1)?.status === 200,
+      "the explicitly retried Final must succeed")
+    const audit = assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession))
+    expect((audit.stores?.analysisRuns?.count ?? 0) === 1,
+      "the successful explicit retry must save exactly one completed run")
+    evidence["afterExplicitSuccess"] = {
+      calls: [...state.calls],
+      surface: await readResumeSurface(cdp, input.sideSession),
+      persistence: await readPersistenceAudit(cdp, input.sideSession),
+      privacy: await auditNegativePrivacy(cdp, input.sideSession),
+    }
+    return
+  }
+
+  steps.push("retryable-resume-before-destructive-operation")
+  state.resumeTransientStatus = 503
+  state.resumeTransientRemaining = 1
+  await clickTestButton(cdp, input.sideSession, "final-resume-continue")
+  await waitForResumeCta(cdp, input.sideSession, true)
+  evidence["beforeDestructiveResume"] = {
+    calls: [...state.calls],
+    surface: await readResumeSurface(cdp, input.sideSession),
+    panel: await evaluate<string>(cdp, input.sideSession, "document.body?.innerText || ''"),
+  }
+  // Complete the explicit resume before opening Options. Activating Options
+  // changes the active source tab and legitimately invalidates the checkpoint.
+  evidence["beforeSuccessfulResumeClick"] = await evaluate<string>(cdp, input.sideSession, `(() => {
+    const button = document.querySelector('[data-testid="final-resume-continue"]');
+    const panel = document.querySelector('[data-testid="final-resume-panel"]');
+    return JSON.stringify({
+      present: Boolean(button), disabled: button ? button.disabled : null,
+      phase: panel ? panel.getAttribute("data-resume-phase") : null,
+      href: location.href,
+    });
+  })()`)
+  await clickTestButton(cdp, input.sideSession, "final-resume-continue")
+  await poll(async () => evaluate<string>(cdp!, input.sideSession, "document.body?.innerText || ''")
+    .then((text) => /Smoke resume summary/.test(text) ? true : null), 180_000, "resume completes before clear")
+  const beforeReleasedClear = state.calls.length
+  steps.push("open-options-for-clear")
+  const options = await sendNamed(cdp, "Target.createTarget", {
+    url: `chrome-extension://${extensionId}/options.html#data`,
+  })
+  const optionsSession = await attach(cdp, String(options.result?.targetId))
+  await poll(async () => evaluate<string>(cdp!, optionsSession, "document.body?.innerText || ''")
+    .then((text) => /清除分析历史|清空分析历史|Clear analysis history/i.test(text) ? true : null),
+  45_000, "Options destructive controls")
+  steps.push("clear-history-after-resume-completes")
+  await evaluate(cdp, optionsSession, `(() => {
+    window.confirm = () => true;
+    const button = [...document.querySelectorAll("button")].find((node) => /清除分析历史|清空分析历史|Clear analysis history/i.test(node.textContent || ""));
+    if (!button) throw new Error("clear analysis history button missing after task release");
+    button.click();
+    return true;
+  })()`)
+  await Bun.sleep(1000)
+  evidence["clearUiDuringFinal"] = await evaluate<string>(cdp, optionsSession, "document.body?.innerText || ''")
+  await Bun.sleep(1200)
+  const auditAfterClear = assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession))
+  expect((auditAfterClear.stores?.analysisRuns?.count ?? -1) === 0,
+    "the completed clear must leave no completed analysis history")
+  const runsAtClear = auditAfterClear.stores?.analysisRuns?.runs ?? []
+  evidence["clearAfterTaskRelease"] = {
+    surface: await readResumeSurface(cdp, input.sideSession),
+    persistence: await readPersistenceAudit(cdp, input.sideSession),
+  }
+  // After deletion, a new explicit full analysis is allowed. Hold its Final
+  // across a second clear so the test proves no late save resurrects the data.
+  steps.push("new-full-analysis-after-clear")
+  await settleActiveVideo(cdp, input.sideSession, pageSession)
+  state.holdLateFinal = deferred()
+  state.releaseHeldResponse = deferred()
+  await clickGenerate(cdp, input.sideSession, "fresh full analysis after clear")
+  await state.lateFinalStarted.promise
+  await evaluate(cdp, optionsSession, `(() => {
+    const button = [...document.querySelectorAll("button")].find((node) => /清除分析历史|清空分析历史|Clear analysis history/i.test(node.textContent || ""));
+    if (!button) throw new Error("clear analysis history button missing during new full analysis");
+    button.click();
+    return true;
+  })()`)
+  await Bun.sleep(1000)
+  evidence["clearDuringSecondFinal"] = await evaluate<string>(cdp, optionsSession, "document.body?.innerText || ''")
+  expect(/Cancel the active task before clearing\/deleting this data\./.test(evidence["clearDuringSecondFinal"]),
+    "an active full analysis must block another panel's destructive operation")
+  state.holdLateFinal = null
+  state.releaseHeldResponse.release()
+  await Bun.sleep(1800)
+  const audit = assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession))
+  evidence["afterLateSuccessVsClear"] = {
+    calls: [...state.calls],
+    surface: await readResumeSurface(cdp, input.sideSession),
+    persistence: await readPersistenceAudit(cdp, input.sideSession),
+    privacy: await auditNegativePrivacy(cdp, input.sideSession),
+  }
+  const finalRunIds = completedRunIds(audit)
+  expect(runsAtClear.every((run) => typeof run.id === "string" && finalRunIds.includes(run.id!)),
+    "the second destructive operation was blocked, so no old history may be resurrected")
+  expect((audit.stores?.analysisRuns?.count ?? 0) === runsAtClear.length + 1,
+    "the explicitly started fresh analysis may add exactly one new completed run")
+  expect(state.calls.length === beforeReleasedClear + 6,
+    "only the explicitly started fresh full analysis may add 5 Map + 1 Final")
+  evidence["heldFinalDelivery"] = {
+    request: state.heldFinalRequest,
+    fulfilled: state.heldFinalFulfilled,
+    error: state.heldFinalError,
+  }
+}
+
 /* ----------------------------------------------------- AC-18 real lifecycle */
 
 type LifecycleInput = {
@@ -1212,7 +1600,7 @@ type LifecycleInput = {
   evidence: Record<string, any>
   state: SmokeState
   steps: string[]
-  scenario: Exclude<SmokeScenario, "golden">
+  scenario: "refresh" | "reopen" | "cancel" | "source-switch" | "tab-switch" | "destructive" | "retry"
   extensionId: string
   pageSession: string
   originalSideTargetId: string

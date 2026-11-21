@@ -22,7 +22,7 @@
 - [许可证偏好、候选条款比较与待核验版权边界](licensing/2026-11-17-license-policy-review.md)：R-002 候选审查，尚非正式授权文本。
 - [竞品定位研究](research/2026-11-17-competitor-landscape.md)、[可复现测试方案](research/video-benchmark-protocol.md)、[结果记录模板](research/video-benchmark-results-template.md)：R-003，当前仅完成桌面研究。
 - [Y-06 长视频失败的脱敏复核](reviews/2026-11-18-y06-provider-502-diagnostic.md)：Issue #22；原始 HAR 未纳入仓库。
-- [Y-06 最终总结失败后继续分析：设计与决策记录](design/2026-11-18-y06-final-resume-design.md) 与 [验收矩阵](design/2026-11-18-y06-final-resume-acceptance.md)：R-004 / Issue #22；M1/M2/M3 已合并；M4-R02 为 RECONSTRUCTED CANDIDATE，M4-R03 PASS、R02-F01 CLOSED，M4 等待独立最终审查；尚未推送、合并，M5 尚未启动。
+- [Y-06 最终总结失败后继续分析：设计与决策记录](design/2026-11-18-y06-final-resume-design.md) 与 [验收矩阵](design/2026-11-18-y06-final-resume-acceptance.md)：R-004 / Issue #22；M1/M2/M3/M4 全部 MERGED，M4 已由 PR #28 合并；R02 保留 RECONSTRUCTED CANDIDATE 历史属性，R03 PASS、R02-F01 CLOSED，R04 独立最终审查 PASS，R05 远端审查通过后现已合并；M5 PENDING，尚未启动。
 
 ## 历史资料（原始记录保留）
 

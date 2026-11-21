@@ -37,10 +37,10 @@
 | R-001 | V1.1 对外发布准备 | P1 | `candidate` | 对选定 release SHA 完成实际包验证、依赖/安全检查、隔离浏览器 Smoke 和发布审核 |
 | R-002 | 授权目标与第三方版权边界审查 | P1 | `candidate` | [候选审查](licensing/2026-11-17-license-policy-review.md)；使用偏好已确认，具体 LICENSE 待定，需完成源码归属和依赖许可核验 |
 | R-003 | 竞品对比与真实使用基准测试 | P1 | `candidate` | [首轮桌面研究](research/2026-11-17-competitor-landscape.md)已完成；[实测方案](research/video-benchmark-protocol.md)待执行，性能、准确性和稳定性尚无实测评分 |
-| R-004 | Y-06 长视频 Final 恢复与阶段进度 | P1 | `in_review` | [设计](design/2026-11-18-y06-final-resume-design.md)、[30 条验收用例](design/2026-11-18-y06-final-resume-acceptance.md)；Issue #22；M1/M2/M3 已合并（PR #25/#26/#27）；M4-R02 为 RECONSTRUCTED CANDIDATE，M4-R03 PASS、R02-F01 CLOSED，M4 等待独立最终审查；本地分支 `feat/y06-m4-reconstructed-finalization-20261121` 尚未推送、合并，M5 尚未启动 |
+| R-004 | Y-06 长视频 Final 恢复与阶段进度 | P1 | `done` | [设计](design/2026-11-18-y06-final-resume-design.md)、[30 条验收用例](design/2026-11-18-y06-final-resume-acceptance.md)；Issue #22；M1/M2/M3/M4 全部 MERGED（PR #25/#26/#27/#28）；M4-R02 保留 RECONSTRUCTED CANDIDATE 历史属性，R03 PASS、R02-F01 CLOSED，R04 独立最终审查 PASS，R05 远端审查通过后现已合并；M5 PENDING，尚未启动 |
 
 ## 当前开发承诺
 
-**本轮未批准 F-001、F-002、F-003 等新功能实施；R-004 的 M1/M2/M3 已合并，M4 已按专项授权完成隔离重建与修复。** 其他候选功能没有锁定目标版本或排期。经过明确立项，创建对应 [计划模板](feature-plans/TEMPLATE.md) 和 GitHub Issue，状态变更为 `approved`，之后再记录实际实施。M4-R02 为 RECONSTRUCTED CANDIDATE，M4-R03 PASS、R02-F01 CLOSED，M4 等待独立最终审查，尚未推送、合并；M5 尚未启动。
+**本轮未批准 F-001、F-002、F-003 等新功能实施；R-004 的 M1/M2/M3/M4 已全部 MERGED，M4 已由 PR #28 合并。** 其他候选功能没有锁定目标版本或排期。经过明确立项，创建对应 [计划模板](feature-plans/TEMPLATE.md) 和 GitHub Issue，状态变更为 `approved`，之后再记录实际实施。M4-R02 保留 RECONSTRUCTED CANDIDATE 历史属性，R03 PASS、R02-F01 CLOSED，R04 独立最终审查 PASS，R05 远端审查通过后现已合并；M5 PENDING，尚未启动。
 
 **原则：** 维护本地优先、精确 `contentKey`（含 Bilibili P1/P2 隔离）、Prompt/缓存身份、API Key 与可选权限隔离，以及历史数据迁移/删除/导出契约。

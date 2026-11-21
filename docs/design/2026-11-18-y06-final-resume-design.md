@@ -1,10 +1,10 @@
 # Y-06 / Issue #22 — 最终结构化总结失败后的会话内恢复设计
 
-> **M1 / M2 / M3 MERGED · M4 RECONSTRUCTED CANDIDATE / READY FOR FINAL REVIEW** · 当前状态更新 2026-11-21
+> **M1 / M2 / M3 / M4 MERGED · M5 PENDING** · 当前状态更新 2026-11-22
 >
-> M1 已由 PR #25 合并（`7c5adbad7e75fa730c6b996c844ce085763ae15e`），M2 已由 PR #26 合并（`e01572decbc5454560f48c8bfcbe9716219f0ab2`），M3 已由 PR #27 合并。M4 固定基线为 `1bea4bc8f66525ca2edb248b185a8abf18ff3658`，本地分支为 `feat/y06-m4-reconstructed-finalization-20261121`。
+> M1 已由 PR #25 合并（`7c5adbad7e75fa730c6b996c844ce085763ae15e`），M2 已由 PR #26 合并（`e01572decbc5454560f48c8bfcbe9716219f0ab2`），M3 已由 PR #27 合并，M4 已由 [PR #28](https://github.com/Aaron-AVC/video-summary-assistant/pull/28) 合并，Merge Commit 为 `d0985924f9185d00d43732d33853dcf62f6c9261`。
 >
-> M4-R02 为 **RECONSTRUCTED CANDIDATE**，不是异常前的字节级原件；M4-R03 **PASS**，R02-F01 **CLOSED**，M4 等待独立最终审查。原异常 Worktree 与恢复证据继续保留为历史记录；M4 尚未推送、合并，M5 尚未启动。
+> M4-R02 保留 **RECONSTRUCTED CANDIDATE** 历史属性，不是异常前的字节级原件；M4-R03 **PASS**，R02-F01 **CLOSED**；M4-R04 独立最终审查 **PASS**；M4-R05 创建 Draft PR、远端审查通过后现已合并。原异常 Worktree 与恢复证据继续保留为历史记录；M5 尚未启动。
 >
 > 创建日期：2026-11-18 · 建议优先级：P1 · 原设计基线：`main@b42b7fffe05661fa1155a30af60874ab5793e2ca`
 >
@@ -128,7 +128,7 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | M1 | `merged` | 精确 `map/reduction/final/repair` 事件和可分类 HTTP 错误；不改变请求行为 | PR #25 已合并为 `7c5adbad7e75fa730c6b996c844ce085763ae15e` |
 | M2 | `merged` | 30 分钟 / 256 KiB 的单一内存检查点、完整性/身份/generation/lease 校验、真实 Reduction 接缝、Provider 二次身份校验及跨面板失效 | PR #26 已合并为 `e01572decbc5454560f48c8bfcbe9716219f0ab2` |
 | M3 | `merged` | 手动「继续最终总结」、双身份恢复准入、Final-only 请求与共用持久化已落地；F-01～F-04 定向修复通过独立复核，黄金恢复及 AC-18 刷新/关闭重开浏览器 Smoke PASS | PR #27 已合并 |
-| M4 | `reconstructed_candidate / ready_for_final_review` | M4-R02 隔离重建五文件；M4-R03 修复 R02-F01 并 PASS。源码仍为重建候选，不是异常前字节级原件；等待独立最终审查，尚未推送、合并 | M3 已合并 |
+| M4 | `merged` | M4-R02 保留 RECONSTRUCTED CANDIDATE 历史属性，不是异常前字节级原件；M4-R03 修复 R02-F01 并 PASS，R04 独立最终审查 PASS，R05 远端审查通过后现已合并 | PR #28；Merge Commit `d0985924f9185d00d43732d33853dcf62f6c9261` |
 | M5 | `pending` | 本里程碑未启动；M4 隔离重建、修复与最终门禁属于 M4 范围，不视为启动 M5 | 未授权 |
 
 **不批准的后续议题**：跨刷新持久化检查点；Map 阶段续跑；自助设置重试次数 / `Retry-After` 自动退避；费用估算 UI。需另立 PR，评估数据库 Schema、导出/删除、秘钥修订和用户可见的计费提示。
@@ -164,5 +164,6 @@ Map 摘要为模型生成的**不可信证据**。恢复应继续使用现有 `b
 | 2026-11-21 | `reconstructed_candidate`（M4-R02） | 在 `D:/files/vsa-m4-rebuild-20261120` 从固定基线重建五文件安全回归；原异常 Worktree、正式 main、其他 Worktree、Stash 与既有证据未修改。R02 五文件历史 SHA256 与 Diff 保存在仓库外 `D:/files/vsa-m4-rebuild-evidence-20261120/M4-R02-reconstruction-report.md` 和 `final-sha256.txt`；源码不是异常前字节级原件 | M4-R03 定向审查 |
 | 2026-11-21 | `PASS / R02-F01 CLOSED`（M4-R03） | Final 已收到后 Repair HTTP 503 曾被误判为 `final-retryable`；现优先返回 `structured-output-failed` 并销毁检查点。用户取消优先、原始 TTL、无响应瞬时失败及身份门禁不变。定向用例 RED `final-retryable` → GREEN `structured-output-failed`；独立复审 CLOSED | M4 等待独立最终审查；不宣称找回字节级原件 |
 | 2026-11-21 | `ready_for_final_review`（M4-R04） | 在 `feat/y06-m4-reconstructed-finalization-20261121` 复核同一五文件并重新执行门禁：1700 pass / 0 fail / 6123 assertions（116 文件）、TypeScript、Build、diff check、CfT Artifact Gate 与八组 Chrome Smoke 全 PASS。命令、退出码和原始日志位于 `D:/files/vsa-m4-rebuild-evidence-20261120/R04/` | 仅本地原子提交；尚未推送、合并，M5 尚未启动 |
+| 2026-11-22 | `merged`（M4-R05） | 普通推送封板分支并创建 Draft PR #28，远端审查通过后现已合并。功能提交 `88c2a773eba4c35ab57f7e6304bb5f4c3a965cc8`，Merge Commit `d0985924f9185d00d43732d33853dcf62f6c9261`；M1/M2/M3/M4 全部 MERGED | M5 PENDING，尚未启动。非阻塞 NOTE：Smoke promise 缺少独立超时保护；caniuse-lite 过期提示。Cancel Smoke 的 `Invalid InterceptionId` 子场景仍 NOT RUN，由确定性 Coordinator 测试覆盖 |
 
 [返回文档索引](../README.md)

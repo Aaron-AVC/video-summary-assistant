@@ -1,10 +1,10 @@
 # Issue #22 — Final Resume 验收矩阵和可复现测试用例
 
-> **M1 / M2 / M3 MERGED · M4 RECONSTRUCTED CANDIDATE / READY FOR FINAL REVIEW** · 当前状态更新 2026-11-21
+> **M1 / M2 / M3 / M4 MERGED · M5 PENDING** · 当前状态更新 2026-11-22
 >
-> M1 已由 PR #25 合并，M2 已由 PR #26 合并，M3 已由 PR #27 合并。M4-R02 为 **RECONSTRUCTED CANDIDATE**，不声称找回异常前的字节级原件；M4-R03 **PASS**，R02-F01 **CLOSED**。M4 固定基线为 `1bea4bc8f66525ca2edb248b185a8abf18ff3658`，本地封板分支为 `feat/y06-m4-reconstructed-finalization-20261121`。
+> M1 已由 PR #25 合并，M2 已由 PR #26 合并，M3 已由 PR #27 合并，M4 已由 [PR #28](https://github.com/Aaron-AVC/video-summary-assistant/pull/28) 合并，Merge Commit 为 `d0985924f9185d00d43732d33853dcf62f6c9261`。M4-R02 保留 **RECONSTRUCTED CANDIDATE** 历史属性，不声称找回异常前的字节级原件；M4-R03 **PASS**，R02-F01 **CLOSED**；M4-R04 独立最终审查 **PASS**；M4-R05 创建 Draft PR、远端审查通过后现已合并。
 >
-> M4 等待独立最终审查，尚未推送、合并，M5 尚未启动。原异常 Worktree 与恢复证据保留；下方旧里程碑日志不覆盖本轮状态。
+> M5 尚未启动。原异常 Worktree 与恢复证据保留；下方旧里程碑日志不覆盖本轮状态。
 >
 > [设计与决策记录](2026-11-18-y06-final-resume-design.md) · [Issue #22](https://github.com/Aaron-AVC/video-summary-assistant/issues/22) · 改写前候选门禁 HEAD `00a2a2df1287aabde9449d5fdb6f177426dd6170`。当前状态不覆盖下方历史日志中对应旧 SHA 的真实结果。
 
@@ -59,7 +59,7 @@
 | AC-27 | HAR-like 含密钥/HTML/Prompt/字幕/模型摘要的模拟错误 | Toast、console、diagnostic export、storage 不含 Key、Headers、Request Body、任何 Map 文本；只允许阶段/状态/次数/时间 | `PASS`（M2 content-free metadata 与脱敏导出回归；未使用真实 HAR） |
 | AC-28 | 全仓文档及打包审查 | 不增加 host permissions、网络上传端点、数据库表或迁移；无自动 HTTP 重试或 API Key 再存储 | `PASS`（main…候选 HEAD 范围/构建产物审查） |
 | AC-29 | 先完成带 502 的纯 mock 端到端模拟 | 第一次 5×Map + 1×Final(502)；继续 0×Map + 1×Final(200)；真实运行记录可复核 | `PASS`（M3 黄金流程：真实 `runAnalysis` + 真实检查点 + 纯 Mock Provider） |
-| AC-30 | 最终实现 PR 审查门禁 | Target RED→GREEN、全量 Bun、TypeScript、Chrome MV3 Build、`git diff --check`、需实施的浏览器 Smoke + 独立 SHA/范围审查 | `PASS`（M4-R04 当前源码复核：1700 pass / 0 fail / 6123 assertions（116 文件），TypeScript、Build、diff check、CfT Artifact Gate 与八组 Chrome Smoke 全 PASS；五文件 SHA256 与 R03 一致。M4 整体仍等待独立最终审查，尚未推送、合并） |
+| AC-30 | 最终实现 PR 审查门禁 | Target RED→GREEN、全量 Bun、TypeScript、Chrome MV3 Build、`git diff --check`、需实施的浏览器 Smoke + 独立 SHA/范围审查 | `PASS`（M4-R04 当前源码复核：1700 pass / 0 fail / 6123 assertions（116 文件），TypeScript、Build、diff check、CfT Artifact Gate 与八组 Chrome Smoke 全 PASS；五文件 SHA256 与 R03 一致；M4-R05 远端审查通过后现已由 PR #28 合并） |
 
 ## 5. 具体实施测试文件建议
 
@@ -89,6 +89,7 @@
 | 2026-11-21 | M4-R02 隔离重建 / `RECONSTRUCTED CANDIDATE` | 固定基线 `1bea4bc8f66525ca2edb248b185a8abf18ff3658`，五文件重建候选；不声称找回异常前字节级原件。R02 五文件历史 SHA256 与 Diff 独立保留 | `D:/files/vsa-m4-rebuild-evidence-20261120/M4-R02-reconstruction-report.md`、`final-sha256.txt`、`reconstructed-candidate.diff`；恢复证据 `D:/files/vsa-m4-recovery-evidence-20261120/` | M4-R03 定向审查 |
 | 2026-11-21 | M4-R03 R02-F01 修复 / `PASS` | Final 已收到后 Repair HTTP 503 的回归由 RED `final-retryable` 转为 GREEN `structured-output-failed`；检查点 `empty`、零持久化、再次恢复 `unavailable`。独立复审 R02-F01 CLOSED、READY FOR FINALIZATION | R03 当时全量报告 1700 pass / 0 fail / 6123 assertions；本轮 R04 重新执行同源码门禁，原始证据见下一行，不将旧报告冒充本轮运行 | 最终成果整理与本地封板 |
 | 2026-11-21 | M4-R04 当前源码门禁 / `PASS` | Coordinator 41 pass / 160 assertions；相关四套件 167 pass / 588 assertions；全量 Bun 1700 pass / 0 fail / 6123 assertions（116 文件）；TypeScript、Build、diff check、CfT Artifact Gate 与 `golden`、`refresh`、`reopen`、`cancel`、`source-switch`、`tab-switch`、`destructive`、`retry` 八组 Chrome Smoke 全 PASS。15 条验证命令均 exit 0；五文件均 LF 且哈希与 R03 相同 | 仓库外 `D:/files/vsa-m4-rebuild-evidence-20261120/R04/`：`{coordinator,related-four,bun-test,typecheck,build,diff-check,artifact-gate}.{log,stderr.log,command.txt,exit.txt}`，`smoke-<scenario>.*`，`source-sha256.txt`、`source-eol.txt`；Bun 主体输出在对应 `.stderr.log`；执行脚本 `run-core-gates.sh`、`run-browser-gates.sh` | M4 READY FOR FINAL REVIEW；未推送、合并，M5 尚未启动 |
+| 2026-11-22 | M4-R05 Draft PR 与合并 / `MERGED` | 封板分支普通推送，Draft PR #28 远端审查通过后现已合并。功能提交 `88c2a773eba4c35ab57f7e6304bb5f4c3a965cc8`，Merge Commit `d0985924f9185d00d43732d33853dcf62f6c9261`；M1/M2/M3/M4 全部 MERGED | [PR #28](https://github.com/Aaron-AVC/video-summary-assistant/pull/28)。保留两项非阻塞 NOTE：Smoke promise 缺少独立超时保护、caniuse-lite 过期提示。Cancel Smoke 的 `Invalid InterceptionId` 子场景仍 NOT RUN，由确定性 Coordinator 测试覆盖 | M5 PENDING，尚未启动 |
 
 **验收判定约束：** 有实际失败日志的用例才标 RED，有对应运行日志的才标 PASS。未执行的性能、成本或跨 Provider 回归一律保留 `NOT RUN`。
 

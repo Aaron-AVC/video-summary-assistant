@@ -12,10 +12,14 @@
  * No Playwright / Puppeteer / Selenium / jsdom: only Bun + CDP over WebSocket.
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 import { CdpConnection, fetchVersionInfo, waitForDevToolsPort } from "./lib/cdp-client"
+import {
+  ARTIFACT_GATE_PROFILE_ROOT_ENV,
+  createArtifactGateProfile,
+} from "./lib/artifact-gate-profile"
 import {
   ArtifactGateError,
   CHROME_PATH_ENV,
@@ -33,6 +37,8 @@ import {
   planCleanup,
   resolveArtifactPath,
   resolveBackgroundScriptPath,
+  sanitizeDiagnosticText,
+  sanitizeDiagnosticUrl,
   selectExtensionTargets,
   toExceptionRecord,
   validateChromePath,
@@ -46,6 +52,7 @@ import {
 type CliOptions = {
   artifactDir: string
   chromePath: string | null
+  profileRoot: string | null
 }
 
 /**
@@ -67,6 +74,7 @@ type GateResult = {
 function parseArgs(argv: readonly string[]): CliOptions {
   let artifactDir = DEFAULT_ARTIFACT_DIR
   let chromePath = process.env[CHROME_PATH_ENV]?.trim() || null
+  let profileRoot = process.env[ARTIFACT_GATE_PROFILE_ROOT_ENV] || null
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -84,6 +92,13 @@ function parseArgs(argv: readonly string[]): CliOptions {
       index += 1
       continue
     }
+    if (arg === "--profile-root") {
+      const value = argv[index + 1]
+      if (!value) throw new ArtifactGateError("preflight", "--profile-root requires a directory path.")
+      profileRoot = value
+      index += 1
+      continue
+    }
     if (arg === "--help" || arg === "-h") {
       printUsage()
       process.exit(0)
@@ -91,7 +106,7 @@ function parseArgs(argv: readonly string[]): CliOptions {
     throw new ArtifactGateError("preflight", `Unknown argument: ${arg}`)
   }
 
-  return { artifactDir, chromePath }
+  return { artifactDir, chromePath, profileRoot }
 }
 
 function printUsage(): void {
@@ -103,6 +118,7 @@ Usage:
 Options:
   --artifact <dir>  Extension directory to execute. Default: ${DEFAULT_ARTIFACT_DIR}
   --chrome <path>   Chromium executable. Default: $${CHROME_PATH_ENV}
+  --profile-root <dir> Isolated temporary profile root. Default: $${ARTIFACT_GATE_PROFILE_ROOT_ENV} or system temp.
 
 The gate executes an existing production build; it never rebuilds the artifact.
 Run \`bun run build\` first.
@@ -172,10 +188,6 @@ function assertArtifactReady(artifactDir: string): ArtifactManifest {
   return manifest
 }
 
-function randomRunId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
 function toTargets(list: readonly unknown[]): CdpTarget[] {
   const targets: CdpTarget[] = []
   for (const raw of list) {
@@ -213,10 +225,18 @@ class ExceptionCollector {
       message: record.message,
       level,
     })
+    const safeRecord: ExceptionRecord = {
+      ...record,
+      target: sanitizeDiagnosticText(record.target),
+      url: sanitizeDiagnosticUrl(record.url),
+      message: sanitizeDiagnosticText(record.message),
+      ...(record.stack ? { stack: sanitizeDiagnosticText(record.stack) } : {}),
+      stackTrace: record.stackTrace ?? [],
+    }
     if (classification.fatal) {
-      this.fatal.push(record)
+      this.fatal.push(safeRecord)
     } else {
-      this.informational.push(record)
+      this.informational.push(safeRecord)
     }
   }
 
@@ -230,12 +250,19 @@ class ExceptionCollector {
     sessionId: string,
     label: string,
     resolveUrl: () => string,
+    stage: GateStage,
   ): () => void {
     return connection.onEvent((message) => {
       if (message.sessionId !== sessionId) return
 
       if (message.method === "Runtime.exceptionThrown") {
-        this.add(toExceptionRecord("runtime.exceptionThrown", label, resolveUrl(), message.params?.exceptionDetails))
+        this.add(toExceptionRecord(
+          "runtime.exceptionThrown",
+          label,
+          resolveUrl(),
+          message.params?.exceptionDetails,
+          { stage },
+        ))
         return
       }
 
@@ -253,7 +280,14 @@ class ExceptionCollector {
           })
           .filter((part) => part.length > 0)
           .join(" ")
-        this.add({ source: "runtime.consoleAPICalled", target: label, url: resolveUrl(), message: text }, type)
+        this.add({
+          source: "runtime.consoleAPICalled",
+          target: label,
+          url: resolveUrl(),
+          message: text,
+          stackTrace: [],
+          stage,
+        }, type)
         return
       }
 
@@ -269,6 +303,8 @@ class ExceptionCollector {
             target: label,
             url: typeof record.url === "string" ? record.url : resolveUrl(),
             message: typeof record.text === "string" ? record.text : "",
+            stackTrace: [],
+            stage,
           },
           level,
         )
@@ -303,7 +339,13 @@ async function evaluate<T>(
   )
   const details = response.result?.exceptionDetails
   if (details) {
-    const record = toExceptionRecord("runtime.exceptionThrown", "evaluate", "cdp://evaluate", details)
+    const record = toExceptionRecord(
+      "runtime.exceptionThrown",
+      "evaluate",
+      "cdp://evaluate",
+      details,
+      { stage },
+    )
     fail(stage, `Evaluation failed: ${record.message}`, `Expression: ${expression}`)
   }
   const remote = response.result?.result
@@ -367,7 +409,11 @@ function printExceptionReport(collector: ExceptionCollector): void {
     console.error(`  [fatal] ${record.source}`)
     console.error(`    target:  ${record.target}`)
     console.error(`    url:     ${record.url}`)
+    if (record.stage) console.error(`    stage:   ${record.stage}`)
+    if (record.executionContextId !== undefined) console.error(`    context: ${record.executionContextId}`)
     console.error(`    message: ${record.message}`)
+    if (record.text) console.error(`    text:    ${record.text}`)
+    if (record.exception) console.error(`    exception: ${JSON.stringify(record.exception)}`)
     if (record.stack) console.error(`    stack:   ${record.stack}`)
   }
   for (const record of collector.informational) {
@@ -407,7 +453,7 @@ async function openExtensionPage(
   await connection.send("Log.enable", {}, sessionId)
 
   let currentUrl = "about:blank"
-  const stop = collector.watch(connection, sessionId, label, () => currentUrl)
+  const stop = collector.watch(connection, sessionId, label, () => currentUrl, stage)
 
   // Record the destination before navigating: the bundle can throw during the
   // very first evaluation, and that report must name the real page URL.
@@ -455,10 +501,14 @@ async function runGate(options: CliOptions): Promise<GateResult> {
     throw new ArtifactGateError("preflight", chrome.message)
   }
 
-  const runId = randomRunId()
-  const runDir = join(workspaceRoot, ".buntmp", `artifact-runtime-${runId}`)
-  const profileDir = join(runDir, "profile")
-  mkdirSync(profileDir, { recursive: true })
+  const profile = createArtifactGateProfile({
+    requestedRoot: options.profileRoot,
+    envRoot: process.env[ARTIFACT_GATE_PROFILE_ROOT_ENV],
+  })
+  const profileDir = profile.profileDir
+  console.log(`Profile path: ${profileDir}`)
+  console.log(`Profile resolved path: ${profile.profileRealPath}`)
+  console.log(`Profile path UTF-16 length: ${profile.pathLengthUtf16}`)
 
   const args = buildChromeArgs({
     chromePath: chrome.path,
@@ -488,6 +538,7 @@ async function runGate(options: CliOptions): Promise<GateResult> {
         connection.close()
       }
 
+      let safeToRemoveProfile = true
       if (child) {
         const exited = await Promise.race([
           child.exited.then(() => true),
@@ -507,15 +558,21 @@ async function runGate(options: CliOptions): Promise<GateResult> {
               console.error(`Cleanup: fallback termination failed: ${String(error)}`)
             }
           }
+          safeToRemoveProfile = await Promise.race([
+            child.exited.then(() => true),
+            Bun.sleep(1_000).then(() => false),
+          ])
         }
       }
 
-      if (existsSync(runDir)) {
+      if (safeToRemoveProfile) {
         try {
-          rmSync(runDir, { recursive: true, force: true })
+          profile.cleanup()
         } catch (error) {
-          console.error(`Cleanup: could not remove ${runDir}: ${String(error)}`)
+          console.error(`Cleanup: could not safely remove owned profile ${profileDir}: ${String(error)}`)
         }
+      } else {
+        console.error(`Cleanup: profile retained because the spawned browser may still be running: ${profileDir}`)
       }
     })()
     return cleanupDone
@@ -619,7 +676,7 @@ async function runGate(options: CliOptions): Promise<GateResult> {
     {
       const backgroundTarget = extension.background!
       const sessionId = await attachToTarget(connection, backgroundTarget.id, "background")
-      const stop = collector.watch(connection, sessionId, "background", () => backgroundTarget.url)
+      const stop = collector.watch(connection, sessionId, "background", () => backgroundTarget.url, "background")
       try {
         await connection.send("Runtime.enable", {}, sessionId)
         await connection.send("Log.enable", {}, sessionId)

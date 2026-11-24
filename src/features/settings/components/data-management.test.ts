@@ -4,7 +4,9 @@ import {
   clearCategorizedData,
   clearDataManagementStores,
   createDataManagementSnapshot,
-  performCategorizedDataClear
+  performCategorizedDataClear,
+  performDataClearWhenReady,
+  isDataClearActionEnabled,
 } from "@/features/settings/components/data-management"
 import { DestructiveOperationBlockedError } from "@/features/history/lib/destructive-operation-coordinator"
 import { createHistoryRepository } from "@/features/history/lib/history-repository"
@@ -76,6 +78,34 @@ const diagnosticLogs: TranscriptLogEntry[] = [
 ]
 
 describe("data-management storage lifecycle", () => {
+  it("blocks database clears while inventory is unavailable and keeps diagnostics clear enabled", async () => {
+    const cleared: string[] = []
+    const dependencies = {
+      clearLocalData: async () => { cleared.push("all-local") },
+      clearQaData: async () => { cleared.push("conversations") },
+      clearTranscriptCache: async () => { cleared.push("transcript-cache") },
+      clearAnalysisHistory: async () => { cleared.push("analysis-history") },
+      clearSettings: async () => { cleared.push("settings") },
+      clearTranscriptLogs: async () => { cleared.push("diagnostics") },
+    }
+
+    const safeOptions = {
+      checkConflicts: async () => [],
+      broadcastMutation: () => {},
+    }
+
+    for (const action of ["conversations", "transcript-cache", "analysis-history", "all"] as const) {
+      expect(isDataClearActionEnabled(action, false)).toBe(false)
+      await expect(performDataClearWhenReady(action, false, dependencies, safeOptions)).rejects.toThrow(
+        "Local database inventory is unavailable.",
+      )
+    }
+
+    expect(isDataClearActionEnabled("diagnostics", false)).toBe(true)
+    await performDataClearWhenReady("diagnostics", false, dependencies, safeOptions)
+    expect(cleared).toEqual(["diagnostics"])
+  })
+
   it("clears only the selected data category", async () => {
     const cleared: string[] = []
     const dependencies = {
@@ -287,5 +317,28 @@ describe("data-management storage lifecycle", () => {
     expect(cleared).toContain("settings")
     expect(cleared).toContain("local-data")
     expect(cleared).toContain("diagnostic-logs")
+  })
+
+  it("does not clear settings or diagnostic logs when local database clearing fails", async () => {
+    const cleared: string[] = []
+    const databaseError = new DOMException("closed", "DatabaseClosedError")
+
+    await expect(clearDataManagementStores({
+      exportSettings: async () => settingsSnapshot,
+      exportLocalData: async () => localData,
+      getTranscriptLogs: async () => diagnosticLogs,
+      clearSettings: async () => {
+        cleared.push("settings")
+      },
+      clearLocalData: async () => {
+        cleared.push("local-data")
+        throw databaseError
+      },
+      clearTranscriptLogs: async () => {
+        cleared.push("diagnostic-logs")
+      },
+    })).rejects.toBe(databaseError)
+
+    expect(cleared).toEqual(["local-data"])
   })
 })

@@ -6,6 +6,30 @@
 
 export type PersistenceErrorReason = "quota_exceeded" | "write_failed"
 
+const DATABASE_UNAVAILABLE_NAMES = new Set([
+  "DatabaseClosedError",
+  "DatabaseOpenError",
+  "OpenFailedError",
+  "UnknownError",
+  "InvalidStateError",
+  "NoSuchDatabaseError",
+  "MissingAPIError",
+  "VersionError",
+])
+
+/** Identify IndexedDB/Dexie availability failures, including nested wrappers. */
+export function isDatabaseUnavailableError(error: unknown): boolean {
+  const seen = new Set<object>()
+  const visit = (candidate: unknown): boolean => {
+    if (typeof candidate !== "object" || candidate === null || seen.has(candidate)) return false
+    seen.add(candidate)
+    const record = candidate as { name?: unknown; inner?: unknown; cause?: unknown }
+    if (typeof record.name === "string" && DATABASE_UNAVAILABLE_NAMES.has(record.name)) return true
+    return visit(record.inner) || visit(record.cause)
+  }
+  return visit(error)
+}
+
 export class PersistenceError extends Error {
   readonly reason: PersistenceErrorReason
   readonly cause: unknown

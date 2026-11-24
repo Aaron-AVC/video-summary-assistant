@@ -1,6 +1,8 @@
 import type { ReactNode } from "react"
 
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { DatabaseAvailabilityStatus } from "@/sidepanel/workspace/database-availability"
 import {
   selectSidePanelTab,
   type SidePanelTab,
@@ -11,6 +13,9 @@ type SidePanelShellProps = {
   activeTab: SidePanelTab
   onTabChange: (tab: SidePanelTab) => void
   header: ReactNode
+  databaseStatus?: DatabaseAvailabilityStatus
+  onDatabaseRetry?: () => void
+  systemNotice?: ReactNode
   taskBanner?: ReactNode
   overview: ReactNode
   transcript: ReactNode
@@ -23,6 +28,9 @@ export function SidePanelShell({
   activeTab,
   onTabChange,
   header,
+  databaseStatus,
+  onDatabaseRetry,
+  systemNotice,
   taskBanner,
   overview,
   transcript,
@@ -41,6 +49,24 @@ export function SidePanelShell({
   return (
     <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-3">
       {header}
+      {systemNotice}
+      {databaseStatus === "unavailable" || databaseStatus === "retrying" ? (
+        <div
+          role={databaseStatus === "retrying" ? "status" : "alert"}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+          <p className="min-w-0 flex-1 text-sm text-foreground">
+            {t("database.unavailable")}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={databaseStatus === "retrying"}
+            onClick={onDatabaseRetry}>
+            {t(databaseStatus === "retrying" ? "database.retrying" : "database.retry")}
+          </Button>
+        </div>
+      ) : null}
       {taskBanner}
       <Tabs
         value={activeTab}

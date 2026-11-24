@@ -21,6 +21,7 @@ export type KnowledgeControllerDependencies = {
     | "updateNote"
     | "deleteItem"
   >
+  onReadError?: (error: unknown) => void
 }
 
 export type KnowledgeLoadRequest = {
@@ -75,7 +76,7 @@ function sameSnapshot(left: KnowledgeSnapshot, right: KnowledgeSnapshot): boolea
  * derives one from a bare `videoId`.
  */
 export function createKnowledgeController(dependencies: KnowledgeControllerDependencies) {
-  const { repository } = dependencies
+  const { repository, onReadError } = dependencies
   let snapshot: KnowledgeSnapshot = EMPTY_SNAPSHOT
   const listeners = new Set<() => void>()
   let loadGeneration = 0
@@ -103,6 +104,7 @@ export function createKnowledgeController(dependencies: KnowledgeControllerDepen
       publish({ contentKey, items: byNewestUpdated(items), isLoading: false, error: null })
     } catch (error) {
       if (generation !== loadGeneration) return
+      onReadError?.(error)
       publish({
         ...snapshot,
         isLoading: false,

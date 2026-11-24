@@ -17,6 +17,10 @@ import { join, resolve } from "node:path"
 
 import { CdpConnection, fetchVersionInfo, waitForDevToolsPort } from "./lib/cdp-client"
 import {
+  isNormalApplicationReady,
+  runStableSidePanelReadinessGate,
+} from "./lib/artifact-gate-readiness"
+import {
   ARTIFACT_GATE_PROFILE_ROOT_ENV,
   createArtifactGateProfile,
 } from "./lib/artifact-gate-profile"
@@ -359,6 +363,7 @@ type MountSnapshot = {
   readyState: string
   rootChildCount: number
   bodyChildCount: number
+  databaseStatus: string | null
 }
 
 const MOUNT_PROBE = `(() => {
@@ -366,7 +371,8 @@ const MOUNT_PROBE = `(() => {
   return JSON.stringify({
     readyState: document.readyState,
     rootChildCount: root ? root.childElementCount : 0,
-    bodyChildCount: document.body ? document.body.children.length : 0
+    bodyChildCount: document.body ? document.body.children.length : 0,
+    databaseStatus: root?.getAttribute("data-database-status") ?? null
   })
 })()`
 
@@ -388,14 +394,31 @@ async function waitForMount(
     }
     const raw = await evaluate<string>(connection, sessionId, MOUNT_PROBE, stage)
     lastSnapshot = JSON.parse(raw) as MountSnapshot
-    if (isApplicationMounted(lastSnapshot)) return
+    if (
+      stage === "sidePanel"
+      && isApplicationMounted(lastSnapshot)
+      && lastSnapshot.databaseStatus === "unavailable"
+    ) {
+      fail(stage, "Side Panel mounted, but its local database is unavailable.")
+    }
+    if (
+      stage === "sidePanel"
+        ? isNormalApplicationReady(lastSnapshot)
+        : isApplicationMounted(lastSnapshot)
+    ) return
     await Bun.sleep(200)
   }
 
   fail(
     stage,
     describeTimeout(stage),
-    `${pageLabel} never mounted. Last observation: ${JSON.stringify(lastSnapshot)}`,
+    stage === "sidePanel" && isApplicationMounted(lastSnapshot ?? {
+      readyState: "loading",
+      rootChildCount: 0,
+      bodyChildCount: 0,
+    })
+      ? `Side Panel mounted without database readiness. Last observation: ${JSON.stringify(lastSnapshot)}`
+      : `${pageLabel} never mounted. Last observation: ${JSON.stringify(lastSnapshot)}`,
   )
 }
 
@@ -716,8 +739,21 @@ async function runGate(options: CliOptions): Promise<GateResult> {
     {
       const page = await openExtensionPage(connection, sidePanelUrl, collector, "sidepanel", "sidePanel")
       try {
-        await waitForMount(connection, page.sessionId, "sidePanel", "Side Panel", collector)
-        await stabilityWindow()
+        await runStableSidePanelReadinessGate({
+          waitForMount: () => waitForMount(connection, page.sessionId, "sidePanel", "Side Panel", collector),
+          stabilityWindow,
+          hasFatal: () => collector.hasFatal,
+          failOnFatal: () => fail("sidePanel", "Side Panel production bundle raised an uncaught runtime exception."),
+          readSnapshot: async () => JSON.parse(
+            await evaluate<string>(connection, page.sessionId, MOUNT_PROBE, "sidePanel"),
+          ) as MountSnapshot,
+          isReady: isNormalApplicationReady,
+          failOnNotReady: (snapshot) => fail(
+            "sidePanel",
+            "Side Panel lost normal database readiness during the stability window.",
+            `Last observation: ${JSON.stringify(snapshot)}`,
+          ),
+        })
         if (collector.hasFatal) {
           fail("sidePanel", "Side Panel production bundle raised an uncaught runtime exception.")
         }

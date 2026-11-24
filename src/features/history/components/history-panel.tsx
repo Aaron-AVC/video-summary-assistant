@@ -36,16 +36,23 @@ export function HistoryPanel() {
   const { t } = useI18n()
   const [items, setItems] = useState<RecentAnalysisListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     setIsLoading(true)
-    const records = await historyRepository.listRecentAnalyses(FULL_HISTORY_LIMIT)
-    const next = records.map(({ recentVideo, analysis }) =>
-      toListItem(recentVideo, analysis?.status ?? null)
-    )
-    setItems(next)
-    setIsLoading(false)
-  }, [])
+    setLoadError(null)
+    try {
+      const records = await historyRepository.listRecentAnalyses(FULL_HISTORY_LIMIT)
+      const next = records.map(({ recentVideo, analysis }) =>
+        toListItem(recentVideo, analysis?.status ?? null)
+      )
+      setItems(next)
+    } catch {
+      setLoadError(t("history.loadFailed"))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [t])
 
   useEffect(() => {
     void reload()
@@ -123,6 +130,8 @@ export function HistoryPanel() {
       onSelect={handleSelect}
       onDeleteAnalysis={handleDeleteAnalysis}
       onDeleteVideo={handleDeleteVideo}
+      loadError={loadError}
+      onRetry={() => { void reload() }}
       searchPlaceholder={t("history.search")}
       emptyMatchMessage={t("history.noFullMatch")}
       scrollHeightClassName="h-[32rem]"

@@ -84,6 +84,7 @@ export type SearchSnapshot = {
 
 export type SearchControllerDependencies = {
   repository: SearchRepository
+  onReadError?: (error: unknown) => void
 }
 
 export type SearchRequest = {
@@ -97,6 +98,7 @@ export type SearchController = {
   setQuery: (query: string) => void
   search: (request: SearchRequest) => Promise<void>
   refresh: (runtime: SearchRuntimeProjection | null) => Promise<void>
+  clearResults: () => void
   reset: () => void
 }
 
@@ -465,6 +467,7 @@ export function createSearchController(
       candidates = await dependencies.repository.loadCandidates()
     } catch (error) {
       if (!isCurrent(requestGeneration)) return
+      dependencies.onReadError?.(error)
       publish({
         query: snapshot.query,
         results: [],
@@ -516,6 +519,16 @@ export function createSearchController(
     search: runSearch,
 
     refresh: (runtime) => runSearch({ query: snapshot.query, runtime }),
+
+    clearResults: () => {
+      generation += 1
+      publish({
+        query: snapshot.query,
+        results: [],
+        isSearching: false,
+        error: null,
+      })
+    },
 
     reset: () => {
       generation += 1

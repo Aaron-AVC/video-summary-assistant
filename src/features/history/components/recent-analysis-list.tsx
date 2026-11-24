@@ -52,6 +52,8 @@ type RecentAnalysisListProps = {
   searchable?: boolean
   searchPlaceholder?: string
   emptyMatchMessage?: string
+  loadError?: string | null
+  onRetry?: () => void
   scrollHeightClassName?: string
 }
 
@@ -67,6 +69,8 @@ export function RecentAnalysisList({
   searchable = true,
   searchPlaceholder,
   emptyMatchMessage,
+  loadError = null,
+  onRetry,
   scrollHeightClassName = "h-[20rem]"
 }: RecentAnalysisListProps) {
   const { t, locale } = useI18n()
@@ -99,6 +103,23 @@ export function RecentAnalysisList({
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {loadError ? (
+          <div
+            role="alert"
+            className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+            <p className="text-sm text-foreground">{loadError}</p>
+            {onRetry ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isLoading}
+                onClick={onRetry}>
+                {t("history.retry")}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {searchable && items.length > 0 ? (
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -118,7 +139,7 @@ export function RecentAnalysisList({
             <Skeleton className="h-20 w-full rounded-2xl" />
             <Skeleton className="h-20 w-[90%] rounded-2xl" />
           </div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && loadError ? null : items.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
             {t("history.empty")}
           </div>

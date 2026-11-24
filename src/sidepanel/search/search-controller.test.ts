@@ -445,6 +445,34 @@ describe("search controller lifecycle", () => {
     expect(controller.getSnapshot().results).toEqual([])
   })
 
+  it("clears results while unavailable and does not republish an in-flight scan", async () => {
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const controller = createSearchController({
+      repository: {
+        loadCandidates: async () => {
+          await gate
+          return emptyCandidates()
+        },
+      },
+    })
+
+    controller.setQuery("deployment")
+    const pending = controller.refresh(null)
+    controller.clearResults()
+    release?.()
+    await pending
+
+    expect(controller.getSnapshot()).toMatchObject({
+      query: "deployment",
+      results: [],
+      isSearching: false,
+      error: null,
+    })
+  })
+
   it("does not scan when only the query text changes", () => {
     const fake = fixedRepository(emptyCandidates())
     const controller = createSearchController({ repository: fake.repository })

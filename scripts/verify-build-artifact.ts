@@ -16,10 +16,8 @@ import { existsSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 import { CdpConnection, fetchVersionInfo, waitForDevToolsPort } from "./lib/cdp-client"
-import {
-  isNormalApplicationReady,
-  runStableSidePanelReadinessGate,
-} from "./lib/artifact-gate-readiness"
+import { isNormalApplicationReady } from "./lib/artifact-gate-readiness"
+import { runArtifactGatePageStages } from "./lib/artifact-gate-page-stages"
 import {
   ARTIFACT_GATE_PROFILE_ROOT_ENV,
   createArtifactGateProfile,
@@ -481,13 +479,17 @@ async function openExtensionPage(
   // Record the destination before navigating: the bundle can throw during the
   // very first evaluation, and that report must name the real page URL.
   currentUrl = url
-  const navigation = await connection.send("Page.navigate", { url }, sessionId, 15_000)
-  const errorText = navigation.result?.errorText
-  if (typeof errorText === "string" && errorText.length > 0) {
+  try {
+    const navigation = await connection.send("Page.navigate", { url }, sessionId, 15_000)
+    const errorText = navigation.result?.errorText
+    if (typeof errorText === "string" && errorText.length > 0) {
+      fail(stage, `Navigation to ${url} failed: ${errorText}`)
+    }
+    return { sessionId, stop }
+  } catch (error) {
     stop()
-    fail(stage, `Navigation to ${url} failed: ${errorText}`)
+    throw error
   }
-  return { sessionId, stop }
 }
 
 async function drain(stream: ReadableStream<Uint8Array> | number | null | undefined): Promise<void> {
@@ -733,53 +735,53 @@ async function runGate(options: CliOptions): Promise<GateResult> {
       }
     }
 
-    // ---- Gate B: Side Panel production page --------------------------------
+    // ---- Gate B/C: Side Panel and Options production pages -----------------
+    // Keep the Side Panel session and exception listener alive through Options
+    // acceptance and the final normal-readiness recheck.
     const sidePanelPath = manifest.sidePanelPath!
+    const optionsPath = manifest.optionsPath!
     const sidePanelUrl = `chrome-extension://${extensionId}/${sidePanelPath}`
-    {
-      const page = await openExtensionPage(connection, sidePanelUrl, collector, "sidepanel", "sidePanel")
-      try {
-        await runStableSidePanelReadinessGate({
+    const optionsUrl = `chrome-extension://${extensionId}/${optionsPath}`
+    await runArtifactGatePageStages({
+      openSidePanel: async () => {
+        const page = await openExtensionPage(connection, sidePanelUrl, collector, "sidepanel", "sidePanel")
+        return {
           waitForMount: () => waitForMount(connection, page.sessionId, "sidePanel", "Side Panel", collector),
-          stabilityWindow,
-          hasFatal: () => collector.hasFatal,
-          failOnFatal: () => fail("sidePanel", "Side Panel production bundle raised an uncaught runtime exception."),
           readSnapshot: async () => JSON.parse(
             await evaluate<string>(connection, page.sessionId, MOUNT_PROBE, "sidePanel"),
           ) as MountSnapshot,
-          isReady: isNormalApplicationReady,
-          failOnNotReady: (snapshot) => fail(
-            "sidePanel",
-            "Side Panel lost normal database readiness during the stability window.",
-            `Last observation: ${JSON.stringify(snapshot)}`,
-          ),
-        })
-        if (collector.hasFatal) {
-          fail("sidePanel", "Side Panel production bundle raised an uncaught runtime exception.")
+          stop: page.stop,
         }
-        console.log("[PASS] Side Panel production bundle mounted")
-      } finally {
-        // Release this page's listeners: a later stage must not inherit them.
-        page.stop()
-      }
-    }
-
-    // ---- Gate C: Options production page -----------------------------------
-    const optionsPath = manifest.optionsPath!
-    const optionsUrl = `chrome-extension://${extensionId}/${optionsPath}`
-    {
-      const page = await openExtensionPage(connection, optionsUrl, collector, "options", "options")
-      try {
-        await waitForMount(connection, page.sessionId, "options", "Options", collector)
-        await stabilityWindow()
-        if (collector.hasFatal) {
-          fail("options", "Options production bundle raised an uncaught runtime exception.")
+      },
+      openOptions: async () => {
+        const page = await openExtensionPage(connection, optionsUrl, collector, "options", "options")
+        return {
+          waitForMount: () => waitForMount(connection, page.sessionId, "options", "Options", collector),
+          stop: page.stop,
         }
-        console.log("[PASS] Options production bundle mounted")
-      } finally {
-        page.stop()
-      }
-    }
+      },
+      stabilityWindow,
+      hasFatal: () => collector.hasFatal,
+      failOnFatal: (stage) => fail(
+        stage,
+        stage === "sidePanel"
+          ? "Side Panel production bundle raised an uncaught runtime exception."
+          : "Options production bundle raised an uncaught runtime exception.",
+      ),
+      isReady: isNormalApplicationReady,
+      failOnSidePanelNotReady: (snapshot) => fail(
+        "sidePanel",
+        "Side Panel lost normal database readiness during the stability window.",
+        `Last observation: ${JSON.stringify(snapshot)}`,
+      ),
+      failOnFinalSidePanelNotReady: (snapshot) => fail(
+        "sidePanel",
+        "Side Panel lost normal database readiness before artifact Gate success.",
+        `Final observation: ${JSON.stringify(snapshot)}`,
+      ),
+      onSidePanelPassed: () => console.log("[PASS] Side Panel production bundle mounted"),
+      onOptionsPassed: () => console.log("[PASS] Options production bundle mounted"),
+    })
 
     if (collector.hasFatal) {
       fail("options", "Uncaught runtime exceptions were observed during the gate.")

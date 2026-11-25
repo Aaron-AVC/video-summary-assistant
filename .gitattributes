@@ -1,0 +1,3 @@
+/docs/licensing/evidence/R002-PR23/** -text whitespace=cr-at-eol
+/scripts/licensing/capture-parcel-build-graph.cjs -text whitespace=cr-at-eol
+/licenses/third-party/pr23-materials/** -text whitespace=cr-at-eol

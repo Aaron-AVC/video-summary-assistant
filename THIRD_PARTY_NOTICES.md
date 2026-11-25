@@ -77,5 +77,28 @@ native host file was imported into this repository.
 
 Task 1 keeps the dependency set and lockfile from the selected
 YouTube-Summarizer baseline; it does not add a new third-party package.
-Individual transitive dependency license review remains part of the final V1
-license/notice review.
+The accepted [source ledger](docs/licensing/third-party-license-ledger.json)
+tracks the installed closure and original legal bytes. The independent
+[build and notice review](docs/licensing/evidence/R002-PR23/REVIEW.md) tracks
+the observed production assets, additional generated content and the broader
+notice coverage. It also explains the shadcn MIT and icon attribution.
+
+## Reproduce the third-party audit preview
+
+The current corpus is **`BLOCKED_AUDIT_PREVIEW`**. It preserves third-party
+license and NOTICE bytes in `THIRD_PARTY/`, including separately mapped
+package-directory identities and a checksum list. `react-remove-scroll-bar`
+2.3.8 is present in the production build and its exact-version copyright and
+license text remain open; see the build and notice review for the other items.
+
+```sh
+bun scripts/distribution-notices.ts scope
+bun scripts/distribution-notices.ts scope --artifact build/chrome-mv3-prod
+bun scripts/distribution-notices.ts generate <new-external-directory>
+bun scripts/distribution-notices.ts verify <generated-directory>
+```
+
+`--artifact` verifies the audited build bytes when available; the preview can
+also be built from the retained evidence. Candidate generation refuses open
+items and requires a verified artifact. The final ZIP gate and project
+licensing policy are separate stages.

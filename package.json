@@ -74,6 +74,9 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.6.3"
   },
+  "overrides": {
+    "react-remove-scroll-bar": "2.3.7"
+  },
   "manifest": {
     "permissions": [
       "sidePanel",

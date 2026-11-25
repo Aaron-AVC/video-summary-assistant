@@ -1,0 +1,40 @@
+{
+  "sha256": "ccc872d7a2dc007cbf9d755f30d56b8d80eabdbe22c44c95a709129bfdc46f01",
+  "byteLength": 4937,
+  "integrity": "sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q==",
+  "entries": [
+    "package/dist/es2015/component.js",
+    "package/dist/es2019/component.js",
+    "package/dist/es5/component.js",
+    "package/dist/es2015/constants.js",
+    "package/dist/es2019/constants.js",
+    "package/dist/es5/constants.js",
+    "package/dist/es2015/index.js",
+    "package/dist/es2019/index.js",
+    "package/dist/es5/index.js",
+    "package/dist/es2015/utils.js",
+    "package/dist/es2019/utils.js",
+    "package/dist/es5/utils.js",
+    "package/constants/package.json",
+    "package/package.json",
+    "package/README.md",
+    "package/dist/es2015/component.d.ts",
+    "package/dist/es2019/component.d.ts",
+    "package/dist/es5/component.d.ts",
+    "package/dist/es2015/constants.d.ts",
+    "package/dist/es2019/constants.d.ts",
+    "package/dist/es5/constants.d.ts",
+    "package/dist/es2015/index.d.ts",
+    "package/dist/es2019/index.d.ts",
+    "package/dist/es5/index.d.ts",
+    "package/dist/es2015/utils.d.ts",
+    "package/dist/es2019/utils.d.ts",
+    "package/dist/es5/utils.d.ts"
+  ],
+  "readme": {
+    "sha256": "486442209236ffa3893312e508694699a6b8834d30a2f9c083c1f3379983e4f9",
+    "byteLength": 1716
+  },
+  "sourceMaps": [],
+  "matchesInstalledEs2015": true
+}

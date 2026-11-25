@@ -1,0 +1,182 @@
+[
+  {
+    "name": "@parcel/transformer-js",
+    "version": "2.9.3",
+    "identity": "node_modules/@parcel/transformer-js/package.json",
+    "installedManifestSha256": "ef94fea26aee46b8d96ced2b4f7d33282bce8f4deed449391aa75715e097e707",
+    "evidenceType": "GRAPH",
+    "outputs": [],
+    "declared": "MIT",
+    "copyrightStatements": [
+      "Copyright (c) 2017-present Devon Govett"
+    ],
+    "registryTarballUrl": "https://registry.npmjs.org/@parcel/transformer-js/-/transformer-js-2.9.3.tgz",
+    "tarballSha256": "259a73dab946f538f9796da7f5d5f13262a160ca4a7dc0832c0c137758ea186c",
+    "integrity": "sha512-Z2MVVg5FYcPOfxlUwxqb5l9yjTMEqE3KI3zq2MBRUme6AV07KxLmCDF23b6glzZlHWQUE8MXzYCTAkOPCcPz+Q==",
+    "tarballLegalFiles": [
+      "package/LICENSE"
+    ],
+    "licenses": [
+      {
+        "tarballPath": "package/LICENSE",
+        "sha256": "5cfba9d5711264d45a2431a53c79f597cef12720cc7c764db2602daa92d0bd2a",
+        "byteLength": 1077
+      }
+    ]
+  },
+  {
+    "name": "@plasmohq/parcel-runtime",
+    "version": "0.25.2",
+    "identity": "node_modules/@plasmohq/parcel-runtime/package.json",
+    "installedManifestSha256": "399ff941cc6db8a8ddd850dc9688b7bbc3f9dcc4b12d31195c0f60c46a786c3d",
+    "evidenceType": "GRAPH",
+    "outputs": [],
+    "declared": "MIT",
+    "copyrightStatements": [
+      "Copyright (c) 2023 Plasmo Corp. <foss@plasmo.com> (https://www.plasmo.com) and contributors"
+    ],
+    "registryTarballUrl": "https://registry.npmjs.org/@plasmohq/parcel-runtime/-/parcel-runtime-0.25.2.tgz",
+    "tarballSha256": "d26847993a78a8c41bda02cbac5f3d03bf914383d4b9adefe3698390351a7fc4",
+    "integrity": "sha512-oeW/JKIYBkkB8vtFAvCTODYH+UeXjh78iFchUyIkdGh69SPViPqW91xS45M7G8Q+0kNV7In/Byv701XyS3W4sg==",
+    "tarballLegalFiles": [
+      "package/LICENSE"
+    ],
+    "licenses": [
+      {
+        "tarballPath": "package/LICENSE",
+        "sha256": "2289170d75e6cc94e97988f5eab52752a09f10bd97c41f6d6fcab93dbcc06a3b",
+        "byteLength": 1139
+      }
+    ]
+  },
+  {
+    "name": "@parcel/packager-js",
+    "version": "2.9.3",
+    "identity": "node_modules/@parcel/packager-js/package.json",
+    "installedManifestSha256": "d3c178c01eca8e424df684b78c92d983a527325f5d892ef9b6d31b4a1ef631b3",
+    "evidenceType": "EMITTED_PRELUDE",
+    "outputs": [
+      "bilibili-video.5fd6a346.js",
+      "options.95eda3f3.js",
+      "sidepanel.b7741352.js",
+      "static/background/index.js",
+      "youtube-watch.3b0aae31.js"
+    ],
+    "declared": "MIT",
+    "copyrightStatements": [
+      "Copyright (c) 2017-present Devon Govett"
+    ],
+    "registryTarballUrl": "https://registry.npmjs.org/@parcel/packager-js/-/packager-js-2.9.3.tgz",
+    "tarballSha256": "12e64ecdb3283bf48576b9198cbbcabff6c97d14813a56569b5a43901b349424",
+    "integrity": "sha512-V5xwkoE3zQ3R+WqAWhA1KGQ791FvJeW6KonOlMI1q76Djjgox68hhObqcLu66AmYNhR2R/wUpkP18hP2z8dSFw==",
+    "tarballLegalFiles": [
+      "package/LICENSE"
+    ],
+    "licenses": [
+      {
+        "tarballPath": "package/LICENSE",
+        "sha256": "5cfba9d5711264d45a2431a53c79f597cef12720cc7c764db2602daa92d0bd2a",
+        "byteLength": 1077
+      }
+    ]
+  },
+  {
+    "name": "plasmo",
+    "version": "0.90.5",
+    "identity": "node_modules/plasmo/package.json",
+    "installedManifestSha256": "27bbea04cfb4f317864492201f6fb7f9688ed8bde0e36d2e6c2b610a4cffa4f4",
+    "evidenceType": "GENERATED_TEMPLATES",
+    "outputs": [
+      "options.95eda3f3.js",
+      "options.html",
+      "sidepanel.b7741352.js",
+      "sidepanel.html",
+      "static/background/index.js"
+    ],
+    "declared": "MIT",
+    "copyrightStatements": [
+      "Copyright (c) 2023 Plasmo Corp. <foss@plasmo.com> (https://www.plasmo.com) and contributors"
+    ],
+    "registryTarballUrl": "https://registry.npmjs.org/plasmo/-/plasmo-0.90.5.tgz",
+    "tarballSha256": "36c0f96a58121ba5f02d6ce618824065b7e0d754a8561be5e66f44ebd0102d9b",
+    "integrity": "sha512-VRFsRCHTKCDSRz7ZGmN4hCFqrHE8z7vDYqJK63v5gjRs+EUFdfEciQyGhPmG5NkT+yPvmMZO+R/j1HU/pg2BKA==",
+    "tarballLegalFiles": [
+      "package/LICENSE"
+    ],
+    "licenses": [
+      {
+        "tarballPath": "package/LICENSE",
+        "sha256": "2289170d75e6cc94e97988f5eab52752a09f10bd97c41f6d6fcab93dbcc06a3b",
+        "byteLength": 1139
+      }
+    ]
+  },
+  {
+    "name": "tailwindcss",
+    "version": "3.4.19",
+    "identity": "node_modules/tailwindcss/package.json",
+    "installedManifestSha256": "969a9400c6b59a0c5b3dd8ac7d083613fedf78a258cef37938c36cf452ca9349",
+    "evidenceType": "EMITTED_CSS",
+    "outputs": [
+      "options.cbd95b00.css"
+    ],
+    "declared": "MIT",
+    "copyrightStatements": [
+      "Copyright (c) Tailwind Labs, Inc.",
+      "Copyright (c) Nicolas Gallagher",
+      "Copyright (c) Jonathan Neal",
+      "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)",
+      "Copyright (c) Adam Wathan",
+      "Copyright (c) Jonathan Reinink"
+    ],
+    "registryTarballUrl": "https://registry.npmjs.org/tailwindcss/-/tailwindcss-3.4.19.tgz",
+    "tarballSha256": "f5d5b1e9df84e5bcfea5383a178c9ae11873eb7810e591aeda19353d3678fab8",
+    "integrity": "sha512-3ofp+LL8E+pK/JuPLPggVAIaEuhvIz4qNcf3nA1Xn2o/7fb7s/TYpHhwGDv1ZU3PkBluUVaF8PyCHcm48cKLWQ==",
+    "tarballLegalFiles": [
+      "package/lib/css/LICENSE",
+      "package/lib/value-parser/LICENSE",
+      "package/LICENSE",
+      "package/src/css/LICENSE",
+      "package/src/value-parser/LICENSE"
+    ],
+    "licenses": [
+      {
+        "tarballPath": "package/LICENSE",
+        "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985",
+        "byteLength": 1071
+      },
+      {
+        "tarballPath": "package/lib/css/LICENSE",
+        "sha256": "c15f7afc9058d8a9995c2922a4c5812ac16a17647b2eb84014bb2fccada131c9",
+        "byteLength": 1226
+      }
+    ]
+  },
+  {
+    "name": "tailwindcss-animate",
+    "version": "1.0.7",
+    "identity": "node_modules/tailwindcss-animate/package.json",
+    "installedManifestSha256": "a6a9ae2d3731891b7d005a7baf235db24fa9ce6c56a6da1cda4a953ea131bb69",
+    "evidenceType": "EMITTED_CSS",
+    "outputs": [
+      "options.cbd95b00.css"
+    ],
+    "declared": "MIT",
+    "copyrightStatements": [
+      "Copyright (c) 2020 Jamie Kyle"
+    ],
+    "registryTarballUrl": "https://registry.npmjs.org/tailwindcss-animate/-/tailwindcss-animate-1.0.7.tgz",
+    "tarballSha256": "7f21107de460a37d5d0af5ecc44b1c632137e92cdb843e870f724235da215529",
+    "integrity": "sha512-bl6mpH3T7I3UFxuvDEXLxy/VuFxBk5bbzplh7tXI68mwMokNYd1t9qPBHlnyTwfa4JGC4zP516I1hYYtQ/vspA==",
+    "tarballLegalFiles": [
+      "package/LICENSE"
+    ],
+    "licenses": [
+      {
+        "tarballPath": "package/LICENSE",
+        "sha256": "d06945a5d85f4f6062393af30ad07d8afd1efa190c46cea6819b85c11764c7cd",
+        "byteLength": 1067
+      }
+    ]
+  }
+]

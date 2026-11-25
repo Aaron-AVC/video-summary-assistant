@@ -1,0 +1,2 @@
+# Preserve original permission notices, including line endings and whitespace.
+/materials/*.txt -text -whitespace

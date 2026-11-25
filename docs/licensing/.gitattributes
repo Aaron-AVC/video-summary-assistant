@@ -1,0 +1,5 @@
+# Pinned evidence is verified against the original bytes.
+/evidence/R002-F01-R2-versioned-runtime-closure.json -text
+/evidence/R002-P02-distribution-component-matrix.json -text
+# Trailing delimiters represent empty TSV cells.
+/evidence/source-inventory-8ee1c311.tsv -text whitespace=-blank-at-eol

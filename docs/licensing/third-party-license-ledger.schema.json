@@ -1,0 +1,443 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:video-summary-assistant:third-party-license-ledger-schema:v1",
+  "title": "Video Summary Assistant third-party license provenance ledger",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "target",
+    "acquiredOn",
+    "dependencyClosure",
+    "releaseDistribution",
+    "unresolvedIssues",
+    "expectedCounts",
+    "licenseMaterials",
+    "components"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vsa-third-party-license-ledger/v1"
+    },
+    "status": {
+      "type": "string"
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "repository",
+        "branch",
+        "commit",
+        "tree",
+        "fixedMainBaseline"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "fixedMainBaseline": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "acquiredOn": {
+      "type": "string",
+      "format": "date"
+    },
+    "dependencyClosure": {
+      "type": "object",
+      "required": [
+        "packageJsonSha256",
+        "bunLockSha256",
+        "unchangedFromP01Baseline",
+        "required",
+        "expandedOptional",
+        "componentsByDirectoryIdentity",
+        "uniqueNameVersions",
+        "actualBrowserBundleMembership"
+      ],
+      "properties": {
+        "packageJsonSha256": {
+          "const": "7050aee1c63bad4be656c439c4fcc6341d26625971c51941843b994d7ecc860c"
+        },
+        "bunLockSha256": {
+          "const": "ea283b89e2b0b233e4b65df1e1d9f28c27b7f74e270a6fe42f3770f8ff901bf4"
+        },
+        "unchangedFromP01Baseline": {
+          "type": "object",
+          "required": [
+            "commit",
+            "packageJsonBlobSame",
+            "bunLockBlobSame"
+          ],
+          "properties": {
+            "commit": {
+              "const": "4a328851f2b0ca745c9f757125fa112ac7bada62"
+            },
+            "packageJsonBlobSame": {
+              "const": true
+            },
+            "bunLockBlobSame": {
+              "const": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "required": {
+          "type": "object",
+          "required": [
+            "packageDirectoryIdentities",
+            "nameVersions",
+            "edges"
+          ],
+          "properties": {
+            "packageDirectoryIdentities": {
+              "const": 70
+            },
+            "nameVersions": {
+              "const": 65
+            },
+            "edges": {
+              "const": 243
+            }
+          },
+          "additionalProperties": true
+        },
+        "expandedOptional": {
+          "type": "object",
+          "required": [
+            "packageDirectoryIdentities",
+            "nameVersions",
+            "edges",
+            "optionalOnlyPackageDirectoryIdentities"
+          ],
+          "properties": {
+            "packageDirectoryIdentities": {
+              "const": 74
+            },
+            "nameVersions": {
+              "const": 69
+            },
+            "edges": {
+              "const": 316
+            },
+            "optionalOnlyPackageDirectoryIdentities": {
+              "const": 4
+            }
+          },
+          "additionalProperties": true
+        },
+        "componentsByDirectoryIdentity": {
+          "const": 74
+        },
+        "uniqueNameVersions": {
+          "const": 69
+        },
+        "actualBrowserBundleMembership": {
+          "const": "UNKNOWN"
+        }
+      },
+      "additionalProperties": true
+    },
+    "releaseDistribution": {
+      "type": "object",
+      "required": [
+        "browserBundleMembers",
+        "projectRootLicenseSelected",
+        "releaseApproved"
+      ],
+      "properties": {
+        "browserBundleMembers": {
+          "const": "UNKNOWN"
+        },
+        "projectRootLicenseSelected": {
+          "const": false
+        },
+        "releaseApproved": {
+          "const": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "unresolvedIssues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "component",
+          "issue",
+          "nextEvidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "issue": {
+            "type": "string"
+          },
+          "nextEvidence": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "expectedCounts": {
+      "type": "object",
+      "required": [
+        "npmPackageDirectoryIdentities",
+        "nonNpmComponents",
+        "totalComponents"
+      ],
+      "properties": {
+        "npmPackageDirectoryIdentities": {
+          "const": 74
+        },
+        "nonNpmComponents": {
+          "const": 4
+        },
+        "totalComponents": {
+          "const": 78
+        }
+      },
+      "additionalProperties": false
+    },
+    "licenseMaterials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "materialId",
+          "path",
+          "sha256",
+          "byteLength",
+          "kind",
+          "sourceArtifacts"
+        ],
+        "properties": {
+          "materialId": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^licenses/third-party/materials/[a-f0-9]{64}\\.txt$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "byteLength": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "enum": [
+              "license-text",
+              "notice-text",
+              "source-provenance-record"
+            ]
+          },
+          "sourceArtifacts": {
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 78,
+      "maxItems": 78,
+      "items": {
+        "type": "object",
+        "required": [
+          "componentId",
+          "kind",
+          "name",
+          "version",
+          "actualBundleMembership",
+          "license",
+          "sourceEvidence"
+        ],
+        "properties": {
+          "componentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "npm-package",
+              "source-component",
+              "source-asset"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "actualBundleMembership": {
+            "const": "UNKNOWN"
+          },
+          "license": {
+            "$ref": "#/$defs/license"
+          },
+          "sourceEvidence": {
+            "type": "array"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "npm-package"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "packageDirectoryIdentity",
+                "packageDirectory",
+                "installedManifestSha256",
+                "dependencyRelationship",
+                "installedClosureMembership"
+              ],
+              "properties": {
+                "packageDirectoryIdentity": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "packageDirectory": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "installedManifestSha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "dependencyRelationship": {
+                  "type": "object",
+                  "required": [
+                    "directness",
+                    "requiredClosureMember",
+                    "optionalOnlyClosureMember",
+                    "reachability"
+                  ],
+                  "properties": {
+                    "directness": {
+                      "enum": [
+                        "direct",
+                        "transitive"
+                      ]
+                    },
+                    "requiredClosureMember": {
+                      "type": "boolean"
+                    },
+                    "optionalOnlyClosureMember": {
+                      "type": "boolean"
+                    },
+                    "reachability": {
+                      "type": "array",
+                      "minItems": 1
+                    }
+                  },
+                  "not": {
+                    "properties": {
+                      "requiredClosureMember": {
+                        "const": true
+                      },
+                      "optionalOnlyClosureMember": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "requiredClosureMember",
+                      "optionalOnlyClosureMember"
+                    ]
+                  },
+                  "additionalProperties": true
+                },
+                "installedClosureMembership": {
+                  "enum": [
+                    "REQUIRED",
+                    "OPTIONAL_ONLY",
+                    "UNKNOWN",
+                    "NOT_IN_CLOSURE"
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "$defs": {
+    "license": {
+      "type": "object",
+      "required": [
+        "evidenceStatus",
+        "copyrightStatements",
+        "licenseMaterialIds",
+        "noticeMaterialIds"
+      ],
+      "properties": {
+        "evidenceStatus": {
+          "enum": [
+            "VERIFIED_TARBALL_TEXT",
+            "VERIFIED_UPSTREAM_ROOT_TEXT",
+            "PARTIAL_SOURCE_TEXT",
+            "DECLARATION_ONLY",
+            "UNRESOLVED",
+            "REFERENCE_ONLY",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "copyrightStatements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "licenseMaterialIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        },
+        "noticeMaterialIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

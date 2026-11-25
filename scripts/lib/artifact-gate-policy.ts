@@ -64,6 +64,25 @@ export type ExtensionTargets = {
   options: CdpTarget | null
 }
 
+export type ExceptionStackFrame = {
+  functionName: string
+  scriptId: string | null
+  url: string
+  lineNumber: number | null
+  columnNumber: number | null
+}
+
+export type StructuredException = {
+  className: string | null
+  description: string | null
+  subtype: string | null
+  rawValue: string | number | boolean | null | undefined
+  scriptId: string | null
+  url: string | null
+  lineNumber: number | null
+  columnNumber: number | null
+}
+
 export type ExceptionRecord = {
   /** Where the report came from, for actionable failure output. */
   source: "runtime.exceptionThrown" | "runtime.consoleAPICalled" | "log.entryAdded"
@@ -71,6 +90,11 @@ export type ExceptionRecord = {
   url: string
   message: string
   stack?: string
+  stage?: GateStage
+  text?: string | null
+  exception?: StructuredException
+  executionContextId?: number
+  stackTrace: ExceptionStackFrame[]
 }
 
 export type FatalClassification = {
@@ -96,6 +120,62 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null
+}
+
+const MAX_DIAGNOSTIC_TEXT_LENGTH = 2_048
+
+/** Bound diagnostic text and redact common credential forms. */
+export function sanitizeDiagnosticText(value: string): string {
+  return value
+    .replace(
+      /(["']?\b(?:authorization|proxy-authorization)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\r\n,;}]+)/gi,
+      "$1[REDACTED]",
+    )
+    .replace(/(https?:\/\/)[^\s/?#@]+(?::[^\s/?#@]*)?@/gi, "$1[REDACTED]@")
+    .replace(/(\b(?:cookie|set-cookie)\s*[:=]\s*)[^\r\n]*/gi, "$1[REDACTED]")
+    .replace(/(["']?\b(?:authorization|proxy-authorization|cookie|set-cookie|api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|passwd|secret|client[_-]?secret|credential)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}&]+)/gi, "$1[REDACTED]")
+    .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|key)=)[^&#\s]*/gi, "$1[REDACTED]")
+    .slice(0, MAX_DIAGNOSTIC_TEXT_LENGTH)
+}
+
+/** Remove URL credentials, query values, and fragments from diagnostics. */
+export function sanitizeDiagnosticUrl(value: string): string {
+  try {
+    const parsed = new URL(value)
+    parsed.username = ""
+    parsed.password = ""
+    parsed.search = ""
+    parsed.hash = ""
+    return sanitizeDiagnosticText(parsed.toString())
+  } catch {
+    return sanitizeDiagnosticText(value.replace(/(\/\/)[^/@\s]+@/g, "$1").split(/[?#]/, 1)[0])
+  }
+}
+
+function safeScalar(value: unknown): string | number | boolean | null | undefined {
+  if (value === null) return null
+  if (typeof value === "string") return sanitizeDiagnosticText(value)
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined
+  if (typeof value === "boolean") return value
+  return undefined
+}
+
+function safePosition(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function safeFrame(value: unknown): ExceptionStackFrame | null {
+  if (!isRecord(value)) return null
+  const functionName = asString(value.functionName)
+  const scriptId = asString(value.scriptId)
+  const frameUrl = asString(value.url)
+  return {
+    functionName: sanitizeDiagnosticText(functionName ?? "(anonymous)"),
+    scriptId: scriptId === null ? null : sanitizeDiagnosticText(scriptId),
+    url: frameUrl ? sanitizeDiagnosticUrl(frameUrl) : "",
+    lineNumber: safePosition(value.lineNumber),
+    columnNumber: safePosition(value.columnNumber),
+  }
 }
 
 /** Reject absolute paths and parent traversal so artifact paths stay inside the build. */
@@ -386,21 +466,57 @@ export function toExceptionRecord(
   target: string,
   url: string,
   details: unknown,
+  context: { stage?: GateStage } = {},
 ): ExceptionRecord {
-  const record: ExceptionRecord = { source, target, url, message: "" }
+  const record: ExceptionRecord = {
+    source,
+    target: sanitizeDiagnosticText(target),
+    url: sanitizeDiagnosticUrl(url),
+    message: "",
+    stage: context.stage,
+    stackTrace: [],
+  }
   if (!isRecord(details)) {
-    record.message = String(details)
+    record.message = sanitizeDiagnosticText(String(details))
     return record
   }
 
   const exception = isRecord(details.exception) ? details.exception : null
   const description = asString(exception?.description)
-  const value = exception?.value
   const text = asString(details.text)
+  const value = safeScalar(exception?.value)
+  const detailsUrl = asString(details.url)
+  const rawFrames = isRecord(details.stackTrace) && Array.isArray(details.stackTrace.callFrames)
+    ? details.stackTrace.callFrames
+    : []
 
-  record.message = description ?? text ?? (value === undefined ? "unknown error" : String(value))
-  const stack = asString(exception?.preview)
-  if (stack) record.stack = stack
+  record.message = sanitizeDiagnosticText(description ?? text ?? (value === undefined ? "unknown error" : String(value)))
+  record.text = text === null ? null : sanitizeDiagnosticText(text)
+  const scriptId = asString(details.scriptId) ?? asString(exception?.scriptId)
+  const className = asString(exception?.className)
+  const subtype = asString(exception?.subtype)
+  record.exception = {
+    className: className === null ? null : sanitizeDiagnosticText(className),
+    description: description === null ? null : sanitizeDiagnosticText(description),
+    subtype: subtype === null ? null : sanitizeDiagnosticText(subtype),
+    rawValue: value,
+    scriptId: scriptId === null ? null : sanitizeDiagnosticText(scriptId),
+    url: detailsUrl ? sanitizeDiagnosticUrl(detailsUrl) : null,
+    lineNumber: safePosition(details.lineNumber),
+    columnNumber: safePosition(details.columnNumber),
+  }
+  if (typeof details.executionContextId === "number" && Number.isFinite(details.executionContextId)) {
+    record.executionContextId = details.executionContextId
+  }
+  record.stackTrace = rawFrames
+    .map(safeFrame)
+    .filter((frame): frame is ExceptionStackFrame => frame !== null)
+    .slice(0, 64)
+  if (record.stackTrace.length > 0) {
+    record.stack = record.stackTrace
+      .map((frame) => `at ${frame.functionName} (${frame.url || frame.scriptId || "unknown"}:${frame.lineNumber ?? 0}:${frame.columnNumber ?? 0})`)
+      .join("\n")
+  }
   return record
 }
 

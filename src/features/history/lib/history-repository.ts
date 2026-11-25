@@ -98,15 +98,11 @@ async function queryLatestByCompoundIndex<T>(
   index: string,
   key: unknown,
 ): Promise<T | null> {
-  try {
-    const collection = table.where(index)
-    const equals = collection.equals?.(key)
-    if (equals?.reverse) return (await equals.reverse().first()) ?? null
-    if (equals?.first) return (await equals.first()) ?? null
-    return (await equals?.toArray?.())?.[0] ?? null
-  } catch {
-    return null
-  }
+  const collection = table.where(index)
+  const equals = collection.equals?.(key)
+  if (equals?.reverse) return (await equals.reverse().first()) ?? null
+  if (equals?.first) return (await equals.first()) ?? null
+  return (await equals?.toArray?.())?.[0] ?? null
 }
 
 async function queryLatestByCompoundPrefix<T>(
@@ -114,15 +110,9 @@ async function queryLatestByCompoundPrefix<T>(
   index: string,
   prefix: string,
 ): Promise<T | null> {
-  try {
-    const collection = table.where(index)
-    if (collection.between) {
-      return (await collection.between([prefix, ""], [prefix, "￿"]).reverse().first()) ?? null
-    }
-  } catch {
-    // Fall through to the compatibility scan below.
-  }
-  return null
+  const collection = table.where(index)
+  if (!collection.between) return null
+  return (await collection.between([prefix, ""], [prefix, "￿"]).reverse().first()) ?? null
 }
 
 export function createHistoryRepository(database = db, options: HistoryRepositoryOptions = {}) {

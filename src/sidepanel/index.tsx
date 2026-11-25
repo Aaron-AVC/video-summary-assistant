@@ -3,6 +3,7 @@ import "@/styles/globals.css"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
+import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/sonner"
 import { CurrentVideoCard } from "@/features/analysis/components/current-video-card"
 import { ActiveAnalysisTaskBanner } from "@/features/analysis/components/active-analysis-task"
@@ -40,6 +41,8 @@ import { AnalysisAbortedError, runAnalysis } from "@/features/analysis/lib/run-a
 import { OpenAICompatibleClientError } from "@/features/analysis/lib/openai-compatible-client"
 import type { RecentAnalysisListItem } from "@/features/history/components/recent-analysis-list"
 import { historyRepository } from "@/features/history/lib/history-repository"
+import { isDatabaseUnavailableError } from "@/lib/db/errors"
+import { isDatabaseReady, verifyDatabaseReady } from "@/lib/db/readiness"
 import {
   admitDestructiveTask,
   performDestructiveOperation,
@@ -168,6 +171,8 @@ import {
   type WorkspaceHistoryRestoreMode,
   type WorkspaceRestoredAnalysisIdentity,
 } from "@/sidepanel/workspace/workspace-controller"
+import { DatabaseAvailabilityController } from "@/sidepanel/workspace/database-availability"
+import { loadWorkspaceBranches } from "@/sidepanel/workspace/workspace-bootstrap"
 
 /** Content-free identity used to decide whether a resume entry still applies. */
 type FinalResumeIdentitySnapshot = {
@@ -210,6 +215,19 @@ function SidepanelWorkspace() {
   const activeTabIdRef = useRef(activeTabId)
   activeTabIdRef.current = activeTabId
 
+  const databaseAvailabilityControllerRef = useRef<DatabaseAvailabilityController | null>(null)
+  if (!databaseAvailabilityControllerRef.current) {
+    databaseAvailabilityControllerRef.current = new DatabaseAvailabilityController({
+      probe: () => verifyDatabaseReady(),
+    })
+  }
+  const databaseAvailabilityController = databaseAvailabilityControllerRef.current
+  const [databaseAvailability, setDatabaseAvailability] = useState(
+    databaseAvailabilityController.getSnapshot(),
+  )
+  const databaseAvailabilityRef = useRef(databaseAvailability.status)
+  databaseAvailabilityRef.current = databaseAvailability.status
+
   const [activeTab, setActiveTab] = useState<SidePanelTab>(INITIAL_SIDE_PANEL_TAB)
   const [provider, setProvider] = useState<ProviderConfigRecord | null>(null)
   const [analysisPresetId, setAnalysisPresetId] = useState<AnalysisPresetId>(DEFAULT_ANALYSIS_PRESET_ID)
@@ -223,9 +241,37 @@ function SidepanelWorkspace() {
   const [qaMessages, setQaMessages] = useState<QaMessageEntity[]>([])
   const [askError, setAskError] = useState<string | null>(null)
   const [isBootstrapping, setIsBootstrapping] = useState(true)
+  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null)
   const [isAnalysisFetching, setIsAnalysisFetching] = useState(false)
   const [analysisPhase, setAnalysisPhase] = useState<AnalysisPhase>("idle")
   const [analysisError, setAnalysisError] = useState<string | null>(null)
+
+  const reportDatabaseFailure = useCallback((error: unknown, failureGeneration: number) => {
+    if (isDatabaseUnavailableError(error)) {
+      databaseAvailabilityController.markUnavailable(error, failureGeneration)
+    }
+  }, [databaseAvailabilityController])
+
+  const runDatabaseOperation = <T,>(operation: () => Promise<T>): Promise<T> => {
+    const failureGeneration = databaseAvailabilityController.captureFailureGeneration()
+    let result: Promise<T>
+    try {
+      result = Promise.resolve(operation())
+    } catch (error) {
+      reportDatabaseFailure(error, failureGeneration)
+      return Promise.reject(error)
+    }
+    return result.catch((error: unknown) => {
+      reportDatabaseFailure(error, failureGeneration)
+      throw error
+    })
+  }
+
+  const ensureDatabaseAvailable = useCallback(() => {
+    if (isDatabaseReady(databaseAvailabilityRef.current)) return true
+    toast.error(t("database.unavailable"))
+    return false
+  }, [t])
 
   const analysisTaskControllerRef = useRef<AnalysisTaskController | null>(null)
   if (!analysisTaskControllerRef.current) analysisTaskControllerRef.current = new AnalysisTaskController()
@@ -236,27 +282,47 @@ function SidepanelWorkspace() {
   const transcriptControllerRef = useRef<TranscriptController | null>(null)
   if (!transcriptControllerRef.current) {
     transcriptControllerRef.current = new TranscriptController({
-      readCached: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
+      readCached: (contentKey) => runDatabaseOperation(
+        () => historyRepository.getLatestTranscriptByContentKey(contentKey),
+      ),
       loadRemote: ({ request, isCurrent }) => loadCurrentTranscript({
         requestedContentKey: request.video.contentKey,
         ...(request.sourceTabId === undefined ? {} : { tabId: request.sourceTabId }),
         isCurrent,
       }),
-      saveCache: (payload) => historyRepository.saveTranscriptCache(payload),
+      saveCache: (payload) => runDatabaseOperation(
+        () => historyRepository.saveTranscriptCache(payload),
+      ),
     })
   }
   const transcriptController = transcriptControllerRef.current
   const historyControllerRef = useRef<ReturnType<typeof createHistoryController> | null>(null)
   if (!historyControllerRef.current) {
     historyControllerRef.current = createHistoryController({
-      listRecentAnalyses: (limit) => historyRepository.listRecentAnalyses(limit),
-      getCurrentAnalysisByVideoId: (videoId) => historyRepository.getCurrentAnalysisByVideoId(videoId),
-      getLatestTranscriptSnapshotByVideoId: (videoId) => historyRepository.getLatestTranscriptSnapshotByVideoId(videoId),
-      getCurrentAnalysisByContentKey: (contentKey) => historyRepository.getCurrentAnalysisByContentKey(contentKey),
-      getLatestTranscriptByContentKey: (contentKey) => historyRepository.getLatestTranscriptByContentKey(contentKey),
-      getSavedAnalysisRunById: (analysisRunId) => historyRepository.getSavedAnalysisRunById(analysisRunId),
-      deleteAnalysisRun: (analysisRunId) => historyRepository.deleteAnalysisRun(analysisRunId),
-      deleteVideoData: (contentKey) => historyRepository.deleteVideoData(contentKey),
+      listRecentAnalyses: (limit) => runDatabaseOperation(
+        () => historyRepository.listRecentAnalyses(limit),
+      ),
+      getCurrentAnalysisByVideoId: (videoId) => runDatabaseOperation(
+        () => historyRepository.getCurrentAnalysisByVideoId(videoId),
+      ),
+      getLatestTranscriptSnapshotByVideoId: (videoId) => runDatabaseOperation(
+        () => historyRepository.getLatestTranscriptSnapshotByVideoId(videoId),
+      ),
+      getCurrentAnalysisByContentKey: (contentKey) => runDatabaseOperation(
+        () => historyRepository.getCurrentAnalysisByContentKey(contentKey),
+      ),
+      getLatestTranscriptByContentKey: (contentKey) => runDatabaseOperation(
+        () => historyRepository.getLatestTranscriptByContentKey(contentKey),
+      ),
+      getSavedAnalysisRunById: (analysisRunId) => runDatabaseOperation(
+        () => historyRepository.getSavedAnalysisRunById(analysisRunId),
+      ),
+      deleteAnalysisRun: (analysisRunId) => runDatabaseOperation(
+        () => historyRepository.deleteAnalysisRun(analysisRunId),
+      ),
+      deleteVideoData: (contentKey) => runDatabaseOperation(
+        () => historyRepository.deleteVideoData(contentKey),
+      ),
       performDestructiveOperation,
     })
   }
@@ -265,18 +331,25 @@ function SidepanelWorkspace() {
   if (!askControllerRef.current) {
     askControllerRef.current = createAskController({
       listQaThreadsForVideo: (contentKey, analysisRunId) => (
-        qaConversationRepository.listQaThreadsForVideo(contentKey, analysisRunId)
+        runDatabaseOperation(() => qaConversationRepository.listQaThreadsForVideo(contentKey, analysisRunId))
       ),
-      getQaThread: (threadId) => qaConversationRepository.getQaThread(threadId),
-      listQaMessages: (threadId) => qaConversationRepository.listQaMessages(threadId),
-      deleteQaThread: (threadId) => qaConversationRepository.deleteQaThread(threadId),
-      createQaThread: (input) => qaConversationRepository.createQaThread(input),
+      getQaThread: (threadId) => runDatabaseOperation(() => qaConversationRepository.getQaThread(threadId)),
+      listQaMessages: (threadId) => runDatabaseOperation(() => qaConversationRepository.listQaMessages(threadId)),
+      deleteQaThread: (threadId) => runDatabaseOperation(() => qaConversationRepository.deleteQaThread(threadId)),
+      createQaThread: (input) => runDatabaseOperation(() => qaConversationRepository.createQaThread(input)),
       resolveProvider: (providerId) => settingsStorage.resolveProvider(providerId),
-      appendQaMessage: (input) => qaConversationRepository.appendQaMessage(input),
-      getQaAnswer: (cacheKey) => historyRepository.getQaAnswer(cacheKey),
-      saveQaAnswer: (input) => historyRepository.saveQaAnswer(input),
-      runAskVideo: (input) => askVideo(input),
-      appendAssistantMessage: (input) => qaConversationRepository.appendQaMessage(input),
+      appendQaMessage: (input) => runDatabaseOperation(() => qaConversationRepository.appendQaMessage(input)),
+      getQaAnswer: (cacheKey) => runDatabaseOperation(() => historyRepository.getQaAnswer(cacheKey)),
+      saveQaAnswer: (input) => runDatabaseOperation(() => historyRepository.saveQaAnswer(input)),
+      runAskVideo: (input) => {
+        if (!isDatabaseReady(databaseAvailabilityRef.current)) {
+          throw new Error("Local database is unavailable.")
+        }
+        return askVideo(input)
+      },
+      appendAssistantMessage: (input) => runDatabaseOperation(
+        () => qaConversationRepository.appendQaMessage(input),
+      ),
     })
   }
   const askController = askControllerRef.current
@@ -295,12 +368,27 @@ function SidepanelWorkspace() {
         }
       },
       saveTaskTranscriptCache: (input) => transcriptController.saveTaskCache(input),
-      getAnalysisCache: (cacheKey) => historyRepository.getAnalysisCache(cacheKey),
-      saveVideoRecord: (input) => historyRepository.saveVideoRecord(input),
-      saveTranscriptSnapshot: (input) => historyRepository.saveTranscriptSnapshot(input),
-      saveAnalysisRun: (input) => historyRepository.saveAnalysisRun(input),
-      saveAnalysisCache: (input) => historyRepository.saveAnalysisCache(input),
-      runAnalysis: (options) => runAnalysis(options),
+      getAnalysisCache: (cacheKey) => runDatabaseOperation(
+        () => historyRepository.getAnalysisCache(cacheKey),
+      ),
+      saveVideoRecord: (input) => runDatabaseOperation(
+        () => historyRepository.saveVideoRecord(input),
+      ),
+      saveTranscriptSnapshot: (input) => runDatabaseOperation(
+        () => historyRepository.saveTranscriptSnapshot(input),
+      ),
+      saveAnalysisRun: (input) => runDatabaseOperation(
+        () => historyRepository.saveAnalysisRun(input),
+      ),
+      saveAnalysisCache: (input) => runDatabaseOperation(
+        () => historyRepository.saveAnalysisCache(input),
+      ),
+      runAnalysis: (options) => {
+        if (!isDatabaseReady(databaseAvailabilityRef.current)) {
+          throw new Error("Local database is unavailable.")
+        }
+        return runAnalysis(options)
+      },
     })
   }
   const analysisController = analysisControllerRef.current
@@ -440,11 +528,13 @@ function SidepanelWorkspace() {
   if (!knowledgeControllerRef.current) {
     knowledgeControllerRef.current = createKnowledgeController({
       repository: {
-        listByContentKey: (contentKey) => knowledgeRepository.listByContentKey(contentKey),
-        toggleBookmark: (input) => knowledgeRepository.toggleBookmark(input),
-        createNote: (input) => knowledgeRepository.createNote(input),
-        updateNote: (input) => knowledgeRepository.updateNote(input),
-        deleteItem: (id) => knowledgeRepository.deleteItem(id),
+        listByContentKey: (contentKey) => runDatabaseOperation(
+          () => knowledgeRepository.listByContentKey(contentKey),
+        ),
+        toggleBookmark: (input) => runDatabaseOperation(() => knowledgeRepository.toggleBookmark(input)),
+        createNote: (input) => runDatabaseOperation(() => knowledgeRepository.createNote(input)),
+        updateNote: (input) => runDatabaseOperation(() => knowledgeRepository.updateNote(input)),
+        deleteItem: (id) => runDatabaseOperation(() => knowledgeRepository.deleteItem(id)),
       },
     })
   }
@@ -453,7 +543,7 @@ function SidepanelWorkspace() {
   if (!searchControllerRef.current) {
     searchControllerRef.current = createSearchController({
       repository: {
-        loadCandidates: () => searchRepository.loadCandidates(),
+        loadCandidates: () => runDatabaseOperation(() => searchRepository.loadCandidates()),
       },
     })
   }
@@ -463,6 +553,25 @@ function SidepanelWorkspace() {
   )
   const [knowledgeSnapshot, setKnowledgeSnapshot] = useState(knowledgeController.getSnapshot())
   const [searchSnapshot, setSearchSnapshot] = useState(searchController.getSnapshot())
+  useEffect(() => {
+    setDatabaseAvailability(databaseAvailabilityController.getSnapshot())
+    const unsubscribe = databaseAvailabilityController.subscribe((snapshot) => {
+      databaseAvailabilityRef.current = snapshot.status
+      setDatabaseAvailability(snapshot)
+    })
+    void databaseAvailabilityController.initialize()
+    return unsubscribe
+  }, [databaseAvailabilityController])
+  useEffect(() => {
+    const root = document.getElementById("__plasmo")
+    if (!root) return
+    root.setAttribute("data-database-status", databaseAvailability.status)
+    return () => {
+      if (root.getAttribute("data-database-status") === databaseAvailability.status) {
+        root.removeAttribute("data-database-status")
+      }
+    }
+  }, [databaseAvailability.status])
   useEffect(() => searchController.subscribe(() => {
     setSearchSnapshot(searchController.getSnapshot())
   }), [searchController])
@@ -828,7 +937,8 @@ function SidepanelWorkspace() {
   )
   const isAsking = Boolean(activeAskTask)
   const canAsk = Boolean(
-    provider
+    isDatabaseReady(databaseAvailability.status)
+    && provider
     && analysisView
     && hasMatchingAskTranscript
     && askQuestion.trim()
@@ -863,8 +973,15 @@ function SidepanelWorkspace() {
   )
 
   const refreshRecentAnalyses = useCallback(async () => {
-    setRecentItems(await historyController.listRecentAnalyses(10))
-  }, [historyController])
+    try {
+      const recent = await historyController.listRecentAnalyses(10)
+      setRecentItems(recent)
+      setHistoryLoadError(null)
+    } catch (error) {
+      if (!isDatabaseUnavailableError(error)) setHistoryLoadError(t("history.loadFailed"))
+      throw error
+    }
+  }, [historyController, reportDatabaseFailure, t])
 
   const applyMutation = useCallback(async (mutation: Parameters<typeof applySidepanelDataMutation>[0]) => {
     finalCheckpointLifecycle.handleMutation(mutation)
@@ -1044,35 +1161,80 @@ function SidepanelWorkspace() {
     }
   }, [historyController, publishHistoryRestore, workspaceController])
 
-  const loadWorkspace = useCallback(async () => {
+  const loadWorkspace = useCallback(async ({ retryDatabase = false }: { retryDatabase?: boolean } = {}) => {
     const generation = workspaceController.beginLoadGeneration()
     const displayGenerationAtLoadStart = workspaceController.getDisplayGeneration()
+    const isCurrent = () => workspaceController.isLoadGenerationCurrent(generation)
     setIsBootstrapping(true)
+    setHistoryLoadError(null)
     try {
-      const [providerConfigs, recent, persistedPresetId] = await Promise.all([
-        settingsStorage.getProviderConfigs(),
-        historyController.listRecentAnalyses(10),
-        settingsStorage.getAnalysisPresetId(),
-      ])
-      if (!workspaceController.isLoadGenerationCurrent(generation)) return
+      const branches = await loadWorkspaceBranches({
+        loadProvider: async () => {
+          const providerConfigs = await settingsStorage.getProviderConfigs()
+          if (isCurrent()) setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
+          return providerConfigs
+        },
+        loadPreset: async () => {
+          const persistedPresetId = await settingsStorage.getAnalysisPresetId()
+          if (isCurrent()) setAnalysisPresetId(persistedPresetId)
+          return persistedPresetId
+        },
+        loadRecent: async () => {
+          const readiness = retryDatabase
+            ? await databaseAvailabilityController.retry()
+            : await databaseAvailabilityController.initialize()
+          if (!isDatabaseReady(readiness)) {
+            throw new Error("Local database is unavailable.")
+          }
+          const recent = await historyController.listRecentAnalyses(10)
+          if (!isCurrent()) return recent
+          setRecentItems(recent)
+          setHistoryLoadError(null)
 
-      setProvider(providerConfigs.find((item) => item.isDefault) ?? null)
-      setRecentItems(recent)
-      setAnalysisPresetId(persistedPresetId)
+          if (videoContext.platform && videoContext.videoId && videoContext.contentKey) {
+            await loadSavedAnalysisForContext(
+              videoContext,
+              generation,
+              displayGenerationAtLoadStart,
+            )
+          }
+          return recent
+        },
+      }, {
+        isRecentCurrent: isCurrent,
+        onHistoryFailure: () => {
+          if (databaseAvailabilityController.getSnapshot().status !== "unavailable") {
+            setHistoryLoadError(t("history.loadFailed"))
+          }
+        },
+      })
 
-      if (videoContext.platform && videoContext.videoId && videoContext.contentKey) {
-        await loadSavedAnalysisForContext(
-          videoContext,
-          generation,
-          displayGenerationAtLoadStart,
-        )
+      if (!isCurrent()) return
+      if (branches.provider.status === "rejected") {
+        console.error("Side Panel provider settings initialization failed.", branches.provider.reason)
+      }
+      if (branches.preset.status === "rejected") {
+        console.error("Side Panel analysis preset initialization failed.", branches.preset.reason)
+      }
+    } catch (error) {
+      if (isCurrent()) {
+        if (!isDatabaseUnavailableError(error)) {
+          setHistoryLoadError(t("history.loadFailed"))
+        }
+        console.error("Side Panel workspace initialization failed.", error)
       }
     } finally {
-      if (workspaceController.isLoadGenerationCurrent(generation)) {
-        setIsBootstrapping(false)
-      }
+      if (isCurrent()) setIsBootstrapping(false)
     }
-  }, [historyController, loadSavedAnalysisForContext, videoContext.contentKey, videoContext.platform, videoContext.videoId, videoContext.title, videoContext.partId, workspaceController])
+  }, [
+    databaseAvailabilityController,
+    historyController,
+    loadSavedAnalysisForContext,
+    t,
+    videoContext,
+    activeTabId,
+    workspaceController,
+  ])
 
   useEffect(() => {
     const transition = workspaceController.observeRuntimeContent({
@@ -1127,8 +1289,10 @@ function SidepanelWorkspace() {
       knowledgeController.reset()
       return
     }
+    if (!isDatabaseReady(databaseAvailability.status)) return
     void knowledgeController.loadForContent({ identity })
   }, [
+    databaseAvailability.status,
     knowledgeController,
     videoContext.contentKey,
     videoContext.isReady,
@@ -1183,7 +1347,7 @@ function SidepanelWorkspace() {
       if (error instanceof StaleTranscriptError) return
       toast.error(error instanceof Error ? error.message : t("toast.unknownTranscriptError"))
     }
-  }, [loadTranscriptForCurrent])
+  }, [loadTranscriptForCurrent, reportDatabaseFailure, t])
 
   const loadTranscriptForTask = useCallback(async (
     task: ActiveAnalysisTask,
@@ -1238,6 +1402,7 @@ function SidepanelWorkspace() {
   }, [workspaceController])
 
   const handleAnalyze = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (!ensureDatabaseAvailable()) return
     if (analysisPresetWriter.isPending()) return
     if (activeAnalysisTask) {
       toast.error(t("toast.anotherAnalysis"))
@@ -1468,7 +1633,7 @@ function SidepanelWorkspace() {
     }
 
     void runTask()
-  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, askController, clearQaWorkspace, finalCheckpointLifecycle, loadTranscriptForTask, provider, publishCompleted, publishTranscript, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, askController, clearQaWorkspace, ensureDatabaseAvailable, finalCheckpointLifecycle, loadTranscriptForTask, provider, publishCompleted, publishTranscript, refreshRecentAnalyses, reportDatabaseFailure, restoreQaConversation, t, transcriptController, videoContext, workspaceController])
 
   const handleCancelAnalysis = useCallback(() => {
     finalCheckpointLifecycle.invalidate()
@@ -1485,6 +1650,7 @@ function SidepanelWorkspace() {
    * zero AI calls.
    */
   const handleResumeFinal = useCallback(async () => {
+    if (!ensureDatabaseAvailable()) return
     if (analysisPresetWriter.isPending()) return
     if (activeAnalysisTask) {
       toast.error(t("toast.anotherAnalysis"))
@@ -1656,8 +1822,15 @@ function SidepanelWorkspace() {
                   profileModel: resolved.profile.model,
                   profileGenerationTimeoutSec: resolved.profile.generationTimeoutSec,
                 })),
-                getAnalysisCache: (cacheKey) => historyRepository.getAnalysisCache(cacheKey),
-                runFinalOnlyAnalysis,
+                getAnalysisCache: (cacheKey) => runDatabaseOperation(
+                  () => historyRepository.getAnalysisCache(cacheKey),
+                ),
+                runFinalOnlyAnalysis: (options) => {
+                  if (!isDatabaseReady(databaseAvailabilityRef.current)) {
+                    throw new Error("Local database is unavailable.")
+                  }
+                  return runFinalOnlyAnalysis(options)
+                },
                 persistCompletedAnalysis: async (input) => {
                   const cacheKey = await computeAnalysisCacheKey({
                     contentKey: input.taskSnapshot.contentKey,
@@ -1785,13 +1958,14 @@ function SidepanelWorkspace() {
     }
 
     void runResume()
-  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, finalCheckpointLifecycle, finalResumeAvailability, provider, publishCompleted, rawVtt, refreshRecentAnalyses, restoreQaConversation, t, transcriptController, transcriptCues, transcriptIdentity, videoContext, workspaceController])
+  }, [activeAnalysisTask, activeTabId, analysisController, analysisPresetId, analysisPresetWriter, analysisTaskController, ensureDatabaseAvailable, finalCheckpointLifecycle, finalResumeAvailability, provider, publishCompleted, rawVtt, refreshRecentAnalyses, reportDatabaseFailure, restoreQaConversation, t, transcriptController, transcriptCues, transcriptIdentity, videoContext, workspaceController])
 
   const handleOpenSavedAnalysis = useCallback(async (
     videoId: string,
     contentKey?: string,
     analysisRunId?: string,
   ) => {
+    if (!ensureDatabaseAvailable()) return null
     // Resolve the saved content identity before any workspace side effect.
     // The content-key restore clears the displayed analysis before it can
     // report that nothing matched, so an unparsable key has to be rejected
@@ -1815,19 +1989,26 @@ function SidepanelWorkspace() {
     // starting a workspace load, so the load generation alone cannot see it.
     const displayGeneration = workspaceController.getDisplayGeneration()
     let restored: WorkspaceRestoredAnalysisIdentity | null = null
-    if (analysisRunId) {
-      restored = await loadSavedAnalysisRun(analysisRunId, generation, displayGeneration)
-    } else if (contentKey && savedIdentity) {
-      const current = videoContextRef.current
-      restored = await loadSavedAnalysisForContext({
-        ...current,
-        videoId,
-        contentKey,
-        platform: savedIdentity.platform,
-        partId: savedIdentity.partId,
-      }, generation, displayGeneration)
-    } else {
-      restored = await loadSavedAnalysis(videoId, generation, displayGeneration)
+    try {
+      if (analysisRunId) {
+        restored = await loadSavedAnalysisRun(analysisRunId, generation, displayGeneration)
+      } else if (contentKey && savedIdentity) {
+        const current = videoContextRef.current
+        restored = await loadSavedAnalysisForContext({
+          ...current,
+          videoId,
+          contentKey,
+          platform: savedIdentity.platform,
+          partId: savedIdentity.partId,
+        }, generation, displayGeneration)
+      } else {
+        restored = await loadSavedAnalysis(videoId, generation, displayGeneration)
+      }
+    } catch (error) {
+      if (workspaceController.isLoadGenerationCurrent(generation)) {
+        toast.error(t("database.unavailable"))
+      }
+      return null
     }
     // A finished restore is not proof that this request is still current: the
     // publication boundary permits a newer load to start while an older one is
@@ -1851,7 +2032,7 @@ function SidepanelWorkspace() {
 
     toast.success(t("toast.loadedHistory"))
     return committed
-  }, [askController, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, transcriptController, workspaceController])
+  }, [askController, ensureDatabaseAvailable, loadSavedAnalysis, loadSavedAnalysisForContext, loadSavedAnalysisRun, reportDatabaseFailure, t, transcriptController, workspaceController])
 
   const hasActiveTaskForContent = useCallback((contentKey?: string) => {
     if (!contentKey) return false
@@ -1860,6 +2041,7 @@ function SidepanelWorkspace() {
   }, [activeAnalysisTask, activeAskTask])
 
   const handleDeleteAnalysis = useCallback(async (item: RecentAnalysisListItem) => {
+    if (!ensureDatabaseAvailable()) return
     if (!item.analysisRunId) return
     if (hasActiveTaskForContent(item.contentKey)) {
       toast.error(t("history.cancelFirst"))
@@ -1876,9 +2058,10 @@ function SidepanelWorkspace() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("history.deleteFailed"))
     }
-  }, [applyMutation, hasActiveTaskForContent, historyController, t])
+  }, [applyMutation, ensureDatabaseAvailable, hasActiveTaskForContent, historyController, reportDatabaseFailure, t])
 
   const handleDeleteVideo = useCallback(async (item: RecentAnalysisListItem) => {
+    if (!ensureDatabaseAvailable()) return
     if (!item.contentKey) return
     if (hasActiveTaskForContent(item.contentKey)) {
       toast.error(t("history.cancelFirst"))
@@ -1893,7 +2076,7 @@ function SidepanelWorkspace() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("history.videoDeleteFailed"))
     }
-  }, [applyMutation, hasActiveTaskForContent, historyController, t])
+  }, [applyMutation, ensureDatabaseAvailable, hasActiveTaskForContent, historyController, reportDatabaseFailure, t])
 
   useEffect(() => {
     const adapter = createPendingHistoryOpenAdapter({
@@ -1908,6 +2091,7 @@ function SidepanelWorkspace() {
   }, [handleOpenSavedAnalysis])
 
   const handleAsk = useCallback(async () => {
+    if (!ensureDatabaseAvailable()) return
     if (askStartLockRef.current || activeAskTask) {
       toast.message(t("toast.anotherAsk"))
       return
@@ -1921,12 +2105,20 @@ function SidepanelWorkspace() {
       return
     }
     const requestedTranscriptLoadGeneration = transcriptController.captureLoadEpoch()
-    const requestIdentity = await askController.prepareExecutionTranscriptIdentity({
-      analysisFingerprint: analysisView.transcriptFingerprint,
-      currentFingerprint: currentTranscriptFingerprintRef.current,
-      transcriptCues,
-      contentMatches: transcriptIdentity?.contentKey === analysisView.contentKey,
-    })
+    let requestIdentity: Awaited<ReturnType<typeof askController.prepareExecutionTranscriptIdentity>>
+    try {
+      requestIdentity = await askController.prepareExecutionTranscriptIdentity({
+        analysisFingerprint: analysisView.transcriptFingerprint,
+        currentFingerprint: currentTranscriptFingerprintRef.current,
+        transcriptCues,
+        contentMatches: transcriptIdentity?.contentKey === analysisView.contentKey,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("toast.unknownAskError")
+      setAskError(message)
+      toast.error(message)
+      return
+    }
     if (!transcriptController.isLoadEpochCurrent(requestedTranscriptLoadGeneration)) {
       const message = t("toast.transcriptChangedWhileLoading")
       setAskError(message)
@@ -2044,6 +2236,7 @@ function SidepanelWorkspace() {
         transcriptCues,
         conversationHistory,
       })
+      if (!ensureDatabaseAvailable()) return
       const taskPromise = askTaskController.start(taskSnapshot, async ({ taskId, signal, setPhase }) => {
         askSignal = signal
         const { answer, assistantMessage } = await askController.runExecutionTask({
@@ -2101,7 +2294,7 @@ function SidepanelWorkspace() {
       pendingAskOperationRef.current = null
       askStartLockRef.current = false
     }
-  }, [activeAskTask, analysisView, askController, askQuestion, askTaskController, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, setTranscriptFingerprint, t, transcriptController, transcriptCues, transcriptIdentity, workspaceController])
+  }, [activeAskTask, analysisView, askController, askQuestion, askTaskController, ensureDatabaseAvailable, isAnalysisBusy, isAnalysisFetching, isTranscriptLoading, provider, qaThreadId, reportDatabaseFailure, setTranscriptFingerprint, t, transcriptController, transcriptCues, transcriptIdentity, workspaceController])
 
   const handleCancelAsk = useCallback(() => {
     askTaskController.cancel()
@@ -2120,7 +2313,9 @@ function SidepanelWorkspace() {
   }, [askController, isAsking, workspaceController])
 
   const handleOpenQaThread = useCallback(async (threadId: string) => {
+    if (!ensureDatabaseAvailable()) return
     if (isAsking || isTranscriptLoading || isAnalysisFetching || isAnalysisBusy) return
+    try {
     const requestedContentKey = analysisView?.contentKey
     const requestedAnalysisRunId = analysisView?.analysisRunId ?? "legacy"
     const requestedTranscriptFingerprint = await askController.resolveOpenThreadTranscriptFingerprint({
@@ -2154,17 +2349,25 @@ function SidepanelWorkspace() {
     setQaMessages(result.thread.messages)
     setAskQuestion("")
     setAskAnswer(result.thread.answer)
-  }, [analysisView, askController, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, transcriptController, transcriptCues, workspaceController])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("database.unavailable"))
+    }
+  }, [analysisView, askController, ensureDatabaseAvailable, isAnalysisBusy, isAnalysisFetching, isAsking, isTranscriptLoading, reportDatabaseFailure, t, transcriptController, transcriptCues, workspaceController])
 
   const handleDeleteQaThread = useCallback(async (threadId: string) => {
+    if (!ensureDatabaseAvailable()) return
     if (isAsking) return
-    await askController.deleteThread({ threadId })
-    setQaThreads((current) => current.filter((thread) => thread.id !== threadId))
-    if (
-      qaThreadId === threadId
-      || workspaceController.getDisplaySelection().qaThreadId === threadId
-    ) handleNewQaChat()
-  }, [askController, handleNewQaChat, isAsking, qaThreadId, workspaceController])
+    try {
+      await askController.deleteThread({ threadId })
+      setQaThreads((current) => current.filter((thread) => thread.id !== threadId))
+      if (
+        qaThreadId === threadId
+        || workspaceController.getDisplaySelection().qaThreadId === threadId
+      ) handleNewQaChat()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("database.unavailable"))
+    }
+  }, [askController, ensureDatabaseAvailable, handleNewQaChat, isAsking, qaThreadId, reportDatabaseFailure, t, workspaceController])
 
   const jumpWithIdentity = useCallback(async (
     identity: VideoIdentity | null,
@@ -2254,21 +2457,31 @@ function SidepanelWorkspace() {
   }, [searchController])
 
   const handleSearchSubmit = useCallback(async () => {
+    if (!ensureDatabaseAvailable()) return
     await searchController.search({
       query: searchSnapshot.query,
       runtime: searchRuntimeRef.current,
     })
-  }, [searchController, searchSnapshot.query])
+  }, [ensureDatabaseAvailable, searchController, searchSnapshot.query])
 
   const handleOpenSearchResult = useCallback(async (result: SearchResult) => {
-    await searchOpenerRef.current?.open(result)
-  }, [])
+    if (!ensureDatabaseAvailable()) return
+    try {
+      await searchOpenerRef.current?.open(result)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("database.unavailable"))
+    }
+  }, [ensureDatabaseAvailable, reportDatabaseFailure, t])
 
   useEffect(() => {
     // A pending cross-video request only resumes once the runtime bridge owns
     // the exact contentKey it was queued for.
-    void searchOpenerRef.current?.notifyRuntimeContent(videoContext.contentKey)
-  }, [videoContext.contentKey])
+    if (!isDatabaseReady(databaseAvailability.status)) return
+    const failureGeneration = databaseAvailabilityController.captureFailureGeneration()
+    void searchOpenerRef.current?.notifyRuntimeContent(videoContext.contentKey).catch((error: unknown) => {
+      reportDatabaseFailure(error, failureGeneration)
+    })
+  }, [databaseAvailability.status, databaseAvailabilityController, reportDatabaseFailure, videoContext.contentKey])
 
   useEffect(() => {
     if (activeTab !== "search") return
@@ -2278,8 +2491,14 @@ function SidepanelWorkspace() {
     // A null identity is a real state (navigation, unsupported page) and must
     // also refresh, so it drops the stale current-video row while keeping the
     // query and the global results.
-    void searchController.refresh(searchRuntimeRef.current)
-  }, [activeTab, searchController, videoContext.contentKey])
+    if (!isDatabaseReady(databaseAvailability.status)) {
+      searchController.clearResults()
+      return
+    }
+    void searchController.refresh(searchRuntimeRef.current).catch(() => {
+      searchController.clearResults()
+    })
+  }, [activeTab, databaseAvailability.status, searchController, videoContext.contentKey])
 
   const handleAnalysisJump = useCallback((timestampSeconds: number) => {
     const identity = analysisView
@@ -2308,6 +2527,7 @@ function SidepanelWorkspace() {
   const knowledgeContentKey = knowledgeIdentity ? knowledgeIdentity.contentKey : null
 
   const handleToggleKnowledgeBookmark = useCallback(async () => {
+    if (!ensureDatabaseAvailable()) return
     if (!knowledgeIdentity || !knowledgeVideoTitle) return
     const timestampSeconds = videoContextRef.current.timestampSeconds
     if (!Number.isFinite(timestampSeconds)) {
@@ -2326,15 +2546,16 @@ function SidepanelWorkspace() {
       } else {
         toast.success(t("knowledge.bookmarkRemoved", { timestamp: formatTimestamp(normalized) }))
       }
-    } catch {
+    } catch (error) {
       toast.error(t("knowledge.bookmarkFailed"))
     }
-  }, [formatTimestamp, knowledgeController, knowledgeIdentity, knowledgeVideoTitle, t])
+  }, [ensureDatabaseAvailable, formatTimestamp, knowledgeController, knowledgeIdentity, knowledgeVideoTitle, reportDatabaseFailure, t])
 
   const handleCreateKnowledgeNote = useCallback(async (input: {
     text: string
     attachTimestamp: boolean
   }) => {
+    if (!ensureDatabaseAvailable()) return
     if (!knowledgeIdentity || !knowledgeVideoTitle) return
     const anchor = input.attachTimestamp
       ? normalizeKnowledgeTimestamp(videoContextRef.current.timestampSeconds)
@@ -2347,27 +2568,29 @@ function SidepanelWorkspace() {
         timestampSeconds: anchor,
       })
       toast.success(t("knowledge.noteSaved"))
-    } catch {
+    } catch (error) {
       toast.error(t("knowledge.noteFailed"))
     }
-  }, [knowledgeController, knowledgeIdentity, knowledgeVideoTitle, t])
+  }, [ensureDatabaseAvailable, knowledgeController, knowledgeIdentity, knowledgeVideoTitle, reportDatabaseFailure, t])
 
   const handleUpdateKnowledgeNote = useCallback(async (id: string, text: string) => {
+    if (!ensureDatabaseAvailable()) return
     try {
       await knowledgeController.updateNote({ id, text })
       toast.success(t("knowledge.noteSaved"))
-    } catch {
+    } catch (error) {
       toast.error(t("knowledge.updateFailed"))
     }
-  }, [knowledgeController, t])
+  }, [ensureDatabaseAvailable, knowledgeController, reportDatabaseFailure, t])
 
   const handleDeleteKnowledgeItem = useCallback(async (id: string) => {
+    if (!ensureDatabaseAvailable()) return
     try {
       await knowledgeController.deleteItem(id)
-    } catch {
+    } catch (error) {
       toast.error(t("knowledge.deleteFailed"))
     }
-  }, [knowledgeController, t])
+  }, [ensureDatabaseAvailable, knowledgeController, reportDatabaseFailure, t])
 
   const handleKnowledgeJump = useCallback((timestampSeconds: number) => {
     void jumpWithIdentity(knowledgeIdentity, timestampSeconds)
@@ -2555,12 +2778,31 @@ function SidepanelWorkspace() {
     phase: workspaceTask?.phase ?? analysisPhase,
     hasAnalysis: Boolean(analysisView),
   }).statusKey)
+  const visibleHistoryLoadError = historyLoadError
+    ?? (databaseAvailability.status === "unavailable" ? t("database.unavailable") : null)
 
   return (
     <main className="min-h-screen min-w-0 overflow-x-hidden bg-background px-3 py-3 text-foreground sm:px-4">
       <SidePanelShell
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        databaseStatus={databaseAvailability.status}
+        onDatabaseRetry={() => { void loadWorkspace({ retryDatabase: true }) }}
+        systemNotice={historyLoadError && databaseAvailability.status !== "unavailable" ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+            <p className="min-w-0 flex-1 text-sm text-foreground">{historyLoadError}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isBootstrapping}
+              onClick={() => { void loadWorkspace() }}>
+              {t("history.retry")}
+            </Button>
+          </div>
+        ) : null}
         header={(
           <CurrentVideoCard
             platform={videoContext.platform}
@@ -2610,6 +2852,7 @@ function SidepanelWorkspace() {
             hasProvider={Boolean(provider)}
             canAnalyze={Boolean(
               videoContext.isReady
+              && isDatabaseReady(databaseAvailability.status)
               && provider
               && !activeAnalysisTask
               && !isAnalysisBusy
@@ -2626,6 +2869,12 @@ function SidepanelWorkspace() {
             onAnalysisPresetChange={handleAnalysisPresetChange}
             recentItems={recentItems}
             isHistoryLoading={isBootstrapping}
+            historyLoadError={visibleHistoryLoadError}
+            onRetryHistory={() => {
+              void loadWorkspace({
+                retryDatabase: databaseAvailabilityRef.current === "unavailable",
+              })
+            }}
             activeVideoId={analysisView?.videoId ?? videoContext.videoId}
             activeAnalysisRunId={analysisView?.analysisRunId}
             onAnalyze={handleAnalyze}

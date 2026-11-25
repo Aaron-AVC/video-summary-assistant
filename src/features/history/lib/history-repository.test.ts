@@ -562,6 +562,34 @@ describe("historyRepository.saveTranscriptSnapshot rawVtt retention", () => {
     expect(fake.transcriptSnapshots.rows[0]?.cues).toEqual([{ startSec: 0, endSec: 1, text: "Cue" }])
   })
 
+  it("surfaces IndexedDB read failures instead of treating them as a cache miss", async () => {
+    const fake = buildFakeDatabase()
+    const indexedDbError = new DOMException("Injected IndexedDB failure", "UnknownError")
+    fake.transcriptCache.where = (() => ({
+      equals: () => ({
+        toArray: async () => { throw indexedDbError },
+      }),
+    })) as typeof fake.transcriptCache.where
+    const repo = createHistoryRepository(fake as never, { runTransaction: passthroughTransaction })
+
+    await expect(repo.saveTranscriptCache({
+      id: "cache-failed-read",
+      contentKey: "youtube:video",
+      platform: "youtube",
+      videoId: "video",
+      partId: null,
+      fingerprint: "fp-safe",
+      fingerprintVersion: 2,
+      language: "en",
+      sourceUrl: null,
+      rawVtt: "WEBVTT",
+      cues: [{ startSec: 0, endSec: 1, text: "Cue" }],
+      createdAt: NOW,
+      updatedAt: NOW,
+    })).rejects.toMatchObject({ reason: "write_failed" })
+    expect(fake.transcriptCache.rows).toHaveLength(0)
+  })
+
   it("reuses old cache cues while hiding its stored fetch URL", async () => {
     const fake = buildFakeDatabase()
     fake.transcriptCache.rows.push({

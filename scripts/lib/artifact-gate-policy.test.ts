@@ -20,6 +20,7 @@ import {
   resolveArtifactPath,
   resolveBackgroundScriptPath,
   resolveExtensionPagePath,
+  sanitizeDiagnosticText,
   selectExtensionTargets,
   toExceptionRecord,
   validateChromePath,
@@ -355,6 +356,149 @@ describe("fatal exception classification", () => {
     })
     expect(record.message).toContain("RG01_NEGATIVE_CONTROL")
     expect(record.target).toBe("sidepanel")
+  })
+
+  it("preserves structured CDP exception details and call frames safely", () => {
+    const record = toExceptionRecord(
+      "runtime.exceptionThrown",
+      "sidepanel",
+      "chrome-extension://extension-id/sidepanel.html?session=private-value",
+      {
+        text: "Uncaught Error: request failed",
+        executionContextId: 17,
+        exception: {
+          className: "Error",
+          description: "Error: request failed",
+          subtype: "error",
+          value: "request failed",
+          objectId: "must-not-be-recorded",
+        },
+        scriptId: "script-9",
+        url: "chrome-extension://extension-id/bundle.js?token=private-value#private",
+        lineNumber: 12,
+        columnNumber: 4,
+        stackTrace: {
+          callFrames: [{
+            functionName: "loadWorkspace",
+            scriptId: "script-9",
+            url: "chrome-extension://extension-id/bundle.js?token=private-value#private",
+            lineNumber: 12,
+            columnNumber: 4,
+          }],
+        },
+      },
+      { stage: "sidePanel" },
+    )
+
+    expect(record).toMatchObject({
+      source: "runtime.exceptionThrown",
+      target: "sidepanel",
+      stage: "sidePanel",
+      executionContextId: 17,
+      text: "Uncaught Error: request failed",
+      exception: {
+        className: "Error",
+        description: "Error: request failed",
+        subtype: "error",
+        scriptId: "script-9",
+        lineNumber: 12,
+        columnNumber: 4,
+      },
+      stackTrace: [{
+        functionName: "loadWorkspace",
+        scriptId: "script-9",
+        lineNumber: 12,
+        columnNumber: 4,
+      }],
+    })
+    expect(JSON.stringify(record)).not.toContain("private-value")
+    expect(JSON.stringify(record)).not.toContain("must-not-be-recorded")
+  })
+
+  it("handles malformed exception shapes and redacts common credentials", () => {
+    expect(() => toExceptionRecord(
+      "runtime.exceptionThrown",
+      "sidepanel",
+      "chrome-extension://x/s.html",
+      { exception: { preview: { properties: [{ name: "value", value: "private" }] } } },
+    )).not.toThrow()
+    expect(toExceptionRecord("runtime.exceptionThrown", "sidepanel", "u", {}))
+      .toMatchObject({ message: "unknown error", stackTrace: [] })
+    expect(toExceptionRecord(
+      "log.entryAdded",
+      "t",
+      "https://example.test/path?token=hidden",
+      "Authorization: Bearer hidden",
+    )).toMatchObject({
+      message: "Authorization: [REDACTED]",
+      url: "https://example.test/path",
+    })
+  })
+
+  it("redacts credentials serialized as JSON inside structured exception values", () => {
+    const privateToken = "synthetic-private-token"
+    const record = toExceptionRecord(
+      "runtime.exceptionThrown",
+      "sidepanel",
+      "chrome-extension://x/sidepanel.html",
+      {
+        exception: {
+          className: "Error",
+          value: JSON.stringify({ accessToken: privateToken }),
+        },
+      },
+    )
+
+    expect(JSON.stringify(record)).not.toContain(privateToken)
+    expect(record.exception?.rawValue).toContain("[REDACTED]")
+  })
+
+  it("redacts complete Authorization values and credentials embedded in exception text", () => {
+    const bearerSecret = "r1-bearer-test-secret"
+    const basicSecret = "r1-basic-test-secret"
+    const password = "SYNTHETIC_SECRET"
+    const urlWithCredentials = `https://user:${password}@example.test/path`
+    const record = toExceptionRecord(
+      "runtime.exceptionThrown",
+      "sidepanel",
+      "chrome-extension://x/sidepanel.html",
+      {
+        text: `Authorization: Bearer ${bearerSecret}`,
+        exception: {
+          className: "Error",
+          description: `Request failed at ${urlWithCredentials}`,
+          value: `Authorization: Basic ${basicSecret}`,
+        },
+        stackTrace: {
+          callFrames: [{
+            functionName: `request ${urlWithCredentials}`,
+            url: "chrome-extension://x/bundle.js",
+            lineNumber: 8,
+            columnNumber: 2,
+          }],
+        },
+      },
+    )
+    const consoleRecord = toExceptionRecord(
+      "runtime.consoleAPICalled",
+      "sidepanel",
+      "chrome-extension://x/sidepanel.html",
+      JSON.stringify({
+        authorization: `Basic ${basicSecret}`,
+        error: urlWithCredentials,
+      }),
+    )
+
+    expect(sanitizeDiagnosticText(`Authorization: Bearer ${bearerSecret}`)).not.toContain(bearerSecret)
+    expect(sanitizeDiagnosticText(`Authorization: Basic ${basicSecret}`)).not.toContain(basicSecret)
+    expect(JSON.stringify(record)).not.toContain(bearerSecret)
+    expect(JSON.stringify(record)).not.toContain(basicSecret)
+    expect(JSON.stringify(record)).not.toContain(password)
+    expect(record.exception?.rawValue).toContain("[REDACTED]")
+    expect(record.stack).toContain("https://[REDACTED]@example.test/path")
+    expect(JSON.stringify(consoleRecord)).not.toContain(basicSecret)
+    expect(JSON.stringify(consoleRecord)).not.toContain(password)
+    expect(consoleRecord.message).toContain("[REDACTED]")
   })
 
   it("falls back gracefully when the payload shape is unknown", () => {

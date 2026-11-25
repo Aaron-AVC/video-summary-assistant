@@ -28,6 +28,7 @@ import {
 import { SettingsSection } from "@/features/common/components/settings-ui"
 import type { PersistenceExport } from "@/lib/schemas/persistence"
 import { useI18n } from "@/lib/i18n/i18n-provider"
+import { isDatabaseUnavailableError } from "@/lib/db/errors"
 
 type DataManagementProps = {
   onDataCleared?: () => void
@@ -117,9 +118,9 @@ export async function createDataManagementSnapshot(
 export async function clearDataManagementStores(
   dependencies = dataManagementDependencies
 ): Promise<void> {
+  await dependencies.clearLocalData()
   await Promise.all([
     dependencies.clearSettings(),
-    dependencies.clearLocalData(),
     dependencies.clearTranscriptLogs()
   ])
 }
@@ -130,6 +131,13 @@ export type DataClearAction =
   | "analysis-history"
   | "diagnostics"
   | "all"
+
+export function isDataClearActionEnabled(
+  action: DataClearAction,
+  databaseInventoryReady: boolean,
+): boolean {
+  return action === "diagnostics" || databaseInventoryReady
+}
 
 export async function clearCategorizedData(
   action: DataClearAction,
@@ -175,9 +183,23 @@ export async function performCategorizedDataClear(
   )
 }
 
+export async function performDataClearWhenReady(
+  action: DataClearAction,
+  databaseInventoryReady: boolean,
+  dependencies: Partial<DataManagementDependencies> = {},
+  coordinatorOptions: PerformDestructiveOperationOptions = {},
+): Promise<void> {
+  if (!isDataClearActionEnabled(action, databaseInventoryReady)) {
+    throw new Error("Local database inventory is unavailable.")
+  }
+  await performCategorizedDataClear(action, dependencies, coordinatorOptions)
+}
+
 export function DataManagement({ onDataCleared }: DataManagementProps) {
   const { t } = useI18n()
   const [inventory, setInventory] = useState<DataInventory>(EMPTY_INVENTORY)
+  const [isInventoryKnown, setIsInventoryKnown] = useState(false)
+  const [inventoryError, setInventoryError] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [clearingAction, setClearingAction] = useState<DataClearAction | null>(null)
   const [feedback, setFeedback] = useState<{
@@ -191,7 +213,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
   })
 
   useEffect(() => {
-    void refreshInventory()
+    void refreshInventory().catch(() => setInventoryError(true))
   }, [])
 
   const totalRecords = useMemo(
@@ -213,8 +235,9 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       ].reduce((sum, count) => sum + count, 0),
     [inventory]
   )
+  const databaseInventoryReady = isInventoryKnown && !inventoryError
 
-  async function refreshInventory() {
+  async function refreshInventory(): Promise<void> {
     const { settings, localData, diagnosticLogs } = await createDataManagementSnapshot()
 
     setInventory({
@@ -232,6 +255,8 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
       knowledgeItems: localData.knowledgeItems?.length ?? 0,
       diagnosticLogs: diagnosticLogs.length
     })
+    setIsInventoryKnown(true)
+    setInventoryError(false)
   }
 
   async function handleExport() {
@@ -252,6 +277,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         message: t("data.exportedMessage")
       })
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) setInventoryError(true)
       setFeedback({
         state: "error",
         title: t("data.exportFailed"),
@@ -263,6 +289,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
   }
 
   async function handleClear(action: DataClearAction, label: string, explanation: string) {
+    if (!isDataClearActionEnabled(action, databaseInventoryReady)) return
     if (typeof window !== "undefined" && !window.confirm(`${label}\n\n${explanation}\n\n${t("data.continue")}`)) return
     if (typeof window !== "undefined" && !window.confirm(t("data.confirmAgain", { label }))) return
 
@@ -270,7 +297,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
     setFeedback({ state: "idle", title: "", message: "" })
 
     try {
-      await performCategorizedDataClear(action)
+      await performDataClearWhenReady(action, databaseInventoryReady)
       await refreshInventory()
       onDataCleared?.()
       setFeedback({
@@ -279,6 +306,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         message: explanation
       })
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) setInventoryError(true)
       setFeedback({
         state: "error",
         title: t("data.clearFailed", { label }),
@@ -303,6 +331,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isInventoryKnown ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <InventoryStat label={t("data.providers")} value={inventory.providerConfigs} />
           <InventoryStat label={t("data.transcripts")} value={inventory.transcriptSnapshots} />
@@ -318,6 +347,7 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
           <InventoryStat label={t("data.knowledgeItems")} value={inventory.knowledgeItems} />
           <InventoryStat label={t("data.diagnosticLogs")} value={inventory.diagnosticLogs} />
         </div>
+        ) : null}
 
         <div className="grid items-stretch gap-4 lg:grid-cols-2">
           <SettingsSection className="flex h-full min-w-0 flex-col justify-between gap-4">
@@ -351,9 +381,9 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
             <div className="flex min-w-0 items-start justify-between gap-4">
               <div className="min-w-0 space-y-2">
                 <p className="text-sm font-medium text-foreground">{t("data.categorizedControls")}</p>
-                <p className="text-sm leading-6 text-muted-foreground">
+                {isInventoryKnown ? <p className="text-sm leading-6 text-muted-foreground">
                   {t("data.currentInventory", { count: totalRecords })}
-                </p>
+                </p> : null}
               </div>
               <Trash2 className="mt-1 h-4 w-4 shrink-0 text-destructive" />
             </div>
@@ -368,7 +398,10 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
                 <Button
                   key={action}
                   className="justify-start rounded-xl"
-                  disabled={clearingAction !== null}
+                  disabled={
+                    clearingAction !== null
+                    || !isDataClearActionEnabled(action, databaseInventoryReady)
+                  }
                   onClick={() => void handleClear(action, label, explanation)}
                   type="button"
                   variant={action === "all" ? "destructive" : "outline"}>
@@ -394,6 +427,25 @@ export function DataManagement({ onDataCleared }: DataManagementProps) {
             </AlertDescription>
           </Alert>
         )}
+        {inventoryError ? (
+          <Alert variant="destructive" role="alert">
+            <AlertTitle>{t("database.unavailable")}</AlertTitle>
+            <AlertDescription>
+              {t("data.inventoryUnavailable")}
+                  <br />
+              <Button
+                className="mt-3"
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void refreshInventory().catch(() => setInventoryError(true))
+                }}>
+                {t("common.refresh")}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
       </CardContent>
     </Card>
   )

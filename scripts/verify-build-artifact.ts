@@ -12,10 +12,16 @@
  * No Playwright / Puppeteer / Selenium / jsdom: only Bun + CDP over WebSocket.
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 import { CdpConnection, fetchVersionInfo, waitForDevToolsPort } from "./lib/cdp-client"
+import { isNormalApplicationReady } from "./lib/artifact-gate-readiness"
+import { runArtifactGatePageStages } from "./lib/artifact-gate-page-stages"
+import {
+  ARTIFACT_GATE_PROFILE_ROOT_ENV,
+  createArtifactGateProfile,
+} from "./lib/artifact-gate-profile"
 import {
   ArtifactGateError,
   CHROME_PATH_ENV,
@@ -33,6 +39,8 @@ import {
   planCleanup,
   resolveArtifactPath,
   resolveBackgroundScriptPath,
+  sanitizeDiagnosticText,
+  sanitizeDiagnosticUrl,
   selectExtensionTargets,
   toExceptionRecord,
   validateChromePath,
@@ -46,6 +54,7 @@ import {
 type CliOptions = {
   artifactDir: string
   chromePath: string | null
+  profileRoot: string | null
 }
 
 /**
@@ -67,6 +76,7 @@ type GateResult = {
 function parseArgs(argv: readonly string[]): CliOptions {
   let artifactDir = DEFAULT_ARTIFACT_DIR
   let chromePath = process.env[CHROME_PATH_ENV]?.trim() || null
+  let profileRoot = process.env[ARTIFACT_GATE_PROFILE_ROOT_ENV] || null
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -84,6 +94,13 @@ function parseArgs(argv: readonly string[]): CliOptions {
       index += 1
       continue
     }
+    if (arg === "--profile-root") {
+      const value = argv[index + 1]
+      if (!value) throw new ArtifactGateError("preflight", "--profile-root requires a directory path.")
+      profileRoot = value
+      index += 1
+      continue
+    }
     if (arg === "--help" || arg === "-h") {
       printUsage()
       process.exit(0)
@@ -91,7 +108,7 @@ function parseArgs(argv: readonly string[]): CliOptions {
     throw new ArtifactGateError("preflight", `Unknown argument: ${arg}`)
   }
 
-  return { artifactDir, chromePath }
+  return { artifactDir, chromePath, profileRoot }
 }
 
 function printUsage(): void {
@@ -103,6 +120,7 @@ Usage:
 Options:
   --artifact <dir>  Extension directory to execute. Default: ${DEFAULT_ARTIFACT_DIR}
   --chrome <path>   Chromium executable. Default: $${CHROME_PATH_ENV}
+  --profile-root <dir> Isolated temporary profile root. Default: $${ARTIFACT_GATE_PROFILE_ROOT_ENV} or system temp.
 
 The gate executes an existing production build; it never rebuilds the artifact.
 Run \`bun run build\` first.
@@ -172,10 +190,6 @@ function assertArtifactReady(artifactDir: string): ArtifactManifest {
   return manifest
 }
 
-function randomRunId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
 function toTargets(list: readonly unknown[]): CdpTarget[] {
   const targets: CdpTarget[] = []
   for (const raw of list) {
@@ -213,10 +227,18 @@ class ExceptionCollector {
       message: record.message,
       level,
     })
+    const safeRecord: ExceptionRecord = {
+      ...record,
+      target: sanitizeDiagnosticText(record.target),
+      url: sanitizeDiagnosticUrl(record.url),
+      message: sanitizeDiagnosticText(record.message),
+      ...(record.stack ? { stack: sanitizeDiagnosticText(record.stack) } : {}),
+      stackTrace: record.stackTrace ?? [],
+    }
     if (classification.fatal) {
-      this.fatal.push(record)
+      this.fatal.push(safeRecord)
     } else {
-      this.informational.push(record)
+      this.informational.push(safeRecord)
     }
   }
 
@@ -230,12 +252,19 @@ class ExceptionCollector {
     sessionId: string,
     label: string,
     resolveUrl: () => string,
+    stage: GateStage,
   ): () => void {
     return connection.onEvent((message) => {
       if (message.sessionId !== sessionId) return
 
       if (message.method === "Runtime.exceptionThrown") {
-        this.add(toExceptionRecord("runtime.exceptionThrown", label, resolveUrl(), message.params?.exceptionDetails))
+        this.add(toExceptionRecord(
+          "runtime.exceptionThrown",
+          label,
+          resolveUrl(),
+          message.params?.exceptionDetails,
+          { stage },
+        ))
         return
       }
 
@@ -253,7 +282,14 @@ class ExceptionCollector {
           })
           .filter((part) => part.length > 0)
           .join(" ")
-        this.add({ source: "runtime.consoleAPICalled", target: label, url: resolveUrl(), message: text }, type)
+        this.add({
+          source: "runtime.consoleAPICalled",
+          target: label,
+          url: resolveUrl(),
+          message: text,
+          stackTrace: [],
+          stage,
+        }, type)
         return
       }
 
@@ -269,6 +305,8 @@ class ExceptionCollector {
             target: label,
             url: typeof record.url === "string" ? record.url : resolveUrl(),
             message: typeof record.text === "string" ? record.text : "",
+            stackTrace: [],
+            stage,
           },
           level,
         )
@@ -303,7 +341,13 @@ async function evaluate<T>(
   )
   const details = response.result?.exceptionDetails
   if (details) {
-    const record = toExceptionRecord("runtime.exceptionThrown", "evaluate", "cdp://evaluate", details)
+    const record = toExceptionRecord(
+      "runtime.exceptionThrown",
+      "evaluate",
+      "cdp://evaluate",
+      details,
+      { stage },
+    )
     fail(stage, `Evaluation failed: ${record.message}`, `Expression: ${expression}`)
   }
   const remote = response.result?.result
@@ -317,6 +361,7 @@ type MountSnapshot = {
   readyState: string
   rootChildCount: number
   bodyChildCount: number
+  databaseStatus: string | null
 }
 
 const MOUNT_PROBE = `(() => {
@@ -324,7 +369,8 @@ const MOUNT_PROBE = `(() => {
   return JSON.stringify({
     readyState: document.readyState,
     rootChildCount: root ? root.childElementCount : 0,
-    bodyChildCount: document.body ? document.body.children.length : 0
+    bodyChildCount: document.body ? document.body.children.length : 0,
+    databaseStatus: root?.getAttribute("data-database-status") ?? null
   })
 })()`
 
@@ -346,14 +392,31 @@ async function waitForMount(
     }
     const raw = await evaluate<string>(connection, sessionId, MOUNT_PROBE, stage)
     lastSnapshot = JSON.parse(raw) as MountSnapshot
-    if (isApplicationMounted(lastSnapshot)) return
+    if (
+      stage === "sidePanel"
+      && isApplicationMounted(lastSnapshot)
+      && lastSnapshot.databaseStatus === "unavailable"
+    ) {
+      fail(stage, "Side Panel mounted, but its local database is unavailable.")
+    }
+    if (
+      stage === "sidePanel"
+        ? isNormalApplicationReady(lastSnapshot)
+        : isApplicationMounted(lastSnapshot)
+    ) return
     await Bun.sleep(200)
   }
 
   fail(
     stage,
     describeTimeout(stage),
-    `${pageLabel} never mounted. Last observation: ${JSON.stringify(lastSnapshot)}`,
+    stage === "sidePanel" && isApplicationMounted(lastSnapshot ?? {
+      readyState: "loading",
+      rootChildCount: 0,
+      bodyChildCount: 0,
+    })
+      ? `Side Panel mounted without database readiness. Last observation: ${JSON.stringify(lastSnapshot)}`
+      : `${pageLabel} never mounted. Last observation: ${JSON.stringify(lastSnapshot)}`,
   )
 }
 
@@ -367,7 +430,11 @@ function printExceptionReport(collector: ExceptionCollector): void {
     console.error(`  [fatal] ${record.source}`)
     console.error(`    target:  ${record.target}`)
     console.error(`    url:     ${record.url}`)
+    if (record.stage) console.error(`    stage:   ${record.stage}`)
+    if (record.executionContextId !== undefined) console.error(`    context: ${record.executionContextId}`)
     console.error(`    message: ${record.message}`)
+    if (record.text) console.error(`    text:    ${record.text}`)
+    if (record.exception) console.error(`    exception: ${JSON.stringify(record.exception)}`)
     if (record.stack) console.error(`    stack:   ${record.stack}`)
   }
   for (const record of collector.informational) {
@@ -407,18 +474,22 @@ async function openExtensionPage(
   await connection.send("Log.enable", {}, sessionId)
 
   let currentUrl = "about:blank"
-  const stop = collector.watch(connection, sessionId, label, () => currentUrl)
+  const stop = collector.watch(connection, sessionId, label, () => currentUrl, stage)
 
   // Record the destination before navigating: the bundle can throw during the
   // very first evaluation, and that report must name the real page URL.
   currentUrl = url
-  const navigation = await connection.send("Page.navigate", { url }, sessionId, 15_000)
-  const errorText = navigation.result?.errorText
-  if (typeof errorText === "string" && errorText.length > 0) {
+  try {
+    const navigation = await connection.send("Page.navigate", { url }, sessionId, 15_000)
+    const errorText = navigation.result?.errorText
+    if (typeof errorText === "string" && errorText.length > 0) {
+      fail(stage, `Navigation to ${url} failed: ${errorText}`)
+    }
+    return { sessionId, stop }
+  } catch (error) {
     stop()
-    fail(stage, `Navigation to ${url} failed: ${errorText}`)
+    throw error
   }
-  return { sessionId, stop }
 }
 
 async function drain(stream: ReadableStream<Uint8Array> | number | null | undefined): Promise<void> {
@@ -455,10 +526,14 @@ async function runGate(options: CliOptions): Promise<GateResult> {
     throw new ArtifactGateError("preflight", chrome.message)
   }
 
-  const runId = randomRunId()
-  const runDir = join(workspaceRoot, ".buntmp", `artifact-runtime-${runId}`)
-  const profileDir = join(runDir, "profile")
-  mkdirSync(profileDir, { recursive: true })
+  const profile = createArtifactGateProfile({
+    requestedRoot: options.profileRoot,
+    envRoot: process.env[ARTIFACT_GATE_PROFILE_ROOT_ENV],
+  })
+  const profileDir = profile.profileDir
+  console.log(`Profile path: ${profileDir}`)
+  console.log(`Profile resolved path: ${profile.profileRealPath}`)
+  console.log(`Profile path UTF-16 length: ${profile.pathLengthUtf16}`)
 
   const args = buildChromeArgs({
     chromePath: chrome.path,
@@ -488,6 +563,7 @@ async function runGate(options: CliOptions): Promise<GateResult> {
         connection.close()
       }
 
+      let safeToRemoveProfile = true
       if (child) {
         const exited = await Promise.race([
           child.exited.then(() => true),
@@ -507,15 +583,21 @@ async function runGate(options: CliOptions): Promise<GateResult> {
               console.error(`Cleanup: fallback termination failed: ${String(error)}`)
             }
           }
+          safeToRemoveProfile = await Promise.race([
+            child.exited.then(() => true),
+            Bun.sleep(1_000).then(() => false),
+          ])
         }
       }
 
-      if (existsSync(runDir)) {
+      if (safeToRemoveProfile) {
         try {
-          rmSync(runDir, { recursive: true, force: true })
+          profile.cleanup()
         } catch (error) {
-          console.error(`Cleanup: could not remove ${runDir}: ${String(error)}`)
+          console.error(`Cleanup: could not safely remove owned profile ${profileDir}: ${String(error)}`)
         }
+      } else {
+        console.error(`Cleanup: profile retained because the spawned browser may still be running: ${profileDir}`)
       }
     })()
     return cleanupDone
@@ -619,7 +701,7 @@ async function runGate(options: CliOptions): Promise<GateResult> {
     {
       const backgroundTarget = extension.background!
       const sessionId = await attachToTarget(connection, backgroundTarget.id, "background")
-      const stop = collector.watch(connection, sessionId, "background", () => backgroundTarget.url)
+      const stop = collector.watch(connection, sessionId, "background", () => backgroundTarget.url, "background")
       try {
         await connection.send("Runtime.enable", {}, sessionId)
         await connection.send("Log.enable", {}, sessionId)
@@ -653,40 +735,53 @@ async function runGate(options: CliOptions): Promise<GateResult> {
       }
     }
 
-    // ---- Gate B: Side Panel production page --------------------------------
+    // ---- Gate B/C: Side Panel and Options production pages -----------------
+    // Keep the Side Panel session and exception listener alive through Options
+    // acceptance and the final normal-readiness recheck.
     const sidePanelPath = manifest.sidePanelPath!
-    const sidePanelUrl = `chrome-extension://${extensionId}/${sidePanelPath}`
-    {
-      const page = await openExtensionPage(connection, sidePanelUrl, collector, "sidepanel", "sidePanel")
-      try {
-        await waitForMount(connection, page.sessionId, "sidePanel", "Side Panel", collector)
-        await stabilityWindow()
-        if (collector.hasFatal) {
-          fail("sidePanel", "Side Panel production bundle raised an uncaught runtime exception.")
-        }
-        console.log("[PASS] Side Panel production bundle mounted")
-      } finally {
-        // Release this page's listeners: a later stage must not inherit them.
-        page.stop()
-      }
-    }
-
-    // ---- Gate C: Options production page -----------------------------------
     const optionsPath = manifest.optionsPath!
+    const sidePanelUrl = `chrome-extension://${extensionId}/${sidePanelPath}`
     const optionsUrl = `chrome-extension://${extensionId}/${optionsPath}`
-    {
-      const page = await openExtensionPage(connection, optionsUrl, collector, "options", "options")
-      try {
-        await waitForMount(connection, page.sessionId, "options", "Options", collector)
-        await stabilityWindow()
-        if (collector.hasFatal) {
-          fail("options", "Options production bundle raised an uncaught runtime exception.")
+    await runArtifactGatePageStages({
+      openSidePanel: async () => {
+        const page = await openExtensionPage(connection, sidePanelUrl, collector, "sidepanel", "sidePanel")
+        return {
+          waitForMount: () => waitForMount(connection, page.sessionId, "sidePanel", "Side Panel", collector),
+          readSnapshot: async () => JSON.parse(
+            await evaluate<string>(connection, page.sessionId, MOUNT_PROBE, "sidePanel"),
+          ) as MountSnapshot,
+          stop: page.stop,
         }
-        console.log("[PASS] Options production bundle mounted")
-      } finally {
-        page.stop()
-      }
-    }
+      },
+      openOptions: async () => {
+        const page = await openExtensionPage(connection, optionsUrl, collector, "options", "options")
+        return {
+          waitForMount: () => waitForMount(connection, page.sessionId, "options", "Options", collector),
+          stop: page.stop,
+        }
+      },
+      stabilityWindow,
+      hasFatal: () => collector.hasFatal,
+      failOnFatal: (stage) => fail(
+        stage,
+        stage === "sidePanel"
+          ? "Side Panel production bundle raised an uncaught runtime exception."
+          : "Options production bundle raised an uncaught runtime exception.",
+      ),
+      isReady: isNormalApplicationReady,
+      failOnSidePanelNotReady: (snapshot) => fail(
+        "sidePanel",
+        "Side Panel lost normal database readiness during the stability window.",
+        `Last observation: ${JSON.stringify(snapshot)}`,
+      ),
+      failOnFinalSidePanelNotReady: (snapshot) => fail(
+        "sidePanel",
+        "Side Panel lost normal database readiness before artifact Gate success.",
+        `Final observation: ${JSON.stringify(snapshot)}`,
+      ),
+      onSidePanelPassed: () => console.log("[PASS] Side Panel production bundle mounted"),
+      onOptionsPassed: () => console.log("[PASS] Options production bundle mounted"),
+    })
 
     if (collector.hasFatal) {
       fail("options", "Uncaught runtime exceptions were observed during the gate.")

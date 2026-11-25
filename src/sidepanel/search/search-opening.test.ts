@@ -253,6 +253,7 @@ describe("current runtime result opening", () => {
     await harness.opener.notifyRuntimeContent("youtube:video-b")
 
     expect(harness.opener.pendingContentKey()).toBeNull()
+    expect(harness.calls.restore).toEqual([])
     expect(harness.calls.surfaces).toEqual([{ surface: "overview", timestampSeconds: null }])
   })
 })

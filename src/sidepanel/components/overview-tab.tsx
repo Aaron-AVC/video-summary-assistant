@@ -41,6 +41,8 @@ type OverviewTabProps = {
   onAnalysisPresetChange?: (presetId: AnalysisPresetId) => void | Promise<void>
   recentItems: RecentAnalysisListItem[]
   isHistoryLoading: boolean
+  historyLoadError?: string | null
+  onRetryHistory?: () => void
   activeVideoId: string | null
   activeAnalysisRunId?: string | null
   onAnalyze: (options?: { force?: boolean }) => void | Promise<void>
@@ -82,6 +84,8 @@ export function OverviewTab({
   onAnalysisPresetChange,
   recentItems,
   isHistoryLoading,
+  historyLoadError = null,
+  onRetryHistory,
   activeVideoId,
   activeAnalysisRunId,
   onAnalyze,
@@ -181,6 +185,8 @@ export function OverviewTab({
         onSelect={onSelectHistory}
         onDeleteAnalysis={onDeleteAnalysis}
         onDeleteVideo={onDeleteVideo}
+        loadError={historyLoadError}
+        onRetry={onRetryHistory}
         onOpenFullHistory={onOpenFullHistory}
         scrollHeightClassName="h-[16rem]"
       />

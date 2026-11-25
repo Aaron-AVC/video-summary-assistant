@@ -1,0 +1,65 @@
+# shadcn/ui audit
+
+TL;DR: the extension frontend now uses the current shadcn/Radix primitives for
+forms, empty states, copy actions, collapsible setup content, and settings
+search. The only registry deviations left are deliberate Tailwind v3 and
+extension-runtime compatibility patches.
+
+## What changed
+
+Official shadcn components added in this pass:
+
+- `field`
+- `label`
+- `input-group`
+- `collapsible`
+- `tooltip`
+- `textarea`, pulled in by the `field` and `input-group` registry items
+
+Existing primitives refreshed or verified against the registry:
+
+- `empty`
+- `separator`
+- `button`
+- `input`
+
+App-level shared wrappers now live in
+`src/features/common/components/settings-ui.tsx`. They centralize settings
+sections, switch rows, status badges, copy buttons, code copy blocks, and setup
+step indicators while still composing project-owned shadcn primitives.
+
+## Intentional deviations
+
+| File | Deviation | Reason |
+| --- | --- | --- |
+| `src/components/ui/field.tsx` | Uses `has-[[data-state=checked]]:*` and `[&:nth-last-child(2)]:*` instead of the latest registry `has-data-*` and `nth-last-2` shorthands. | Tailwind v3.4 in this project does not emit CSS for those registry shorthands. The replacements compile to equivalent selectors. |
+| `src/components/ui/scroll-area.tsx` | Keeps `"use client"`. | Plasmo extension surfaces run client-side, and the local primitive already used the directive safely. |
+| `src/components/ui/separator.tsx` | Keeps `"use client"`. | Same client-only extension runtime reason as `scroll-area`. |
+| `src/components/ui/input-group.tsx` | Keeps `"use client"`. | `InputGroupAddon` handles click-to-focus behavior, so the directive is explicit and correct for this runtime. |
+
+The final shadcn dry run reported five overwrites: `scroll-area`,
+`separator`, `input-group`, and `field` for the deviations above, plus `select`
+in the aggregate dry-run output. A targeted `select` diff reported no actual
+file changes.
+
+## Verification
+
+Commands run after all UI changes:
+
+```bash
+bun run typecheck
+bun run test
+bun run verify:layout
+BUN_INSTALL_CACHE_DIR=/tmp/bun-shadcn-quality-dryrun-cache \
+  bunx --bun shadcn@latest add alert badge button card dialog empty input \
+  scroll-area select separator sheet skeleton sonner switch tabs toggle-group \
+  toggle field label input-group collapsible tooltip --dry-run
+```
+
+Results:
+
+- `bun run typecheck` passed.
+- `bun run test` passed, 85 tests, 0 failures.
+- `bun run verify:layout` passed for sidepanel and options mobile/desktop
+  checks, with no horizontal overflow and no console errors.
+- shadcn dry-run passed with only the intentional deviations listed above.

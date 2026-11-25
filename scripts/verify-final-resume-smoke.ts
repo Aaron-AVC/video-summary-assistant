@@ -96,6 +96,11 @@ import {
   waitForCdpEndpoint,
   waitForDevToolsPort,
 } from "./lib/cdp-client"
+import {
+  actWhenSmokeReady,
+  waitForSmokeCondition,
+  waitForSmokeOutcome,
+} from "./lib/smoke-condition"
 
 type SmokeScenario = "golden" | "refresh" | "reopen" | "cancel" | "source-switch" | "tab-switch" | "destructive" | "retry"
 
@@ -1357,6 +1362,110 @@ async function waitForResumeCta(cdp: CdpConnection, session: string, enabled: bo
   }), 45_000, `resume CTA enabled=${enabled}`)
 }
 
+type SmokeLockInfo = { name: string; mode: string | null }
+
+type DestructivePageObservation = {
+  href: string
+  clearButton: { disabled: boolean; label: string } | null
+  inventorySummary: string | null
+  alerts: Array<{ title: string; text: string }>
+  locks: { held: SmokeLockInfo[]; pending: SmokeLockInfo[] }
+  click?: { events: number; confirmations: number }
+}
+
+const ACTIVE_TASK_LOCK_PREFIX = "video-summary-assistant:active-task:v1:"
+const ACTIVE_CLEAR_CONFLICT = "Cancel the active task before clearing/deleting this data."
+
+async function readDestructivePageObservation(
+  cdp: CdpConnection,
+  session: string,
+  click = false,
+): Promise<DestructivePageObservation> {
+  return evaluate<DestructivePageObservation>(cdp, session, `(async () => {
+    const panel = document.querySelector('[data-layout-check="data-management-panel"]');
+    const button = [...(panel?.querySelectorAll("button") ?? [])].find((node) =>
+      /^(?:清除分析历史|清空分析历史|Clear analysis history)$/i.test(node.textContent.trim())
+    );
+    const snapshot = {
+      href: location.href,
+      clearButton: button ? { disabled: button.disabled, label: button.textContent.trim() } : null,
+      inventorySummary: (panel?.innerText ?? "").split("\\n")
+        .find((line) => /Current inventory:|当前库存：/.test(line)) ?? null,
+      alerts: [...(panel?.querySelectorAll('[role="alert"]') ?? [])].map((node) => ({
+        title: node.querySelector("h5")?.textContent?.trim() ?? "",
+        text: node.innerText.trim(),
+      })),
+    };
+    const locks = navigator.locks.query();
+    if (${click}) {
+      if (!button || button.disabled || !snapshot.inventorySummary) {
+        throw new Error("analysis-history clear is no longer ready at click time");
+      }
+      const counts = { events: 0, confirmations: 0 };
+      const originalConfirm = window.confirm;
+      const onClick = () => { counts.events += 1; };
+      button.addEventListener("click", onClick);
+      window.confirm = () => { counts.confirmations += 1; return true; };
+      try {
+        button.click();
+      } finally {
+        window.confirm = originalConfirm;
+        button.removeEventListener("click", onClick);
+      }
+      snapshot.click = counts;
+    }
+    const { held, pending } = await locks;
+    const describe = (lock) => ({ name: lock.name, mode: lock.mode });
+    return { ...snapshot, locks: { held: held.map(describe), pending: pending.map(describe) } };
+  })()`)
+}
+
+function isAnalysisHistoryClearReady(page: DestructivePageObservation): boolean {
+  return page.clearButton?.disabled === false && page.inventorySummary !== null
+}
+
+function activeSmokeTaskLock(page: DestructivePageObservation): string | undefined {
+  return page.locks.held.find((lock) => lock.name?.startsWith(ACTIVE_TASK_LOCK_PREFIX))?.name
+}
+
+function classifyClearFeedback(page: DestructivePageObservation, before: DestructivePageObservation) {
+  for (const alert of page.alerts.filter(({ text }) => !before.alerts.some((old) => old.text === text))) {
+    if (/^(?:清除分析历史完成|Clear analysis history complete)$/i.test(alert.title)) {
+      return { kind: "success", text: alert.text }
+    }
+    if (/^(?:无法清除分析历史|Could not clear analysis history)$/i.test(alert.title)) {
+      return { kind: alert.text.includes(ACTIVE_CLEAR_CONFLICT) ? "blocked" : "error", text: alert.text }
+    }
+  }
+  return null
+}
+
+async function waitForClearOperationFeedback(
+  read: () => Promise<DestructivePageObservation>,
+  before: DestructivePageObservation,
+  expectedKind: "success" | "blocked",
+  label: string,
+  activeLock?: string,
+) {
+  return waitForSmokeOutcome(
+    async () => {
+      const observation = await read()
+      if (activeLock && !observation.locks.held.some(({ name }) => name === activeLock)) {
+        throw new Error("Final task lock released before the active clear attempt settled")
+      }
+      return {
+        observation,
+        outcome: classifyClearFeedback(observation, before),
+      }
+    },
+    (value) => value.outcome !== null,
+    (value) => value.outcome?.kind === expectedKind,
+    label,
+    (value) => value.outcome?.text ?? "",
+    { timeoutMs: 30_000, intervalMs: 250 },
+  )
+}
+
 async function runNegativeScenario(input: LifecycleInput): Promise<void> {
   const { cdp, evidence, state, steps, scenario, extensionId, pageSession } = input
   const beforeCalls = state.calls.length
@@ -1524,26 +1633,56 @@ async function runNegativeScenario(input: LifecycleInput): Promise<void> {
   await poll(async () => evaluate<string>(cdp!, input.sideSession, "document.body?.innerText || ''")
     .then((text) => /Smoke resume summary/.test(text) ? true : null), 180_000, "resume completes before clear")
   const beforeReleasedClear = state.calls.length
+  const completedResumePersistence = await waitForSmokeCondition(
+    async () => assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession)),
+    (audit) => (audit.stores?.analysisRuns?.runs ?? []).some((run) => (
+      run.status === "completed" && run.videoId === VIDEO_ID && /Smoke resume summary/.test(run.summary ?? "")
+    )),
+    "completed Final Resume persistence",
+    { timeoutMs: 30_000, intervalMs: 250 },
+  )
+  const completedResumeTaskRelease = await waitForSmokeCondition(
+    () => readDestructivePageObservation(cdp, input.sideSession),
+    (observation) => !activeSmokeTaskLock(observation),
+    "Final Resume task lock release",
+    { timeoutMs: 30_000, intervalMs: 250 },
+  )
+  const oldRunIds = completedRunIds(completedResumePersistence)
+  evidence["completedResumeBeforeOptions"] = {
+    persistence: completedResumePersistence,
+    uiAndLocks: completedResumeTaskRelease,
+  }
+  expect(oldRunIds.length === 1 && completedResumePersistence.stores?.analysisRuns?.count === 1,
+    "the completed Final Resume must persist exactly one analysis before clear")
   steps.push("open-options-for-clear")
   const options = await sendNamed(cdp, "Target.createTarget", {
     url: `chrome-extension://${extensionId}/options.html#data`,
   })
   const optionsSession = await attach(cdp, String(options.result?.targetId))
-  await poll(async () => evaluate<string>(cdp!, optionsSession, "document.body?.innerText || ''")
-    .then((text) => /清除分析历史|清空分析历史|Clear analysis history/i.test(text) ? true : null),
-  45_000, "Options destructive controls")
+  const readOptions = () => readDestructivePageObservation(cdp, optionsSession)
+  const clickClear = () => readDestructivePageObservation(cdp, optionsSession, true)
   steps.push("clear-history-after-resume-completes")
-  await evaluate(cdp, optionsSession, `(() => {
-    window.confirm = () => true;
-    const button = [...document.querySelectorAll("button")].find((node) => /清除分析历史|清空分析历史|Clear analysis history/i.test(node.textContent || ""));
-    if (!button) throw new Error("clear analysis history button missing after task release");
-    button.click();
-    return true;
-  })()`)
-  await Bun.sleep(1000)
-  evidence["clearUiDuringFinal"] = await evaluate<string>(cdp, optionsSession, "document.body?.innerText || ''")
-  await Bun.sleep(1200)
+  const firstClear = await actWhenSmokeReady(
+    async () => evidence["firstClearLastReadiness"] = await readOptions() as DestructivePageObservation,
+    isAnalysisHistoryClearReady,
+    clickClear,
+    "Options analysis-history inventory and clear button readiness",
+    { timeoutMs: 45_000, intervalMs: 250 },
+  )
+  evidence["firstClearClickObservation"] = firstClear.result
+  expect(firstClear.result.click?.events === 1,
+    "the ready analysis-history control must dispatch exactly one click")
+  expect(firstClear.result.click?.confirmations === 2,
+    "the analysis-history clear must pass its two existing confirmations")
+  const firstClearOutcome = await waitForClearOperationFeedback(
+    async () => evidence["firstClearLastFeedback"] = await readOptions() as DestructivePageObservation,
+    firstClear.result,
+    "success",
+    "analysis-history clear",
+  )
+  evidence["firstClearFeedback"] = firstClearOutcome
   const auditAfterClear = assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession))
+  evidence["firstClearPersistenceAfterFeedback"] = auditAfterClear
   expect((auditAfterClear.stores?.analysisRuns?.count ?? -1) === 0,
     "the completed clear must leave no completed analysis history")
   const runsAtClear = auditAfterClear.stores?.analysisRuns?.runs ?? []
@@ -1558,30 +1697,67 @@ async function runNegativeScenario(input: LifecycleInput): Promise<void> {
   state.holdLateFinal = deferred()
   state.releaseHeldResponse = deferred()
   await clickGenerate(cdp, input.sideSession, "fresh full analysis after clear")
-  await state.lateFinalStarted.promise
-  await evaluate(cdp, optionsSession, `(() => {
-    const button = [...document.querySelectorAll("button")].find((node) => /清除分析历史|清空分析历史|Clear analysis history/i.test(node.textContent || ""));
-    if (!button) throw new Error("clear analysis history button missing during new full analysis");
-    button.click();
-    return true;
-  })()`)
-  await Bun.sleep(1000)
-  evidence["clearDuringSecondFinal"] = await evaluate<string>(cdp, optionsSession, "document.body?.innerText || ''")
-  expect(/Cancel the active task before clearing\/deleting this data\./.test(evidence["clearDuringSecondFinal"]),
-    "an active full analysis must block another panel's destructive operation")
+  await waitForSmokeCondition(
+    async () => state.heldFinalActive,
+    Boolean,
+    "new Final intercepted and held",
+    { timeoutMs: 180_000 },
+  )
+  evidence["beforeSecondClearPersistence"] = assertNoIntermediatePersistence(
+    await readPersistenceAudit(cdp, optionsSession),
+  )
+  const secondClear = await actWhenSmokeReady(
+    async () => evidence["secondClearLastReadiness"] = await readOptions() as DestructivePageObservation,
+    (observation) => isAnalysisHistoryClearReady(observation) && Boolean(activeSmokeTaskLock(observation)),
+    clickClear,
+    "ready analysis-history control while the new Final remains active",
+    { timeoutMs: 45_000, intervalMs: 250 },
+  )
+  evidence["secondClearClickObservation"] = secondClear.result
+  expect(secondClear.result.click?.events === 1,
+    "the active-task clear attempt must dispatch exactly one click")
+  expect(secondClear.result.click?.confirmations === 2,
+    "the active-task clear attempt must pass its two existing confirmations")
+  const finalLock = activeSmokeTaskLock(secondClear.result)
+  expect(finalLock && state.heldFinalActive, "the new Final must remain held when clear is attempted")
+  const blockedClearOutcome = await waitForClearOperationFeedback(
+    async () => evidence["secondClearLastFeedback"] = await readOptions() as DestructivePageObservation,
+    secondClear.result,
+    "blocked",
+    "an active full analysis must block another panel's destructive operation",
+    finalLock,
+  )
+  evidence["clearDuringSecondFinal"] = blockedClearOutcome
+  expect(state.heldFinalActive, "the new Final must still be held after the clear is blocked")
+  const persistenceWhileFinalHeld = assertNoIntermediatePersistence(
+    await readPersistenceAudit(cdp, input.sideSession),
+  )
+  evidence["persistenceWhileFinalHeldAfterBlockedClear"] = persistenceWhileFinalHeld
+  expect((persistenceWhileFinalHeld.stores?.analysisRuns?.count ?? -1) === runsAtClear.length,
+    "the blocked clear must not mutate history while the new Final is active")
   state.holdLateFinal = null
   state.releaseHeldResponse.release()
-  await Bun.sleep(1800)
+  evidence["afterSecondFinalRelease"] = await waitForSmokeCondition(
+    async () => {
+      if (state.heldFinalError) throw new Error(`held Final could not be fulfilled: ${state.heldFinalError}`)
+      return readDestructivePageObservation(cdp, input.sideSession)
+    },
+    (observation) => state.heldFinalFulfilled && !activeSmokeTaskLock(observation),
+    "held Final completion and task release",
+    { timeoutMs: 180_000, intervalMs: 250 },
+  )
   const audit = assertNoIntermediatePersistence(await readPersistenceAudit(cdp, input.sideSession))
   evidence["afterLateSuccessVsClear"] = {
     calls: [...state.calls],
     surface: await readResumeSurface(cdp, input.sideSession),
-    persistence: await readPersistenceAudit(cdp, input.sideSession),
+    persistence: audit,
     privacy: await auditNegativePrivacy(cdp, input.sideSession),
   }
   const finalRunIds = completedRunIds(audit)
   expect(runsAtClear.every((run) => typeof run.id === "string" && finalRunIds.includes(run.id!)),
     "the second destructive operation was blocked, so no old history may be resurrected")
+  expect(finalRunIds.length === 1 && oldRunIds.every((id) => !finalRunIds.includes(id)),
+    "the newly completed analysis must have a different ID from the deleted analysis")
   expect((audit.stores?.analysisRuns?.count ?? 0) === runsAtClear.length + 1,
     "the explicitly started fresh analysis may add exactly one new completed run")
   expect(state.calls.length === beforeReleasedClear + 6,

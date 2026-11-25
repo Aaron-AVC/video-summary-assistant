@@ -1,0 +1,247 @@
+bun test v1.2.5 (013fdddc)
+
+scripts\licensing\r002-b-candidate.test.ts:
+(pass) R002-B dependency delta > allows only the reviewed compatible substitution [16.00ms]
+(pass) R002-B dependency delta > fails closed on an unrelated dependency or permission change
+(pass) R002-B dependency delta > rejects a wrong publication binding
+(pass) R002-B dependency delta > preserves the shadcn MIT text while separating partial provenance from notice completeness [3062.00ms]
+48 | 
+49 |   it("keeps package identities absent from the Parcel graph unknown and conservatively notices them", () => {
+50 |     const { inputs, scope } = loadCandidate()
+51 |     const excluded = scope.components.filter((row: { membership: string }) => row.membership === "CONFIRMED_EXCLUDED")
+52 |     const unknown = scope.components.filter((row: { membership: string }) => row.membership === "UNKNOWN")
+53 |     expect(excluded).toEqual([])
+                          ^
+error: expect(received).toEqual(expected)
+
++ [
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@radix-ui/react-collapsible/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@radix-ui/react-collapsible/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@radix-ui/react-collapsible",
++     version: "1.1.12",
++   },
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@radix-ui/react-dialog/node_modules/@radix-ui/react-slot/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@radix-ui/react-dialog/node_modules/@radix-ui/react-slot/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@radix-ui/react-slot",
++     version: "1.2.3",
++   },
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@radix-ui/react-dialog/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@radix-ui/react-dialog/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@radix-ui/react-dialog",
++     version: "1.1.15",
++   },
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@radix-ui/react-use-rect/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@radix-ui/react-use-rect/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@radix-ui/react-use-rect",
++     version: "1.1.1",
++   },
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@radix-ui/rect/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@radix-ui/rect/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@radix-ui/rect",
++     version: "1.1.1",
++   },
++   {
++     coverage: "OPTIONAL_ONLY",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@types/prop-types/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@types/prop-types/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@types/prop-types",
++     version: "15.7.15",
++   },
++   {
++     coverage: "OPTIONAL_ONLY",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@types/react-dom/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@types/react-dom/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@types/react-dom",
++     version: "18.3.7",
++   },
++   {
++     coverage: "OPTIONAL_ONLY",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/@types/react/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/@types/react/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "@types/react",
++     version: "18.3.28",
++   },
++   {
++     coverage: "OPTIONAL_ONLY",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/csstype/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/csstype/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "csstype",
++     version: "3.2.3",
++   },
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/detect-node-es/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/detect-node-es/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "detect-node-es",
++     version: "1.1.0",
++   },
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/js-tokens/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/js-tokens/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "js-tokens",
++     version: "4.0.0",
++   },
++   {
++     coverage: "REQUIRED_CLOSURE",
++     evidence: [
++       {
++         absentPackageIdentity: "node_modules/loose-envify/package.json",
++         artifactInventorySha256: "3f49919f03defadb9c55cdd549d7584adaa0e199ec6b24635e9eb2fc95f33444",
++         graphSha256: "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
++         output: "ALL_CAPTURED_OUTPUTS",
++         outputCount: 14,
++         sources: [],
++         type: "SAME_BUILD_GRAPH_COMPLETE_ABSENCE",
++       }
++     ],
++     id: "npm:node_modules/loose-envify/package.json",
++     membership: "CONFIRMED_EXCLUDED",
++     name: "loose-envify",
++     version: "1.4.0",
++   }
++ ]
+- []
+
+- Expected  - 1
++ Received  + 218
+
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\licensing\r002-b-candidate.test.ts:53:22)
+(fail) R002-B dependency delta > keeps package identities absent from the Parcel graph unknown and conservatively notices them [2656.00ms]
+error: Cannot read directory "C:\Users\kqing\": EPERM
+
+ 4 pass
+ 1 fail
+ 13 expect() calls
+Ran 5 tests across 1 files. [6.06s]

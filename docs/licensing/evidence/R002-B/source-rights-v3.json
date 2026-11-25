@@ -1,0 +1,3568 @@
+{
+  "schema": "vsa-source-rights/v3",
+  "sourceCommit": "7eda9fdbe0cd414c16a755f0b5da390c0fd37a57",
+  "paths": [
+    {
+      "path": "README.md",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "README.md",
+      "upstreamBlob": "fa839980bf5bae53d285aa86ead60382b5887180",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "README.zh-CN.md",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "421b2525f1781afb4fef816f3ef5893d65913355",
+        "author": "Aaron-AVC",
+        "authoredAt": "2026-11-17T15:50:06+08:00",
+        "tree": "050e28c9d6950892c2f1d3d8f484c4ee3a17bd03",
+        "parents": [
+          "b50485b9916e298ae53a833a7d58987f94d9317b"
+        ],
+        "subject": "docs: add Chinese README and evidence-linked feature roadmap"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "assets/icon-source.svg",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "7eda9fdbe0cd414c16a755f0b5da390c0fd37a57",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-11-26T03:51:41+08:00",
+        "tree": "cfec44a94ee5a2053a361b7a3087373562378ec5",
+        "parents": [
+          "f6d7b3068b893ce11637ea84598b26a5975e6838"
+        ],
+        "subject": "fix(compliance): pin traceable scroll-lock release and replace inherited icon"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "New geometric artwork in R002-B; project license and rights holder decision pending."
+    },
+    {
+      "path": "assets/icon.png",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "7eda9fdbe0cd414c16a755f0b5da390c0fd37a57",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-11-26T03:51:41+08:00",
+        "tree": "cfec44a94ee5a2053a361b7a3087373562378ec5",
+        "parents": [
+          "f6d7b3068b893ce11637ea84598b26a5975e6838"
+        ],
+        "subject": "fix(compliance): pin traceable scroll-lock release and replace inherited icon"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "New geometric artwork in R002-B; project license and rights holder decision pending."
+    },
+    {
+      "path": "background.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "background.ts",
+      "upstreamBlob": "d63086daf68ff322d86d5a4705dded769f84d030",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "licenses/YouTube-Summarizer-MIT.txt",
+      "disposition": "THIRD_PARTY",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "LICENSE",
+      "upstreamBlob": "79b69cad4ed1ef2f602e4f92032313edfbaada17",
+      "rationale": "Preserved fixed upstream MIT text."
+    },
+    {
+      "path": "options.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "options.tsx",
+      "upstreamBlob": "32cfcad29126e1f8ddd111c7216b93e6a76eefa5",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "popup.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "popup.tsx",
+      "upstreamBlob": "a0bd9391b2140e5c64eaa49d8c100a78b1ec9d1b",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "sidepanel.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "sidepanel.tsx",
+      "upstreamBlob": "7f4fde8c896ef6891980263611928ebc3e72ff1c",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/background/index.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "static/background/index.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/background/index.ts",
+      "upstreamBlob": "e760f2005192c93c48601e6ad8b551a62c266330",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/alert.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/alert.tsx",
+      "upstreamBlob": "41fa7e0561a3fdb5f986c1213a35e563de740e96",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/badge.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/badge.tsx",
+      "upstreamBlob": "f000e3ef5176395b067dfc3f3e1256a80c450015",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/button.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/button.tsx",
+      "upstreamBlob": "36496a28727a3643b4212a14225d4f6cbd50bda5",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/card.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/card.tsx",
+      "upstreamBlob": "f62edea578d50058bef5e6bcc178b88d145564e9",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/empty.tsx",
+      "disposition": "THIRD_PARTY_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/empty.tsx",
+      "upstreamBlob": "71667632e77bf4265ab740e906f785fee806eec2",
+      "rationale": "shadcn template lineage with upstream extension adaptations; retain both full MIT notices."
+    },
+    {
+      "path": "src/components/ui/field.tsx",
+      "disposition": "THIRD_PARTY_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/field.tsx",
+      "upstreamBlob": "c7bb0520a5e4b5f5835b194431452ad0e7f2e934",
+      "rationale": "shadcn template lineage with upstream extension adaptations; retain both full MIT notices."
+    },
+    {
+      "path": "src/components/ui/input-group.tsx",
+      "disposition": "THIRD_PARTY_MIXED",
+      "outputs": [
+        "options.95eda3f3.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/input-group.tsx",
+      "upstreamBlob": "0777399292fd5bafc8317a7136e05c9cdaa58f24",
+      "rationale": "shadcn template lineage with upstream extension adaptations; retain both full MIT notices."
+    },
+    {
+      "path": "src/components/ui/input.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/input.tsx",
+      "upstreamBlob": "68551b9276b4164a8263aa58d385db30f81a4453",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/label.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/label.tsx",
+      "upstreamBlob": "683faa793819982d64e21cb2939666fd6d4a7b13",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/scroll-area.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/scroll-area.tsx",
+      "upstreamBlob": "0b4a48d87fabda1c6e9612172abb56a78e26c14f",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/select.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/select.tsx",
+      "upstreamBlob": "d826bdbabdcbff04513e57d521fe15480353a740",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/separator.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/separator.tsx",
+      "upstreamBlob": "12d81c4a853472948b6dd2e85eff99b5d12fe60b",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/skeleton.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/skeleton.tsx",
+      "upstreamBlob": "01b8b6d4f716ff7c26065bc9e46aebd932729fc1",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/sonner.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/sonner.tsx",
+      "upstreamBlob": "fad1ef944800e001e72d680bd246680ca991eb48",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/switch.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/switch.tsx",
+      "upstreamBlob": "bc69cf2dbfc512347350c5cea6cb8e4a3d7f667d",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/tabs.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/tabs.tsx",
+      "upstreamBlob": "f57fffdb5a07cd21b12f8c014513475a6980a469",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/textarea.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/textarea.tsx",
+      "upstreamBlob": "4d858bb6b02662c749d3cb334129a9a1977b0c51",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/toggle-group.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/toggle-group.tsx",
+      "upstreamBlob": "afe5da62559ca05a0eb5c9415a1e20bd47b37af9",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/toggle.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/toggle.tsx",
+      "upstreamBlob": "c19bea37315b245ce0c3588deafb27adc8397f0f",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/components/ui/tooltip.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/components/ui/tooltip.tsx",
+      "upstreamBlob": "60d9678cf04ac32b16d059f96c787e7d8dd9fa09",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/contents/bilibili-video.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "bilibili-video.5fd6a346.js"
+      ],
+      "introductionCommit": {
+        "sha": "cc6b9df8e4484b871fe96a1860ccf271da553782",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T00:11:24+08:00",
+        "tree": "7f93160135677b473ff9b1e300b6c28e5b2f069d",
+        "parents": [
+          "9222f1cc555ed4ccc0611247884d985ea13ac07a"
+        ],
+        "subject": "feat: add bilibili adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/contents/youtube-watch.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/contents/youtube-watch.ts",
+      "upstreamBlob": "5b47073aafe1f7d9c5e1bb0ff02ba268fee9c6b7",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/components/active-analysis-task.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "6d076bbc65e5c3149162b31bb36eb3aa14eb4e1e",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-14T01:42:38+08:00",
+        "tree": "d1e74b608ea0f4d4323f9cac2eff26b3a1aa6df8",
+        "parents": [
+          "a54925f38048b804dc08fe01339567e7ec52094e"
+        ],
+        "subject": "feat: keep analysis running across tab switches"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/components/active-ask-task.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "6d076bbc65e5c3149162b31bb36eb3aa14eb4e1e",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-14T01:42:38+08:00",
+        "tree": "d1e74b608ea0f4d4323f9cac2eff26b3a1aa6df8",
+        "parents": [
+          "a54925f38048b804dc08fe01339567e7ec52094e"
+        ],
+        "subject": "feat: keep analysis running across tab switches"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/components/analysis-toolbar.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/components/analysis-toolbar.tsx",
+      "upstreamBlob": "09484bb306cbcc9cd21091c99c1122a555483eab",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/components/ask-ai-panel.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/components/ask-ai-panel.tsx",
+      "upstreamBlob": "d79141a95f7f909e4d87ef08899c5a9310efef1b",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/components/current-video-card.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/components/current-video-card.tsx",
+      "upstreamBlob": "39997ddfc67be6fc64dbe81b2ac709e089827506",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/components/final-resume-panel.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "fd634741306f58bcd01948775b11e2dcbf7c38ef",
+        "author": "DeepSeek Harness",
+        "authoredAt": "2026-11-19T16:19:05+08:00",
+        "tree": "dc1933a46ab88574359f0a8558b64b7519b57d3d",
+        "parents": [
+          "f235fc95802d454c38f5fcd71df73045df203e79"
+        ],
+        "subject": "feat: wire manual Final-only resume through Side Panel admission"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/components/key-points-list.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/components/key-points-list.tsx",
+      "upstreamBlob": "703959b6eb6b1a29792ce979f3f6ad9b200654ad",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/components/qa-thread-history.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "0f8f4cf323346acd51c20c3b7fb297d053e126d0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-15T01:27:02+08:00",
+        "tree": "2042ae35bb22ba7f5183d1a9ffca9ffd46304437",
+        "parents": [
+          "41e6d3d5021c3ab4e761fb4f8cc6a213d604dc24"
+        ],
+        "subject": "feat: persist ask video conversations"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/components/segment-timeline.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/components/segment-timeline.tsx",
+      "upstreamBlob": "f89d44da8aa5a8d8042acf80cea675d054ed9b46",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/components/summary-card.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/components/summary-card.tsx",
+      "upstreamBlob": "c88b021ecd4833eca86a16dc49802f43b95c1b87",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/lib/analysis-budget.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "964a176d356896b3c482a65449b8bb3e7afd551c",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T03:53:47+08:00",
+        "tree": "d685d801f597efab89b140c468dad4d8f5eab538",
+        "parents": [
+          "194e3c42adc8f104e842e5cbd324e7e86e8a145c"
+        ],
+        "subject": "feat: add long video analysis pipeline"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/analysis-compat.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "0ae37a0df7909d25322ca7fae17a80ddc7a2a70a",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T22:01:47+08:00",
+        "tree": "5b14fc99ef0b630154bfc1600d5dc9009b4a2ffa",
+        "parents": [
+          "a4fb2a9a5daf82550294a477ce459dd4a637ccf3"
+        ],
+        "subject": "feat: add structured video analysis"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/analysis-plan.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "964a176d356896b3c482a65449b8bb3e7afd551c",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T03:53:47+08:00",
+        "tree": "d685d801f597efab89b140c468dad4d8f5eab538",
+        "parents": [
+          "194e3c42adc8f104e842e5cbd324e7e86e8a145c"
+        ],
+        "subject": "feat: add long video analysis pipeline"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/analysis-preset.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "ba0666bb7b57129aba59389e87e9f55b11e957ed",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T06:39:24+08:00",
+        "tree": "5554e1b6dc4553241c856fa5e7e73959658fdee1",
+        "parents": [
+          "1af52e95e453fc13f0ffde96697b458e2cf65040"
+        ],
+        "subject": "feat: add analysis presets end to end"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/analysis-schema.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/lib/analysis-schema.ts",
+      "upstreamBlob": "b3471f1b59c472377b0c747cf9b76d5fb1419996",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/lib/analysis-task-controller.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "6d076bbc65e5c3149162b31bb36eb3aa14eb4e1e",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-14T01:42:38+08:00",
+        "tree": "d1e74b608ea0f4d4323f9cac2eff26b3a1aa6df8",
+        "parents": [
+          "a54925f38048b804dc08fe01339567e7ec52094e"
+        ],
+        "subject": "feat: keep analysis running across tab switches"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/analysis-task-lifecycle.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "c3fd444e0ddb2d7059a997f1fc6c46a3ab15c6b8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-14T02:03:02+08:00",
+        "tree": "1de055aee9b6f1070cabf0ce25888bf1b16c949b",
+        "parents": [
+          "6d076bbc65e5c3149162b31bb36eb3aa14eb4e1e"
+        ],
+        "subject": "fix: close analysis task lifecycle races"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/ask-task-controller.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "6d076bbc65e5c3149162b31bb36eb3aa14eb4e1e",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-14T01:42:38+08:00",
+        "tree": "d1e74b608ea0f4d4323f9cac2eff26b3a1aa6df8",
+        "parents": [
+          "a54925f38048b804dc08fe01339567e7ec52094e"
+        ],
+        "subject": "feat: keep analysis running across tab switches"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/ask-video.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/lib/ask-video.ts",
+      "upstreamBlob": "5ee7082977e0bce5d03f7724612e21207b73e3c0",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/lib/chunk-transcript.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/lib/chunk-transcript.ts",
+      "upstreamBlob": "ac17841518b509aac29b96325ca59f7ac4e1fcbc",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/lib/final-resume-checkpoint.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "806d0c1e011eb775bbd2e872b3c67fcf0538b1f1",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-11-18T16:22:42+08:00",
+        "tree": "715e6599ce073fb22a2937d3726b6f89262dcafc",
+        "parents": [
+          "7c5adbad7e75fa730c6b996c844ce085763ae15e"
+        ],
+        "subject": "feat: add M2 final resume checkpoint foundation"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/final-resume-coordinator.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "f235fc95802d454c38f5fcd71df73045df203e79",
+        "author": "DeepSeek Harness",
+        "authoredAt": "2026-11-19T16:18:49+08:00",
+        "tree": "e3a6b56693bd9785a5cd43980b33347d89c008f0",
+        "parents": [
+          "9e57be57f5a83c0c1481162e383f6e289a92b861"
+        ],
+        "subject": "feat: add guarded Final-only resume admission and lease lifecycle"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/normalize-video-analysis.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "0ae37a0df7909d25322ca7fae17a80ddc7a2a70a",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T22:01:47+08:00",
+        "tree": "5b14fc99ef0b630154bfc1600d5dc9009b4a2ffa",
+        "parents": [
+          "a4fb2a9a5daf82550294a477ce459dd4a637ccf3"
+        ],
+        "subject": "feat: add structured video analysis"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/openai-compatible-client.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/lib/openai-compatible-client.ts",
+      "upstreamBlob": "5cab143b799f11f1708ed8f865d95c7ac8bab58d",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/lib/parse-video-analysis.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "0ae37a0df7909d25322ca7fae17a80ddc7a2a70a",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T22:01:47+08:00",
+        "tree": "5b14fc99ef0b630154bfc1600d5dc9009b4a2ffa",
+        "parents": [
+          "a4fb2a9a5daf82550294a477ce459dd4a637ccf3"
+        ],
+        "subject": "feat: add structured video analysis"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/prompts.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/lib/prompts.ts",
+      "upstreamBlob": "c628dbdcd06e245fcadcd3d6523696e8495ad330",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/lib/provider-response-body.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "8991726dd2c11741cd0040bf769b6da476e2ee8f",
+        "author": "Aaron-AVC",
+        "authoredAt": "2026-10-25T08:19:32+08:00",
+        "tree": "e9cc4df0d58e21f2b0bdb85eb0c466c9854de00d",
+        "parents": [
+          "6c7e6061d04162daee734b62ecb2996eb256bc12"
+        ],
+        "subject": "fix: bound untrusted zod containers"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/qa-conversation-context.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "0f8f4cf323346acd51c20c3b7fb297d053e126d0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-15T01:27:02+08:00",
+        "tree": "2042ae35bb22ba7f5183d1a9ffca9ffd46304437",
+        "parents": [
+          "41e6d3d5021c3ab4e761fb4f8cc6a213d604dc24"
+        ],
+        "subject": "feat: persist ask video conversations"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/qa-conversation-repository.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "0f8f4cf323346acd51c20c3b7fb297d053e126d0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-15T01:27:02+08:00",
+        "tree": "2042ae35bb22ba7f5183d1a9ffca9ffd46304437",
+        "parents": [
+          "41e6d3d5021c3ab4e761fb4f8cc6a213d604dc24"
+        ],
+        "subject": "feat: persist ask video conversations"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/run-analysis.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/analysis/lib/run-analysis.ts",
+      "upstreamBlob": "ffbeb7fd7bdd41f369c648e85189f7d81d819fc3",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/analysis/lib/run-final-only-analysis.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "9e57be57f5a83c0c1481162e383f6e289a92b861",
+        "author": "DeepSeek Harness",
+        "authoredAt": "2026-11-19T16:18:40+08:00",
+        "tree": "15cf84f9748f93cb0d81644aa7a68f6975e472a4",
+        "parents": [
+          "e01572decbc5454560f48c8bfcbe9716219f0ab2"
+        ],
+        "subject": "feat: add guarded Final-only analysis execution"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/structured-analysis.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "9e57be57f5a83c0c1481162e383f6e289a92b861",
+        "author": "DeepSeek Harness",
+        "authoredAt": "2026-11-19T16:18:40+08:00",
+        "tree": "15cf84f9748f93cb0d81644aa7a68f6975e472a4",
+        "parents": [
+          "e01572decbc5454560f48c8bfcbe9716219f0ab2"
+        ],
+        "subject": "feat: add guarded Final-only analysis execution"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/structured-output-repair.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "0ae37a0df7909d25322ca7fae17a80ddc7a2a70a",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T22:01:47+08:00",
+        "tree": "5b14fc99ef0b630154bfc1600d5dc9009b4a2ffa",
+        "parents": [
+          "a4fb2a9a5daf82550294a477ce459dd4a637ccf3"
+        ],
+        "subject": "feat: add structured video analysis"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/token-estimate.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "964a176d356896b3c482a65449b8bb3e7afd551c",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T03:53:47+08:00",
+        "tree": "d685d801f597efab89b140c468dad4d8f5eab538",
+        "parents": [
+          "194e3c42adc8f104e842e5cbd324e7e86e8a145c"
+        ],
+        "subject": "feat: add long video analysis pipeline"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/analysis/lib/untrusted-data.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "496a45a6a25902f147aa7178b598a8267467e00a",
+        "author": "Aaron-AVC",
+        "authoredAt": "2026-10-28T06:48:06+08:00",
+        "tree": "2cfa81819a9e7483335e51c0eb45834dd2128cc6",
+        "parents": [
+          "cdd223cec57c597dbd96f50c38ce826a819c946b"
+        ],
+        "subject": "feat: harden untrusted prompt boundaries"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/common/components/empty-state.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/common/components/empty-state.tsx",
+      "upstreamBlob": "50d6df981e7b663e48997a65b728d53eb9b425ac",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/common/components/settings-ui.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/common/components/settings-ui.tsx",
+      "upstreamBlob": "bbfa360f4e3546c62c785a0021cf46157bfac5ee",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/export/components/markdown-export-panel.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "72ac77ff114d4b03986cdebb44ccc56a76f1dea0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T00:46:00+08:00",
+        "tree": "487809fa8b02b9c4819bb9fc56a39de806a07b2e",
+        "parents": [
+          "78a7be29c7da4c0ab7d0bb8ca9a54d07e68ac8fe"
+        ],
+        "subject": "feat: add markdown clipboard export"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/export/lib/markdown-delivery.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "72ac77ff114d4b03986cdebb44ccc56a76f1dea0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T00:46:00+08:00",
+        "tree": "487809fa8b02b9c4819bb9fc56a39de806a07b2e",
+        "parents": [
+          "78a7be29c7da4c0ab7d0bb8ca9a54d07e68ac8fe"
+        ],
+        "subject": "feat: add markdown clipboard export"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/export/lib/markdown-export.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "72ac77ff114d4b03986cdebb44ccc56a76f1dea0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T00:46:00+08:00",
+        "tree": "487809fa8b02b9c4819bb9fc56a39de806a07b2e",
+        "parents": [
+          "78a7be29c7da4c0ab7d0bb8ca9a54d07e68ac8fe"
+        ],
+        "subject": "feat: add markdown clipboard export"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/history/components/history-panel.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/history/components/history-panel.tsx",
+      "upstreamBlob": "c00771d4391b7da93ddb4eb16001ecb254e8db69",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/history/components/recent-analysis-list.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/history/components/recent-analysis-list.tsx",
+      "upstreamBlob": "0b7ea866b86831f909370f09f872772919d2246a",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/history/lib/destructive-operation-coordinator.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "c14863e4b3773b104451231d4299d73db0cb1ad2",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-17T00:31:16+08:00",
+        "tree": "0cf8957770b4322dd807a01b6596e582be90bbbd",
+        "parents": [
+          "05ea64a05aef12c434a2500a78504f0addd46ff0"
+        ],
+        "subject": "fix: coordinate destructive data actions"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/history/lib/history-repository.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/history/lib/history-repository.ts",
+      "upstreamBlob": "fcba54890c3723713389907c28ec097b0c83a2cd",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/history/lib/pending-history-open.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/history/lib/pending-history-open.ts",
+      "upstreamBlob": "6818a3dce7a8becff187466dcda306d4c472afa9",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/knowledge/components/knowledge-panel-draft.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "78a7be29c7da4c0ab7d0bb8ca9a54d07e68ac8fe",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T23:23:15+08:00",
+        "tree": "a3f9f4c6b6d489351049d66f36ee7c71d2dfcc3b",
+        "parents": [
+          "829f2fe529233ddd457eef8cde05c561de330ddf"
+        ],
+        "subject": "fix: close knowledge bookmark and draft identity races"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/knowledge/components/knowledge-panel.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "829f2fe529233ddd457eef8cde05c561de330ddf",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T07:48:55+08:00",
+        "tree": "3e667e94d48e2b4997fb85faaee2edc046f64996",
+        "parents": [
+          "7e2b7e3e8937aea12847799ebd409782e39d48cc"
+        ],
+        "subject": "feat: add bookmark and notes knowledge workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/knowledge/lib/knowledge-repository.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "829f2fe529233ddd457eef8cde05c561de330ddf",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T07:48:55+08:00",
+        "tree": "3e667e94d48e2b4997fb85faaee2edc046f64996",
+        "parents": [
+          "7e2b7e3e8937aea12847799ebd409782e39d48cc"
+        ],
+        "subject": "feat: add bookmark and notes knowledge workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/platform/bilibili/bilibili-adapter.ts",
+      "disposition": "PROJECT_HISTORY_ARCHITECTURE_REFERENCE",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "cc6b9df8e4484b871fe96a1860ccf271da553782",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T00:11:24+08:00",
+        "tree": "7f93160135677b473ff9b1e300b6c28e5b2f069d",
+        "parents": [
+          "9222f1cc555ed4ccc0611247884d985ea13ac07a"
+        ],
+        "subject": "feat: add bilibili adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Added in the project Bilibili adapter history. The inherited PR-1 bounded screen found no exact file match across 30 platform/content files or selected shared six-line sequence; architecture-only reference status remains, not a complete rewritten-expression audit."
+    },
+    {
+      "path": "src/features/platform/bilibili/bilibili-transport-policy.ts",
+      "disposition": "PROJECT_HISTORY_ARCHITECTURE_REFERENCE",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "cc6b9df8e4484b871fe96a1860ccf271da553782",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T00:11:24+08:00",
+        "tree": "7f93160135677b473ff9b1e300b6c28e5b2f069d",
+        "parents": [
+          "9222f1cc555ed4ccc0611247884d985ea13ac07a"
+        ],
+        "subject": "feat: add bilibili adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Added in the project Bilibili adapter history. The inherited PR-1 bounded screen found no exact file match across 30 platform/content files or selected shared six-line sequence; architecture-only reference status remains, not a complete rewritten-expression audit."
+    },
+    {
+      "path": "src/features/platform/bilibili/bilibili-transport.ts",
+      "disposition": "PROJECT_HISTORY_ARCHITECTURE_REFERENCE",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "cc6b9df8e4484b871fe96a1860ccf271da553782",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T00:11:24+08:00",
+        "tree": "7f93160135677b473ff9b1e300b6c28e5b2f069d",
+        "parents": [
+          "9222f1cc555ed4ccc0611247884d985ea13ac07a"
+        ],
+        "subject": "feat: add bilibili adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Added in the project Bilibili adapter history. The inherited PR-1 bounded screen found no exact file match across 30 platform/content files or selected shared six-line sequence; architecture-only reference status remains, not a complete rewritten-expression audit."
+    },
+    {
+      "path": "src/features/platform/bilibili/bilibili-url.ts",
+      "disposition": "PROJECT_HISTORY_ARCHITECTURE_REFERENCE",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "cc6b9df8e4484b871fe96a1860ccf271da553782",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T00:11:24+08:00",
+        "tree": "7f93160135677b473ff9b1e300b6c28e5b2f069d",
+        "parents": [
+          "9222f1cc555ed4ccc0611247884d985ea13ac07a"
+        ],
+        "subject": "feat: add bilibili adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Added in the project Bilibili adapter history. The inherited PR-1 bounded screen found no exact file match across 30 platform/content files or selected shared six-line sequence; architecture-only reference status remains, not a complete rewritten-expression audit."
+    },
+    {
+      "path": "src/features/platform/bilibili/subtitle-view.ts",
+      "disposition": "PROJECT_HISTORY_ARCHITECTURE_REFERENCE",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "948f761be40129490a59115d490ecd3c7298335c",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-12T20:39:32+08:00",
+        "tree": "9fd934be76e73ecf6b319a30997b8d99dc481e34",
+        "parents": [
+          "273d2ae5bc5edb79e174130678a168fa75ad1294"
+        ],
+        "subject": "fix: restore modern platform transcript discovery"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Added in the project Bilibili adapter history. The inherited PR-1 bounded screen found no exact file match across 30 platform/content files or selected shared six-line sequence; architecture-only reference status remains, not a complete rewritten-expression audit."
+    },
+    {
+      "path": "src/features/platform/bilibili/wbi.ts",
+      "disposition": "PROJECT_HISTORY_ARCHITECTURE_REFERENCE",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "948f761be40129490a59115d490ecd3c7298335c",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-12T20:39:32+08:00",
+        "tree": "9fd934be76e73ecf6b319a30997b8d99dc481e34",
+        "parents": [
+          "273d2ae5bc5edb79e174130678a168fa75ad1294"
+        ],
+        "subject": "fix: restore modern platform transcript discovery"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Added in the project Bilibili adapter history. The inherited PR-1 bounded screen found no exact file match across 30 platform/content files or selected shared six-line sequence; architecture-only reference status remains, not a complete rewritten-expression audit."
+    },
+    {
+      "path": "src/features/platform/content-key.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js",
+        "static/background/index.js"
+      ],
+      "introductionCommit": {
+        "sha": "3ef26bf92e79802962635dd8d07ae8447e8b2aad",
+        "author": "Aaron-AVC",
+        "authoredAt": "2026-10-26T00:39:19+08:00",
+        "tree": "935d5bc67d74e4050471636192adf5db3c3eb7ba",
+        "parents": [
+          "1183c560e3128aad1feb9f26115085e07b746476"
+        ],
+        "subject": "refactor: centralize content key parsing"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/platform/persistence-compat.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "daf41d7a2252df528f30202d3aa11beb3c74fc61",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-07T21:19:50+08:00",
+        "tree": "cb27962a51bcf0c88ab7406b0f488ad71fbc409b",
+        "parents": [
+          "b7d165bfa3104c6b0ec4a77c35d0e6ad61662476"
+        ],
+        "subject": "refactor: introduce platform adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/platform/registry.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "daf41d7a2252df528f30202d3aa11beb3c74fc61",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-07T21:19:50+08:00",
+        "tree": "cb27962a51bcf0c88ab7406b0f488ad71fbc409b",
+        "parents": [
+          "b7d165bfa3104c6b0ec4a77c35d0e6ad61662476"
+        ],
+        "subject": "refactor: introduce platform adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/platform/youtube/youtube-adapter.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "daf41d7a2252df528f30202d3aa11beb3c74fc61",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-07T21:19:50+08:00",
+        "tree": "cb27962a51bcf0c88ab7406b0f488ad71fbc409b",
+        "parents": [
+          "b7d165bfa3104c6b0ec4a77c35d0e6ad61662476"
+        ],
+        "subject": "refactor: introduce platform adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Platform adapter refactor; inherited expression established by PR-1."
+    },
+    {
+      "path": "src/features/platform/youtube/youtube-live-state.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "3a0b9b38f12a4cb38e08b204f07707645c2b1892",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-13T04:35:29+08:00",
+        "tree": "6fcde52a00c06762b00f0ab65420fe1cc70f713a",
+        "parents": [
+          "651c0cf0a3063c1d3c76e1f9e5d87248a7f54c5d"
+        ],
+        "subject": "fix: read live youtube caption resources"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/platform/youtube/youtube-url.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "daf41d7a2252df528f30202d3aa11beb3c74fc61",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-07T21:19:50+08:00",
+        "tree": "cb27962a51bcf0c88ab7406b0f488ad71fbc409b",
+        "parents": [
+          "b7d165bfa3104c6b0ec4a77c35d0e6ad61662476"
+        ],
+        "subject": "refactor: introduce platform adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Added in the platform adapter refactor alongside deletion of runtime/page-detection; treat extraction lineage conservatively."
+    },
+    {
+      "path": "src/features/search/lib/search-query.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "a4b5d55032b9b1a0448f83da654ef774e4d2a1ad",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T02:46:09+08:00",
+        "tree": "1dfe407fe7054cd8a6dc1330757364ce8c9b567d",
+        "parents": [
+          "18366b63e1af44eb1954ed7566e1a01fd9ff2a08"
+        ],
+        "subject": "feat: add cross-video local search"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/search/lib/search-repository.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "a4b5d55032b9b1a0448f83da654ef774e4d2a1ad",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T02:46:09+08:00",
+        "tree": "1dfe407fe7054cd8a6dc1330757364ce8c9b567d",
+        "parents": [
+          "18366b63e1af44eb1954ed7566e1a01fd9ff2a08"
+        ],
+        "subject": "feat: add cross-video local search"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/settings/components/connection-test.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/settings/components/connection-test.tsx",
+      "upstreamBlob": "6589d5ea3c38f0bc428f61d56882ec497148a2fb",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/settings/components/data-management.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/settings/components/data-management.tsx",
+      "upstreamBlob": "671a3ab4393c341238d70f8fb5385f382c861b75",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/settings/components/diagnostic-log.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/settings/components/diagnostic-log.tsx",
+      "upstreamBlob": "a2afec2a24741edf6465869dcde755fc3e204589",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/settings/components/provider-form.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/settings/components/provider-form.tsx",
+      "upstreamBlob": "723d18c1dfebb8c48d30baacdd270af9eae73c2b",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/settings/components/theme-settings.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/settings/components/theme-settings.tsx",
+      "upstreamBlob": "b7d13f6881615d07f5a31a178e860fa279d7cbf6",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/settings/lib/provider-permissions.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "07c61fd139104b830f3fb41db9f9c4bd5370a864",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T07:32:05+08:00",
+        "tree": "16b3658d378f132ce0d67bb54541199058ae41ee",
+        "parents": [
+          "419898ed093be2beb32c8e49c727d9e9b9d52841"
+        ],
+        "subject": "feat: add provider profiles"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/settings/lib/provider-schema.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/settings/lib/provider-schema.ts",
+      "upstreamBlob": "fcad5b33a3c42d64f19bd4cb46cc3eef6979df76",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/settings/lib/settings-storage.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/settings/lib/settings-storage.ts",
+      "upstreamBlob": "54afe021e3910404fbdf287fe5a1b6e04570dcb5",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/download-vtt.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/download-vtt.ts",
+      "upstreamBlob": "e21d8eb9614ef49b03d602cc6fcdfb278c944b8d",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/fetch-transcript-dom.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/fetch-transcript-dom.ts",
+      "upstreamBlob": "c043544eeea331d427cb61f17a526b0d5844298d",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/fetch-transcript-panel.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/fetch-transcript-panel.ts",
+      "upstreamBlob": "c9d7986a955ac8bd568d57f00e498ec7a2cc8355",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/fetch-vtt.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/fetch-vtt.ts",
+      "upstreamBlob": "caea6e29f6d4eb17da8aef01d4f505d79939a1f3",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/normalize-cues.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/normalize-cues.ts",
+      "upstreamBlob": "ea482e9790c009f94eb9c482d7ee003f07910bf5",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/parse-vtt.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/parse-vtt.ts",
+      "upstreamBlob": "dd94868c353d2fd418861bd1311f4cd06e1c9a6e",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/transcript-log.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/transcript-log.ts",
+      "upstreamBlob": "79e7b91a494b120c8236707c1b5e8c7d2911dd74",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/transcript-schema.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/transcript/lib/transcript-schema.ts",
+      "upstreamBlob": "93e50938479beaa480598ecd14809152f2d7a2e0",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/transcript/lib/transcript-url-sanitizer.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "d8f9c5d3a233ada62f374c5637349363be54df7f",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-18T14:52:58+08:00",
+        "tree": "0c8bfe29d943201a4e38072df6679e4017f8c5a1",
+        "parents": [
+          "f60795c6918297a4278f5673288a08b91c1d24aa"
+        ],
+        "subject": "fix: prevent signed transcript URL persistence and export"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/features/youtube/lib/extract-video-id.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/youtube/lib/extract-video-id.ts",
+      "upstreamBlob": "39631537bb10f2da3316e3cf80777f80f4fd659e",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/features/youtube/lib/read-page-metadata.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/features/youtube/lib/read-page-metadata.ts",
+      "upstreamBlob": "3ebd7253b28e6bdf602b46186d295a2a57369916",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/db/errors.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/db/errors.ts",
+      "upstreamBlob": "d8421e653f64430e727810a957289fe09e6e1b98",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/db/index.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/db/index.ts",
+      "upstreamBlob": "16b74a7f07eddd9a9184233e065adc5eaac71145",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/db/migrations.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/db/migrations.ts",
+      "upstreamBlob": "ccb4c616f9e86f698a4e0fb7c3f7249cba8ce5cc",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/db/readiness.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "e2f297f53a3bc1fb3cb33abe34338e7bdcf0cabc",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-11-25T04:14:50+08:00",
+        "tree": "cffc49240cd0fe0d23d1f65192b0e6374e5a0cf5",
+        "parents": [
+          "c305794a2432fe53f34958567443434112abaf15"
+        ],
+        "subject": "fix: make sidepanel initialization resilient to database failures"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/db/schema.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/db/schema.ts",
+      "upstreamBlob": "593b6f1887f961481acbbd6ee2aa7114e0b129e5",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/export/provider-config-export.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "b7d165bfa3104c6b0ec4a77c35d0e6ad61662476",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-07T04:19:33+08:00",
+        "tree": "61b06512a06de224f3ec937ab98d2579f241c272",
+        "parents": [
+          "db4da4668da5a22bc2ce22801391255dd96656e8"
+        ],
+        "subject": "fix: exclude API keys from data exports"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/i18n/en.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "990c6b8cc003d73c509431e65169b337981f3ec4",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-18T01:01:42+08:00",
+        "tree": "2789c3e3a58bf2f4b05e085337634d1fb0fd749c",
+        "parents": [
+          "e561c2aa488c36eb730b88785ca4a91ea9785ee5"
+        ],
+        "subject": "feat: add localized extension UI"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/i18n/i18n-provider.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "990c6b8cc003d73c509431e65169b337981f3ec4",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-18T01:01:42+08:00",
+        "tree": "2789c3e3a58bf2f4b05e085337634d1fb0fd749c",
+        "parents": [
+          "e561c2aa488c36eb730b88785ca4a91ea9785ee5"
+        ],
+        "subject": "feat: add localized extension UI"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/i18n/i18n.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "990c6b8cc003d73c509431e65169b337981f3ec4",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-18T01:01:42+08:00",
+        "tree": "2789c3e3a58bf2f4b05e085337634d1fb0fd749c",
+        "parents": [
+          "e561c2aa488c36eb730b88785ca4a91ea9785ee5"
+        ],
+        "subject": "feat: add localized extension UI"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/i18n/zh-CN.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "990c6b8cc003d73c509431e65169b337981f3ec4",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-18T01:01:42+08:00",
+        "tree": "2789c3e3a58bf2f4b05e085337634d1fb0fd749c",
+        "parents": [
+          "e561c2aa488c36eb730b88785ca4a91ea9785ee5"
+        ],
+        "subject": "feat: add localized extension UI"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/persistence/cache-identity.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "06721998eae781f01170af0077c51fc4963036b0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-11T00:42:49+08:00",
+        "tree": "257206001276854b032bd09d6c222f537cd00dfa",
+        "parents": [
+          "135988b088e25c7430833647da8f84a4b5b775db"
+        ],
+        "subject": "feat: add content-aware analysis cache"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/providers/extension-providers.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/providers/extension-providers.tsx",
+      "upstreamBlob": "c4a2db6ded2143d282dbf9f99cf22698d55a5305",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/runtime/current-video.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/runtime/current-video.ts",
+      "upstreamBlob": "eee9de3dbf53229d7d173318b2c47191a66b3274",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/runtime/manifest-pattern.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "static/background/index.js"
+      ],
+      "introductionCommit": {
+        "sha": "daf41d7a2252df528f30202d3aa11beb3c74fc61",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-07T21:19:50+08:00",
+        "tree": "cb27962a51bcf0c88ab7406b0f488ad71fbc409b",
+        "parents": [
+          "b7d165bfa3104c6b0ec4a77c35d0e6ad61662476"
+        ],
+        "subject": "refactor: introduce platform adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/runtime/messages.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/runtime/messages.ts",
+      "upstreamBlob": "812a7f4107b263529b1b7df6e5e59cbaa75d4e31",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/runtime/platform-content-bridge.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "cc6b9df8e4484b871fe96a1860ccf271da553782",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-09T00:11:24+08:00",
+        "tree": "7f93160135677b473ff9b1e300b6c28e5b2f069d",
+        "parents": [
+          "9222f1cc555ed4ccc0611247884d985ea13ac07a"
+        ],
+        "subject": "feat: add bilibili adapter"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/schemas/container-limits.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "bilibili-video.5fd6a346.js",
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js",
+        "static/background/index.js",
+        "youtube-watch.3b0aae31.js"
+      ],
+      "introductionCommit": {
+        "sha": "8991726dd2c11741cd0040bf769b6da476e2ee8f",
+        "author": "Aaron-AVC",
+        "authoredAt": "2026-10-25T08:19:32+08:00",
+        "tree": "e9cc4df0d58e21f2b0bdb85eb0c466c9854de00d",
+        "parents": [
+          "6c7e6061d04162daee734b62ecb2996eb256bc12"
+        ],
+        "subject": "fix: bound untrusted zod containers"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/lib/schemas/persistence.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/schemas/persistence.ts",
+      "upstreamBlob": "74c2ba1a537063edbcc56ef85ae4b522b794d493",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/theme/theme-provider.tsx",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/theme/theme-provider.tsx",
+      "upstreamBlob": "ee3d91f08513e4ba99e46cfc94e642714fcdf780",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/theme/theme-storage.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/theme/theme-storage.ts",
+      "upstreamBlob": "0092c366939dd97e6caaa682769d9ddda48a029c",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/lib/utils.ts",
+      "disposition": "UPSTREAM_MIT_ORIGINAL",
+      "outputs": [
+        "options.95eda3f3.js",
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/lib/utils.ts",
+      "upstreamBlob": "d084ccade0d8b5bd77fd5174993bcef7b57644c9",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/options/index.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.95eda3f3.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/options/index.tsx",
+      "upstreamBlob": "aac0821736271c1b7cb2fdda7d2ee995372ea69d",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/sidepanel/analysis/analysis-controller.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "c807e7b62ad58f9844e36a3ab6f1acfa79a5dd1e",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T04:33:42+08:00",
+        "tree": "d54bb3830a406a5764d72a8c8671b9df27984687",
+        "parents": [
+          "356b3ede49a5d5dd9b36f3583aee9e0c65e8855b"
+        ],
+        "subject": "refactor: extract analysis execution workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Analysis execution refactor; preserve upstream MIT conservatively."
+    },
+    {
+      "path": "src/sidepanel/analysis/final-checkpoint-lifecycle.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "806d0c1e011eb775bbd2e872b3c67fcf0538b1f1",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-11-18T16:22:42+08:00",
+        "tree": "715e6599ce073fb22a2937d3726b6f89262dcafc",
+        "parents": [
+          "7c5adbad7e75fa730c6b996c844ce085763ae15e"
+        ],
+        "subject": "feat: add M2 final resume checkpoint foundation"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/analysis/final-resume-availability.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "fd634741306f58bcd01948775b11e2dcbf7c38ef",
+        "author": "DeepSeek Harness",
+        "authoredAt": "2026-11-19T16:19:05+08:00",
+        "tree": "dc1933a46ab88574359f0a8558b64b7519b57d3d",
+        "parents": [
+          "f235fc95802d454c38f5fcd71df73045df203e79"
+        ],
+        "subject": "feat: wire manual Final-only resume through Side Panel admission"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/analysis/final-resume-source-identity.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "3fefa250d6e2224febca64eb02fbff3d167da24f",
+        "author": "DeepSeek Harness",
+        "authoredAt": "2026-11-19T18:29:10+08:00",
+        "tree": "8e1b63dd90d7ef2bcb542c7065c1d1f5e3d3539a",
+        "parents": [
+          "3c6cdbd1830b1211eb7d21eff0dee3f2da9cb6a1"
+        ],
+        "subject": "fix: read the resume source identity from the live runtime only"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/ask/ask-controller.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "71c66627d70d3668d7af426438e4a2f2a8dd7f28",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-20T21:36:02+08:00",
+        "tree": "9c1c7a422a21a94ffac93a6e2ec19598ab0ab879",
+        "parents": [
+          "d9248b6357f65cd1e9104b3c070d8a2bd26787e4"
+        ],
+        "subject": "refactor: extract ask conversation controller"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Ask workflow refactor; preserve upstream MIT conservatively."
+    },
+    {
+      "path": "src/sidepanel/components/ask-tab.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "135988b088e25c7430833647da8f84a4b5b775db",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T04:39:39+08:00",
+        "tree": "0d0466a13629b6623583c13ee85e7007a0dff7d3",
+        "parents": [
+          "964a176d356896b3c482a65449b8bb3e7afd551c"
+        ],
+        "subject": "feat: redesign side panel workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Extracted during sidepanel/index.tsx workflow restructuring."
+    },
+    {
+      "path": "src/sidepanel/components/overview-tab.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "135988b088e25c7430833647da8f84a4b5b775db",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T04:39:39+08:00",
+        "tree": "0d0466a13629b6623583c13ee85e7007a0dff7d3",
+        "parents": [
+          "964a176d356896b3c482a65449b8bb3e7afd551c"
+        ],
+        "subject": "feat: redesign side panel workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Extracted during sidepanel/index.tsx workflow restructuring."
+    },
+    {
+      "path": "src/sidepanel/components/search-tab.tsx",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "a4b5d55032b9b1a0448f83da654ef774e4d2a1ad",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T02:46:09+08:00",
+        "tree": "1dfe407fe7054cd8a6dc1330757364ce8c9b567d",
+        "parents": [
+          "18366b63e1af44eb1954ed7566e1a01fd9ff2a08"
+        ],
+        "subject": "feat: add cross-video local search"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/components/settings-tab.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "135988b088e25c7430833647da8f84a4b5b775db",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T04:39:39+08:00",
+        "tree": "0d0466a13629b6623583c13ee85e7007a0dff7d3",
+        "parents": [
+          "964a176d356896b3c482a65449b8bb3e7afd551c"
+        ],
+        "subject": "feat: redesign side panel workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Extracted during sidepanel/index.tsx workflow restructuring."
+    },
+    {
+      "path": "src/sidepanel/components/sidepanel-shell.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "135988b088e25c7430833647da8f84a4b5b775db",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T04:39:39+08:00",
+        "tree": "0d0466a13629b6623583c13ee85e7007a0dff7d3",
+        "parents": [
+          "964a176d356896b3c482a65449b8bb3e7afd551c"
+        ],
+        "subject": "feat: redesign side panel workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Extracted during sidepanel/index.tsx workflow restructuring."
+    },
+    {
+      "path": "src/sidepanel/components/transcript-tab.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "135988b088e25c7430833647da8f84a4b5b775db",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T04:39:39+08:00",
+        "tree": "0d0466a13629b6623583c13ee85e7007a0dff7d3",
+        "parents": [
+          "964a176d356896b3c482a65449b8bb3e7afd551c"
+        ],
+        "subject": "feat: redesign side panel workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Extracted during sidepanel/index.tsx workflow restructuring."
+    },
+    {
+      "path": "src/sidepanel/history/history-controller.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "befd5f344c842ec60fa3a4864da175e0b1f0cd7f",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-20T07:33:27+08:00",
+        "tree": "bf8fb138c6ea4b425475b5b3600e08bc60e817fa",
+        "parents": [
+          "480aee997405097561d102c627023fe94bd220a0"
+        ],
+        "subject": "refactor: extract history read and restore boundary"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "History restoration refactor; preserve upstream MIT conservatively."
+    },
+    {
+      "path": "src/sidepanel/history/pending-history-open-adapter.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "d9248b6357f65cd1e9104b3c070d8a2bd26787e4",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-20T20:56:21+08:00",
+        "tree": "e60ea8101c03ea70fe634984d3545ef8ff0cc957",
+        "parents": [
+          "f9f52a25f450dd78cb6dea47dca988e5b1adc6a3"
+        ],
+        "subject": "refactor: extract pending history open lifecycle"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/index.tsx",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/sidepanel/index.tsx",
+      "upstreamBlob": "5c63da2004a9c1e8597e2c70aa32384b79a6fc42",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    },
+    {
+      "path": "src/sidepanel/knowledge/knowledge-controller.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "829f2fe529233ddd457eef8cde05c561de330ddf",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T07:48:55+08:00",
+        "tree": "3e667e94d48e2b4997fb85faaee2edc046f64996",
+        "parents": [
+          "7e2b7e3e8937aea12847799ebd409782e39d48cc"
+        ],
+        "subject": "feat: add bookmark and notes knowledge workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/lib/analysis-preset-write.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "08678783e1ddf20675e594f6355f5fd94a143f8b",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T06:56:15+08:00",
+        "tree": "b7421c676ae0040784150e1636cae3aba7614fc5",
+        "parents": [
+          "ba0666bb7b57129aba59389e87e9f55b11e957ed"
+        ],
+        "subject": "fix: close analysis preset identity races"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/lib/apply-data-mutation.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "c14863e4b3773b104451231d4299d73db0cb1ad2",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-17T00:31:16+08:00",
+        "tree": "0cf8957770b4322dd807a01b6596e582be90bbbd",
+        "parents": [
+          "05ea64a05aef12c434a2500a78504f0addd46ff0"
+        ],
+        "subject": "fix: coordinate destructive data actions"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/lib/ask-conversation-identity.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "4258291a0f9e7fcd31e5373ffa3e909ea340c623",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-15T04:27:08+08:00",
+        "tree": "bd3182627da5b115e4e60b2646e68bf94086dea9",
+        "parents": [
+          "0f8f4cf323346acd51c20c3b7fb297d053e126d0"
+        ],
+        "subject": "fix: preserve ask conversation identity"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/lib/ask-transcript-identity.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "bf670ebd95270728ecb6dc53c54a2cde93b40ca8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-15T14:12:58+08:00",
+        "tree": "712067282a5689d63a6074c50070e53c4b33e988",
+        "parents": [
+          "4258291a0f9e7fcd31e5373ffa3e909ea340c623"
+        ],
+        "subject": "fix: bind ask threads to active transcript"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/lib/load-current-transcript.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "135988b088e25c7430833647da8f84a4b5b775db",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T04:39:39+08:00",
+        "tree": "0d0466a13629b6623583c13ee85e7007a0dff7d3",
+        "parents": [
+          "964a176d356896b3c482a65449b8bb3e7afd551c"
+        ],
+        "subject": "feat: redesign side panel workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Extracted during sidepanel/index.tsx workflow restructuring."
+    },
+    {
+      "path": "src/sidepanel/lib/markdown-download.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "72ac77ff114d4b03986cdebb44ccc56a76f1dea0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T00:46:00+08:00",
+        "tree": "487809fa8b02b9c4819bb9fc56a39de806a07b2e",
+        "parents": [
+          "78a7be29c7da4c0ab7d0bb8ca9a54d07e68ac8fe"
+        ],
+        "subject": "feat: add markdown clipboard export"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/lib/sidepanel-pure-helpers.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "aa4492d9a27f9b72b07838a06532378deb08a8c6",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-19T07:28:26+08:00",
+        "tree": "89337fe4ab0e3441aa5c94315d7c3ab172ef8ff3",
+        "parents": [
+          "2981d0638ebab19c17d9ad521fb78639b66cad71"
+        ],
+        "subject": "refactor: extract sidepanel pure helpers"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Side Panel extraction; preserve inherited expression conservatively."
+    },
+    {
+      "path": "src/sidepanel/lib/sidepanel-ux.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "135988b088e25c7430833647da8f84a4b5b775db",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-10T04:39:39+08:00",
+        "tree": "0d0466a13629b6623583c13ee85e7007a0dff7d3",
+        "parents": [
+          "964a176d356896b3c482a65449b8bb3e7afd551c"
+        ],
+        "subject": "feat: redesign side panel workflow"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Treat implementation moved during sidepanel restructuring as mixed."
+    },
+    {
+      "path": "src/sidepanel/lib/task-presentation.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "b4e8a219ad8a63e454868775b22dc5ed14b46920",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-19T07:58:03+08:00",
+        "tree": "0a5c556a759b94dab404236a05ce13f3caff18e7",
+        "parents": [
+          "aa4492d9a27f9b72b07838a06532378deb08a8c6"
+        ],
+        "subject": "refactor: extract task presentation mapping"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/navigation/timestamp-navigation.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "36b654f5fcd625123a9e1c88984f4cfcab0ea1e9",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-19T08:12:43+08:00",
+        "tree": "8791fb92331730446f51b8f8743942d5b4fde31f",
+        "parents": [
+          "b4e8a219ad8a63e454868775b22dc5ed14b46920"
+        ],
+        "subject": "refactor: extract timestamp navigation boundary"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Navigation extracted from existing Side Panel; preserve upstream MIT conservatively."
+    },
+    {
+      "path": "src/sidepanel/search/search-controller.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "a4b5d55032b9b1a0448f83da654ef774e4d2a1ad",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T02:46:09+08:00",
+        "tree": "1dfe407fe7054cd8a6dc1330757364ce8c9b567d",
+        "parents": [
+          "18366b63e1af44eb1954ed7566e1a01fd9ff2a08"
+        ],
+        "subject": "feat: add cross-video local search"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/search/search-opening.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "4452fc69b6db041c5cc53eab31dc7ce29e2bf5d8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T03:13:20+08:00",
+        "tree": "e4ddab8c3692dd56e70514f9ee616079b488d8ba",
+        "parents": [
+          "a4b5d55032b9b1a0448f83da654ef774e4d2a1ad"
+        ],
+        "subject": "fix: close global search query and opening gaps"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/transcript/transcript-acquisition.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "2ad2d3428dbd71c16f3f919ae4d4fe7721f78be3",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-19T21:49:16+08:00",
+        "tree": "d3c9e1875dcf757ba16b622453c8fa110a4ad690",
+        "parents": [
+          "36b654f5fcd625123a9e1c88984f4cfcab0ea1e9"
+        ],
+        "subject": "refactor: extract transcript acquisition boundary"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Transcript workflow extraction; preserve upstream MIT conservatively."
+    },
+    {
+      "path": "src/sidepanel/transcript/transcript-controller.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "ae9cb98c9d56b81ef35a9299cbd904a60d23a0af",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-19T23:44:12+08:00",
+        "tree": "786dc8bf0379663e1e4a53c261cf4d198882526a",
+        "parents": [
+          "5efc35f190d2be9c681a2d3a0c34cde07c9f038a"
+        ],
+        "subject": "refactor: add transcript snapshot controller"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Existing transcript lifecycle extraction."
+    },
+    {
+      "path": "src/sidepanel/transcript/transcript-finalization.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "81b162d386e6eaf2fa169b0a03ae2550dbd5bdb0",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-19T22:28:03+08:00",
+        "tree": "317d7a999a1a74834a2afba66c5152cb9b42f580",
+        "parents": [
+          "2ad2d3428dbd71c16f3f919ae4d4fe7721f78be3"
+        ],
+        "subject": "refactor: extract current transcript finalization"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Existing transcript finalization extraction."
+    },
+    {
+      "path": "src/sidepanel/workspace/analysis-publication.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "a285045c2d3929a846df57b306165c2e96f28e3d",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T04:51:52+08:00",
+        "tree": "ad2181f1c1301558ca882db053ecff5969ac9938",
+        "parents": [
+          "cc20df8565eb8c1c9dfabec5d9111d75c5789d4b"
+        ],
+        "subject": "fix: publish display ownership on fresh analysis completion"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/workspace/database-availability.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "e2f297f53a3bc1fb3cb33abe34338e7bdcf0cabc",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-11-25T04:14:50+08:00",
+        "tree": "cffc49240cd0fe0d23d1f65192b0e6374e5a0cf5",
+        "parents": [
+          "c305794a2432fe53f34958567443434112abaf15"
+        ],
+        "subject": "fix: make sidepanel initialization resilient to database failures"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/workspace/restored-display-selection.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "715b80df87880a14dac27a929a19612fff86b6a9",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-22T04:07:13+08:00",
+        "tree": "bb08bdebf409eeec35ec5f438c74443de78b2d89",
+        "parents": [
+          "fa20055cd36809cf39c3f09ede44c811b2b8a01f"
+        ],
+        "subject": "fix: guard restored display selection against stale restores"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/workspace/workspace-bootstrap.ts",
+      "disposition": "PROJECT_ADDITION_HISTORY",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "e2f297f53a3bc1fb3cb33abe34338e7bdcf0cabc",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-11-25T04:14:50+08:00",
+        "tree": "cffc49240cd0fe0d23d1f65192b0e6374e5a0cf5",
+        "parents": [
+          "c305794a2432fe53f34958567443434112abaf15"
+        ],
+        "subject": "fix: make sidepanel initialization resilient to database failures"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Documented post-import development commit; confirm contributor rights and provenance before applying project terms."
+    },
+    {
+      "path": "src/sidepanel/workspace/workspace-controller.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "c0e0fbf77984fd5023da3998a3a820c841212de9",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T02:12:10+08:00",
+        "tree": "d31a0a3315a265c083f5f57e8617dec1ffda907a",
+        "parents": [
+          "97bc2505e1f2b5a6e0c061e99d8759f75fc1f1a3"
+        ],
+        "subject": "refactor: introduce workspace runtime epoch"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Workspace runtime refactor; preserve upstream MIT conservatively."
+    },
+    {
+      "path": "src/sidepanel/workspace/workspace-state.ts",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "sidepanel.b7741352.js"
+      ],
+      "introductionCommit": {
+        "sha": "c0e0fbf77984fd5023da3998a3a820c841212de9",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-21T02:12:10+08:00",
+        "tree": "d31a0a3315a265c083f5f57e8617dec1ffda907a",
+        "parents": [
+          "97bc2505e1f2b5a6e0c061e99d8759f75fc1f1a3"
+        ],
+        "subject": "refactor: introduce workspace runtime epoch"
+      },
+      "upstreamPath": null,
+      "upstreamBlob": null,
+      "rationale": "Workspace runtime refactor; preserve upstream MIT conservatively."
+    },
+    {
+      "path": "src/styles/globals.css",
+      "disposition": "UPSTREAM_MIT_MIXED",
+      "outputs": [
+        "options.cbd95b00.css"
+      ],
+      "introductionCommit": {
+        "sha": "db4da4668da5a22bc2ce22801391255dd96656e8",
+        "author": "Joyce Welt",
+        "authoredAt": "2026-10-06T23:33:19+08:00",
+        "tree": "a2a0b254cc3465d48a96f5caa75250390c26aba0",
+        "parents": [
+          "67d580ae81eab51ec343871bfbfd0da52a9d7087"
+        ],
+        "subject": "chore: establish extension baseline"
+      },
+      "upstreamPath": "src/styles/globals.css",
+      "upstreamBlob": "f6b9e7a8daddaa270c383c7339df0f25fbccf148",
+      "rationale": "Compared the source commit blob with the PR-1 fixed upstream blob."
+    }
+  ],
+  "inheritedReview": "docs/licensing/provenance-review.md#architecture-references-only"
+}

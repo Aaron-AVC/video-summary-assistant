@@ -1,0 +1,2065 @@
+Command: bun test
+bun test v1.2.5 (013fdddc)
+
+scripts\distribution-notices-validation.test.ts:
+(pass) fixed scope validates as blocked and preserves all closure and supplemental rows [1812.00ms]
+(pass) separates graph observation, conservative coverage, and source attribution [1594.00ms]
+(pass) rejects forged evidence [1266.00ms]
+(pass) rejects another build [1515.00ms]
+(pass) rejects wrong source [1641.00ms]
+(pass) rejects UNKNOWN relabeled excluded [1500.00ms]
+(pass) rejects required component omitted [1641.00ms]
+(pass) rejects outside-closure finding omitted [1218.00ms]
+(pass) unresolved component prevents candidate output before any file is written [3328.00ms]
+(pass) preview preserves notice bytes and directory identities and rejects missing or modified output [4891.00ms]
+(pass) rejects a capture or artifact without the pinned production output bytes [1156.00ms]
+
+scripts\generate-extension-icons.test.ts:
+(pass) project extension icon artwork > generates the production icon and four reproducible size previews from the editable SVG [47.00ms]
+
+scripts\license-ledger-validation.test.ts:
+(pass) third-party license ledger validator > accepts an evidenced npm package while preserving UNKNOWN bundle membership
+(pass) third-party license ledger validator > rejects duplicate package-directory identities even when versions match
+(pass) third-party license ledger validator > rejects a verified license claim without fixed release provenance [15.00ms]
+(pass) third-party license ledger validator > keeps an expanded-optional package outside the required closure
+(pass) third-party license ledger validator > rejects a material whose recorded hash differs from its bytes [16.00ms]
+(pass) third-party license ledger validator > rejects a material path that escapes the legal-material directory
+(pass) third-party license ledger validator > rejects a material path that leaves the directory through a junction [79.00ms]
+(pass) third-party license ledger validator > rejects a package marked as both required and optional-only [15.00ms]
+(pass) third-party license ledger validator > rejects an incomplete component list for the fixed 74-directory closure [16.00ms]
+(pass) third-party license ledger validator > rejects npm evidence whose tarball integrity is not present in bun.lock
+(pass) third-party license ledger validator > rejects a mismatch between installed closure flags and the recorded closure status [15.00ms]
+(pass) third-party license ledger validator > rejects unknown license evidence labels instead of letting them bypass verification [16.00ms]
+(pass) third-party license ledger validator > rejects a confirmed bundle state without direct membership evidence
+(pass) formal ledger acceptance regressions > requires verified tarball text to name a legal file in that exact tarball [172.00ms]
+(pass) formal ledger acceptance regressions > rejects a license material borrowed from a different package and version [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a NOTICE material that does not belong to the exact npm release [156.00ms]
+(pass) formal ledger acceptance regressions > does not verify upstream license text from evidence kind alone [156.00ms]
+(pass) formal ledger acceptance regressions > rejects an unrelated license appended to a valid upstream mapping [156.00ms]
+(pass) formal ledger acceptance regressions > requires every source-component license reference to match its fixed license source [188.00ms]
+(pass) formal ledger acceptance regressions > rejects a borrowed NOTICE even for an unresolved npm release [187.00ms]
+(pass) formal ledger acceptance regressions > requires an upstream license path, blob, digest, and material mapping [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a versioned upstream mapping without the exact manifest and source-map evidence [172.00ms]
+(pass) formal ledger acceptance regressions > requires fixed path, commit, blob, digest, and material identity for source components [172.00ms]
+(pass) formal ledger acceptance regressions > rejects an upstream Git blob that does not match the preserved license bytes [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry Git head that differs from the exact npm publication metadata [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a deleted component even when ledger counts are changed to match [203.00ms]
+(pass) formal ledger acceptance regressions > rejects changing a required package to optional-only while preserving total counts [172.00ms]
+(pass) formal ledger acceptance regressions > keeps actual bundle membership UNKNOWN despite a non-empty claim string [172.00ms]
+(pass) formal ledger acceptance regressions > rejects a SHA-512 SRI that decodes to fewer than 64 bytes [219.00ms]
+(pass) formal ledger acceptance regressions > matches every recorded npm integrity against the actual bun.lock record [203.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry URL that names a different package version [203.00ms]
+(pass) formal ledger acceptance regressions > retains the deduplicated fixed MIT text for every Radix component [407.00ms]
+
+scripts\negative-control-artifact-gate.test.ts:
+(pass) negative control cleanup > removes the control directory after a successful body [15.00ms]
+(pass) negative control cleanup > removes the control directory when the body throws mid-run [16.00ms]
+(pass) negative control cleanup > removes the control directory when injection itself fails [16.00ms]
+(pass) negative control cleanup > clears a stale directory from a previous run before copying [15.00ms]
+(pass) negative control cleanup > fails before creating the control directory when the artifact is missing [16.00ms]
+(pass) negative control cleanup > removes a partial copy when the copy itself fails
+(pass) side panel failure injection > prepends the marker to the bundle referenced by sidepanel.html [15.00ms]
+(pass) side panel failure injection > rejects a Side Panel page without a script reference
+(pass) side panel failure injection > rejects a missing Side Panel page
+(pass) script src containment > refuses ../outside.js and leaves the outside file byte-identical [16.00ms]
+(pass) script src containment > refuses a single parent traversal and never writes outside the control root [16.00ms]
+(pass) script src containment > refuses a nested parent traversal and never writes outside the control root [15.00ms]
+(pass) script src containment > refuses a traversal hidden behind a segment and never writes outside the control root [16.00ms]
+(pass) script src containment > refuses a Windows-style traversal and never writes outside the control root [16.00ms]
+(pass) script src containment > refuses a Windows-style single traversal and never writes outside the control root [15.00ms]
+(pass) script src containment > refuses a Windows-style absolute path and never writes outside the control root
+(pass) script src containment > refuses a drive-qualified path and never writes outside the control root
+(pass) script src containment > refuses a drive-qualified path with forward slashes and never writes outside the control root [15.00ms]
+(pass) script src containment > refuses a remote URL and never writes outside the control root [16.00ms]
+(pass) script src containment > refuses a protocol-relative URL and never writes outside the control root [16.00ms]
+(pass) script src containment > refuses a empty reference and never writes outside the control root [15.00ms]
+(pass) script src containment > keeps the production form working: a single leading slash is extension-root
+(pass) script src containment > normalises nested bundle paths without collapsing traversal
+(pass) script src containment > contains a resolved bundle path that stays inside the control root
+(pass) script src containment > rejects a bundle path that projects outside the control root
+(pass) verifier verdict assessment > passes only for a non-zero exit that surfaces the marker
+(pass) verifier verdict assessment > rejects a verifier that passed on a broken artifact
+(pass) verifier verdict assessment > rejects a verifier that failed without surfacing the marker
+(pass) verifier verdict assessment > reports both problems when nothing was proven
+
+src\background\message-boundary.test.ts:
+(pass) background inbound boundary: deny by default > ignores unknown message types without touching any privileged API [266.00ms]
+(pass) background inbound boundary: deny by default > rejects recognized types whose payload fails the inbound guard [203.00ms]
+(pass) background inbound boundary: deny by default > drops a context notification whose payload is not a valid context [172.00ms]
+(pass) background inbound boundary: deny by default > does not broadcast a context that belongs to no supported platform [31.00ms]
+(pass) background inbound boundary: deny by default > keeps serving valid requests after rejecting malformed ones [94.00ms]
+(pass) background inbound boundary: content identity relay > relays a context that matches the sender tab exactly once [31.00ms]
+(pass) background inbound boundary: content identity relay > drops a context that claims a different video than the sender tab [31.00ms]
+(pass) background inbound boundary: content identity relay > drops a context whose identity matches but whose url does not [31.00ms]
+(pass) background inbound boundary: content identity relay > drops a context relayed without a sender tab id [32.00ms]
+(pass) background inbound boundary: content identity relay > drops a bilibili context relayed from a youtube tab [31.00ms]
+(pass) background inbound boundary: MAIN world injection gating > injects into the MAIN world only for the requesting top frame on the same video [31.00ms]
+(pass) background inbound boundary: MAIN world injection gating > refuses to inject from a sub frame [31.00ms]
+(pass) background inbound boundary: MAIN world injection gating > refuses to inject for a sender that is not a supported YouTube watch page [157.00ms]
+(pass) background inbound boundary: MAIN world injection gating > refuses to inject when the sender page shows a different video [31.00ms]
+(pass) background inbound boundary: MAIN world injection gating > refuses to inject when the tab navigated away before the message arrived [31.00ms]
+(pass) background inbound boundary: MAIN world injection gating > discards an injection result when the tab navigated away during the read [31.00ms]
+(pass) background inbound boundary: MAIN world injection gating > applies the same gating to caption resource refreshes [63.00ms]
+(pass) background inbound boundary: malformed privileged requests > never opens a tab for a non-finite timestamp [156.00ms]
+(pass) background inbound boundary: malformed privileged requests > rejects an invalid timestamp before resolving the active tab [31.00ms]
+(pass) background inbound boundary: malformed privileged requests > keeps an explicit target tab in the invalid-timestamp failure response [32.00ms]
+(pass) background inbound boundary: malformed privileged requests > keeps a negative timestamp on the normal jump path and clamps it to zero [31.00ms]
+(pass) background inbound boundary: malformed privileged requests > keeps the bilibili part and rounding on the normal jump path [31.00ms]
+(pass) background inbound boundary: malformed privileged requests > never opens a tab for an invalid or unsupported identity [625.00ms]
+(pass) background inbound boundary: malformed privileged requests > does not throw out of the listener for any malformed jump request
+(pass) background inbound boundary: malformed privileged requests > rejects a forged videoId instead of laundering it into a tab [31.00ms]
+(pass) background inbound boundary: malformed privileged requests > still opens the canonical YouTube timestamp for a valid identity [32.00ms]
+(pass) background inbound boundary: malformed privileged requests > keeps the canonical bilibili part when the request omits partId [31.00ms]
+(pass) background inbound boundary: malformed privileged requests > still seeks inside the current tab when it shows the same canonical contentKey [31.00ms]
+(pass) background inbound boundary: bilibili network gating > pins the request init for an authorized bilibili sender [31.00ms]
+(pass) background inbound boundary: bilibili network gating > refuses to fetch for a sender that is not a supported bilibili video page [125.00ms]
+(pass) background inbound boundary: bilibili network gating > refuses to fetch when no sender context is available at all [32.00ms]
+(pass) background inbound boundary: bilibili network gating > rejects non-allowlisted resource urls before the handler runs [156.00ms]
+(pass) background inbound boundary: bilibili network gating > base64 encodes the binary subtitle endpoint [31.00ms]
+(pass) background inbound boundary: bilibili network gating > surfaces an oversized response as a failure instead of a truncated body [31.00ms]
+(pass) background inbound boundary: privileged actions stay reachable > opens the side panel only for a recognized request [32.00ms]
+
+src\contents\bilibili-video.test.ts:
+(pass) Bilibili content-script wiring > registers only the supported www video-path match
+(pass) Bilibili content-script wiring > returns generic VideoInfo and normalized TranscriptSegment data for the active part [15.00ms]
+
+src\contents\youtube-watch.test.ts:
+(pass) fetchVideoTranscript fallback isolation > continues to DOM fallback after a rejected panel fetch
+(pass) fetchVideoTranscript fallback isolation > does not invoke a native helper after panel rejection and DOM failure
+(pass) fetchVideoTranscript fallback isolation > returns details from each failed fallback after panel rejection
+
+scripts\lib\artifact-gate-page-stages.test.ts:
+(pass) artifact Gate page stages > fails if Side Panel loses database readiness during Options acceptance [16.00ms]
+(pass) artifact Gate page stages > passes only after both pages pass and the final Side Panel state is available
+(pass) artifact Gate page stages > fails if the final Side Panel database state cannot be read
+
+scripts\lib\artifact-gate-policy.test.ts:
+(pass) artifact path safety > accepts normal relative paths
+(pass) artifact path safety > rejects traversal, absolute and empty paths
+(pass) manifest path resolution > parses the MV3 fields the gate depends on
+(pass) manifest path resolution > rejects non-MV3 and structurally broken manifests
+(pass) manifest path resolution > resolves the background script from service_worker or page
+(pass) manifest path resolution > refuses to parse a manifest with an unsafe background path
+(pass) manifest path resolution > refuses to parse a manifest with an unsafe page path instead of propagating it
+(pass) manifest path resolution > resolves the artifact path against the workspace root
+(pass) page path containment > accepts valid side panel and options pages
+(pass) page path containment > fails the preflight for a absolute POSIX path side panel path
+(pass) page path containment > fails the preflight for a absolute POSIX path options path
+(pass) page path containment > fails the preflight for a absolute backslash path side panel path
+(pass) page path containment > fails the preflight for a absolute backslash path options path
+(pass) page path containment > fails the preflight for a drive-qualified path side panel path
+(pass) page path containment > fails the preflight for a drive-qualified path options path
+(pass) page path containment > fails the preflight for a drive-qualified path with forward slashes side panel path
+(pass) page path containment > fails the preflight for a drive-qualified path with forward slashes options path
+(pass) page path containment > fails the preflight for a single parent traversal side panel path
+(pass) page path containment > fails the preflight for a single parent traversal options path
+(pass) page path containment > fails the preflight for a nested parent traversal side panel path
+(pass) page path containment > fails the preflight for a nested parent traversal options path
+(pass) page path containment > fails the preflight for a traversal hidden behind a segment side panel path
+(pass) page path containment > fails the preflight for a traversal hidden behind a segment options path
+(pass) page path containment > fails the preflight for a traversal with backslashes side panel path
+(pass) page path containment > fails the preflight for a traversal with backslashes options path
+(pass) page path containment > reports no unsafe path for a fully safe manifest
+(pass) page path containment > treats an empty declared path as unusable rather than as a usable page
+(pass) page path containment > never keeps a raw unsafe path on the parsed manifest
+(pass) target filtering > classifies target types
+(pass) target filtering > extracts extension ids only from chrome-extension URLs
+(pass) target filtering > selects the artifact's own service worker, not a bundled browser extension
+(pass) target filtering > ignores extension service workers whose path does not match the manifest
+(pass) target filtering > ignores non service_worker targets even with a matching URL
+(pass) target filtering > requires a manifest background path before selecting anything
+(pass) target filtering > finds already-open side panel and options page targets
+(pass) target filtering > does not attach a foreign extension's page to this artifact
+(pass) fatal exception classification > treats every uncaught runtime exception as fatal
+(pass) fatal exception classification > treats SEC-02 style bundle evaluation errors as fatal
+(pass) fatal exception classification > does not fail on ordinary console.error logging
+(pass) fatal exception classification > ignores non-error console levels
+(pass) fatal exception classification > ignores benign browser noise from Log.entryAdded
+(pass) fatal exception classification > still fails on a bundle error reported through Log.entryAdded
+(pass) fatal exception classification > ignores empty messages instead of inventing failures
+(pass) fatal exception classification > documents benign noise patterns explicitly
+(pass) fatal exception classification > normalizes CDP exception payloads into printable records
+(pass) fatal exception classification > preserves structured CDP exception details and call frames safely
+(pass) fatal exception classification > handles malformed exception shapes and redacts common credentials
+(pass) fatal exception classification > redacts credentials serialized as JSON inside structured exception values
+(pass) fatal exception classification > redacts complete Authorization values and credentials embedded in exception text
+(pass) fatal exception classification > falls back gracefully when the payload shape is unknown
+(pass) mount detection > requires a completed document and a populated root
+(pass) mount detection > rejects an empty React root even when the document is complete
+(pass) mount detection > rejects a document that is still loading
+(pass) chrome path and config validation > fails with an actionable message when no executable is configured
+(pass) chrome path and config validation > fails when the configured executable does not exist
+(pass) chrome path and config validation > accepts an existing executable and trims the path
+(pass) chrome path and config validation > builds isolated browser flags for the artifact under test
+(pass) cleanup bookkeeping > never authorises termination when nothing was spawned
+(pass) cleanup bookkeeping > skips termination after a clean exit
+(pass) cleanup bookkeeping > targets only the spawned pid, never an executable name
+(pass) cleanup bookkeeping > derives the cleanup target from the spawned identity, not the path
+(pass) cleanup bookkeeping > uses taskkill /PID on Windows and never /IM or a process name
+(pass) cleanup bookkeeping > uses a direct pid signal on POSIX instead of a name-based kill
+(pass) timeout policy > defines a finite budget for every stage
+(pass) timeout policy > names the stalled stage in every timeout message
+(pass) timeout policy > carries the stage on the thrown error
+
+scripts\lib\artifact-gate-profile.test.ts:
+(pass) Artifact Gate profile ownership > returns a usable system temporary directory, including malformed-runtime fallback
+(pass) Artifact Gate profile ownership > uses an explicit Unicode root with spaces and reports UTF-16 path length [15.00ms]
+(pass) Artifact Gate profile ownership > uses the configured environment root when no CLI root is supplied [16.00ms]
+(pass) Artifact Gate profile ownership > creates unique directories for concurrent runs [140.00ms]
+(pass) Artifact Gate profile ownership > does not remove a pre-existing directory [32.00ms]
+(pass) Artifact Gate profile ownership > rejects missing, non-directory, and malformed roots [15.00ms]
+(pass) Artifact Gate profile ownership > refuses cleanup after the owned directory is replaced [94.00ms]
+(pass) Artifact Gate profile ownership > exposes the documented environment setting
+
+scripts\lib\artifact-gate-readiness.test.ts:
+(pass) normal database readiness > requires both application mount and an explicitly available database
+(pass) stable Side Panel readiness gate > does not pass when the database becomes unavailable during the stability window
+
+scripts\lib\smoke-condition.test.ts:
+(pass) Smoke condition synchronization > does not click a visible clear button until inventory is ready and the button is enabled
+(pass) Smoke condition synchronization > waits for clear feedback before returning the completed outcome
+(pass) Smoke condition synchronization > fails explicitly when the clear operation reports an error
+(pass) Smoke condition synchronization > fails explicitly when no clear feedback arrives before the bounded timeout
+
+scripts\licensing\r002-b-candidate.test.ts:
+(pass) R002-B dependency delta > allows only the reviewed compatible substitution
+(pass) R002-B dependency delta > fails closed on an unrelated dependency or permission change
+(pass) R002-B dependency delta > rejects a wrong publication binding
+(pass) R002-B dependency delta > preserves the shadcn MIT text while separating partial provenance from notice completeness [3063.00ms]
+
+src\features\platform\content-key.test.ts:
+(pass) parseContentKey: YouTube > parses a canonical YouTube key
+(pass) parseContentKey: YouTube > preserves the exact canonical contentKey and omits partId
+(pass) parseContentKey: YouTube > rejects leading and trailing whitespace inside the videoId
+(pass) parseContentKey: YouTube > accepts only the canonical key among whitespace variants
+(pass) parseContentKey: YouTube > returns null for an empty videoId
+(pass) parseContentKey: YouTube > returns null for an unknown platform
+(pass) parseContentKey: YouTube > returns null for extra segments
+(pass) parseContentKey: YouTube > returns null for non-exact platform casing
+(pass) parseContentKey: YouTube > returns null when leading whitespace breaks the platform segment
+(pass) parseContentKey: YouTube > returns null for empty input and malformed separators
+(pass) parseContentKey: Bilibili > parses a canonical Bilibili key
+(pass) parseContentKey: Bilibili > parses canonical keys across page indexes
+(pass) parseContentKey: Bilibili > round-trips accepted keys through buildBilibiliContentKey
+(pass) parseContentKey: Bilibili > returns null for a BVID rejected by the shared validator
+(pass) parseContentKey: Bilibili > returns null when the p segment is missing
+(pass) parseContentKey: Bilibili > returns null for a wrong literal part segment
+(pass) parseContentKey: Bilibili > returns null for empty, zero, negative pages
+(pass) parseContentKey: Bilibili > returns null for non-canonical integer notation
+(pass) parseContentKey: Bilibili > returns null for non-numeric pages
+(pass) parseContentKey: Bilibili > returns null for page indexes beyond the safe integer range
+(pass) parseContentKey: Bilibili > returns null for extra segments
+(pass) parseContentKey: Bilibili > returns null when the whole key carries surrounding whitespace
+(pass) parseContentKey: Bilibili > returns null for an unknown platform in Bilibili shape
+(pass) parseContentKey: failure semantics > returns null instead of throwing for every malformed key
+
+src\features\platform\persistence-compat.test.ts:
+(pass) platform persistence compatibility > persists both supported platforms through contentKey
+(pass) platform persistence compatibility > preserves the existing YouTube timestamp identity projection
+
+src\features\platform\registry.test.ts:
+(pass) platform adapter registry > resolves supported YouTube watch URLs to the registered adapter
+(pass) platform adapter registry > returns null for unsupported and malformed URLs without requiring a DOM
+
+src\features\platform\session-compat.test.ts:
+(pass) contentKey platform persistence compatibility > allows Bilibili persistence through its part-specific contentKey
+(pass) contentKey platform persistence compatibility > preserves YouTube persistence and distinguishes Bilibili parts for display
+
+src\lib\db\errors.test.ts:
+(pass) database availability error classification > recognizes Dexie close and IndexedDB open failures through wrappers
+(pass) database availability error classification > handles cyclic nested error causes
+
+src\lib\db\migrations.indexeddb.test.ts:
+(pass) Dexie transcript URL cleanup migration > preserves two snapshots for one video when upgrading the real IndexedDB schema [31.00ms]
+(pass) Dexie transcript URL cleanup migration > upgrades a real v5 database to v6 preserving every v5 store [16.00ms]
+(pass) Dexie transcript URL cleanup migration > upgrades a real v3 database without deleting existing cache and history rows [16.00ms]
+
+src\lib\db\migrations.test.ts:
+(pass) registerMigrations > declares the v1 schema
+(pass) registerMigrations > plays back blocks in ascending version order even if registered out of order
+(pass) registerMigrations > simulates a v2 migration on a v1 database without mutating v1
+(pass) registerMigrations > appends a metadata-only provider migration that scrubs legacy apiKey fields
+(pass) registerMigrations > appends v3 content-key stores and preserves legacy rows while copying them
+(pass) registerMigrations > copies multiple v2 transcript snapshots for one video without collapsing them
+(pass) registerMigrations > appends v6 with a knowledgeItems store without touching v1-v5
+(pass) registerMigrations > keeps every historical migration block immutable and append-only
+(pass) registerMigrations > appends a schema-compatible cleanup for stored transcript fetch URLs
+
+src\lib\db\readiness.indexeddb.test.ts:
+(pass) Dexie 4.3.0 database readiness > opens and probes the existing schema without changing stored rows [109.00ms]
+Dexie: Workaround for Chrome UnknownError on open()
+Dexie: Workaround for Chrome UnknownError on open()
+Dexie: Workaround for Chrome UnknownError on open()
+(pass) Dexie 4.3.0 database readiness > reopens the same Dexie instance after a failed open and a later recovery [16.00ms]
+
+src\lib\i18n\i18n.test.ts:
+(pass) i18n > resolves auto and explicit language preferences
+(pass) i18n > normalizes invalid persisted values to auto
+(pass) i18n > keeps dictionary keys in parity and interpolates deterministically
+(pass) i18n > interpolates analysis progress in both locales without source text
+(pass) i18n > resolves download success copy for the issuing flow
+(pass) i18n > never lets the markdown and transcript success copy collapse together
+(pass) i18n > applies the normal initial preference load
+(pass) i18n > does not let a stale initial read overwrite an earlier storage event
+(pass) i18n > keeps rapid successive selections latest after delayed storage change events
+(pass) i18n > cleans up the listener and ignores events after stop
+(pass) i18n > swallows initial read failures without an unhandled rejection
+
+src\lib\persistence\cache-identity.test.ts:
+(pass) content-aware persistence identities > fingerprints cue text byte-for-byte and excludes source metadata
+(pass) content-aware persistence identities > keeps identical normalized cues stable while preserving whitespace changes
+(pass) content-aware persistence identities > recognizes only an exact current analysis identity
+(pass) content-aware persistence identities > normalizes base URLs without collapsing meaningful path prefixes
+(pass) content-aware persistence identities > changes analysis keys for content, transcript, provider, endpoint, and model
+(pass) content-aware persistence identities > does not include API keys, display names, or generated timestamps
+(pass) content-aware persistence identities > does not include the provider generation timeout
+(pass) content-aware persistence identities > separates the same question across conversation contexts while retaining legacy empty identity
+(pass) content-aware persistence identities > bumps the Ask prompt identity without deleting the previous cache namespace
+
+src\lib\providers\extension-providers.test.ts:
+(pass) deriveJumpToTimestampResult > returns ok=true with openedNewTab=false when the active tab handled the jump
+(pass) deriveJumpToTimestampResult > returns ok=true with openedNewTab=true when a new tab was opened
+(pass) deriveJumpToTimestampResult > returns ok=false when neither jumped nor openedNewTab is true
+(pass) deriveJumpToTimestampResult > returns ok=false propagating the runtime error
+(pass) deriveJumpToTimestampResult > returns ok=false when the response is not a jump-to-timestamp response
+(pass) deriveJumpToTimestampResult > narrows the discriminated union safely at the call site
+
+src\lib\runtime\current-video.test.ts:
+(pass) active video context > projects adapter video information into the neutral runtime context
+(pass) active video context > returns an unsupported neutral context when no adapter matches
+(pass) active video context > does not retain stale identity across a YouTube SPA navigation
+(pass) active video context > uses matching live player metadata for the active context author
+(pass) active video context > keeps observer-driven publishes on the cheap metadata path [31.00ms]
+(pass) active video context > keeps explicit active-context requests on the live metadata path [31.00ms]
+
+src\lib\runtime\manifest-pattern.test.ts:
+(pass) matchesManifestPattern > matches a YouTube watch URL against the generated wildcard path
+(pass) matchesManifestPattern > rejects unsupported paths and hosts
+(pass) matchesManifestPattern > supports wildcard subdomains without treating path metacharacters as regex
+
+src\lib\runtime\messages.test.ts:
+(pass) runtime message boundaries > does not route background-only messages into the content script
+(pass) runtime message boundaries > accepts only allowlisted Bilibili resource requests
+(pass) runtime message boundaries > validates the bounded YouTube live-player request
+(pass) runtime message boundaries > validates content context announcements for extension relay
+(pass) active video context string bounds > bounds videoId at 128 characters on both relay boundaries
+(pass) active video context string bounds > bounds partId at 16 characters on both relay boundaries
+(pass) active video context string bounds > bounds contentKey at 256 characters on both relay boundaries
+(pass) active video context string bounds > bounds url at 16384 characters on both relay boundaries
+(pass) active video context string bounds > bounds canonicalUrl at 16384 characters on both relay boundaries
+(pass) active video context string bounds > bounds title at 4096 characters on both relay boundaries
+(pass) active video context string bounds > bounds author at 4096 characters on both relay boundaries
+(pass) active video context string bounds > keeps normal YouTube and Bilibili contexts valid
+(pass) active video context string bounds > enforces a 128 UTF-16 code unit budget for videoId
+(pass) active video context string bounds > enforces a 16 UTF-16 code unit budget for partId
+(pass) active video context string bounds > enforces a 256 UTF-16 code unit budget for contentKey
+(pass) active video context string bounds > enforces a 16384 UTF-16 code unit budget for url
+(pass) active video context string bounds > enforces a 16384 UTF-16 code unit budget for canonicalUrl [16.00ms]
+(pass) active video context string bounds > enforces a 4096 UTF-16 code unit budget for title
+(pass) active video context string bounds > enforces a 4096 UTF-16 code unit budget for author
+(pass) active video context string bounds > counts astral characters as two UTF-16 code units at the title limit
+(pass) active video context string bounds > counts CJK characters at the author limit
+(pass) active video context string bounds > keeps null identity and empty url semantics for unsupported contexts
+(pass) active video context string bounds > still rejects inconsistent identities after the bounds were added
+(pass) sendRuntimeMessage validation > accepts a platform-neutral active video context
+(pass) sendRuntimeMessage validation > accepts a validated live-player response without exposing arbitrary response data
+(pass) sendRuntimeMessage validation > accepts a bounded caption refresh response with a current signed candidate
+(pass) sendRuntimeMessage validation > rejects a legacy context that omits platform and contentKey
+(pass) sendRuntimeMessage validation > returns a typed parse-error envelope when the response is malformed
+(pass) sendRuntimeMessage validation > wraps transport errors as a typed parse-error envelope
+(pass) sendRuntimeMessage validation > rejects normalized transcripts with reversed ranges or blank text
+
+src\lib\runtime\platform-content-bridge.test.ts:
+(pass) platform content bridge context publishing > publishes the active video context through one internal runtime message [62.00ms]
+(pass) platform content bridge context publishing > deduplicates unchanged snapshots and republishes after a real change [188.00ms]
+(pass) platform content bridge context publishing > ignores a page-forged active video context event [187.00ms]
+(pass) platform content bridge context publishing > keeps publishing across navigation events and location changes [125.00ms]
+(pass) platform content bridge context publishing > publishes only the newest snapshot when context changes land close together [125.00ms]
+(pass) platform content bridge context publishing > keeps the live player state request path independent of context publishing [125.00ms]
+(pass) platform content bridge context publishing > does not publish a slow older read after a newer context [188.00ms]
+(pass) platform content bridge context publishing > publishes through the 500ms URL poll when no navigation event fires [125.00ms]
+
+src\lib\schemas\container-bounds.test.ts:
+(pass) bounded zod containers reject oversized input before element validation > does not validate any element of an oversized bounded array
+(pass) bounded zod containers reject oversized input before element validation > control: the same counter does fire for an unbounded array
+(pass) Z1 — analysis provider output collection bounds > accepts exactly the maximum number of key points
+(pass) Z1 — analysis provider output collection bounds > rejects one key point over the maximum without per-element issues
+(pass) Z1 — analysis provider output collection bounds > accepts exactly the maximum number of chapters
+(pass) Z1 — analysis provider output collection bounds > rejects one chapter over the maximum
+(pass) Z2 — ask provider output collection bounds > accepts exactly the maximum number of citations
+(pass) Z2 — ask provider output collection bounds > rejects one citation over the maximum
+(pass) Z2 — ask provider output collection bounds > accepts exactly the maximum number of suggested jumps
+(pass) Z2 — ask provider output collection bounds > rejects one suggested jump over the maximum
+(pass) Z2 — ask provider output collection bounds > accepts exactly the maximum number of follow-ups
+(pass) Z2 — ask provider output collection bounds > rejects one follow-up over the maximum
+(pass) Z3 — runtime transcript segment bounds > accepts exactly the maximum number of transcript segments [47.00ms]
+(pass) Z3 — runtime transcript segment bounds > rejects one segment over the maximum at the runtime boundary [16.00ms]
+
+src\lib\schemas\persistence-bounds.test.ts:
+(pass) persisted analysis row collection bounds > accepts exactly the maximum number of persisted key points
+(pass) persisted analysis row collection bounds > rejects one persisted key point over the maximum
+(pass) persisted analysis row collection bounds > accepts exactly the maximum number of persisted topics
+(pass) persisted analysis row collection bounds > rejects one persisted topic over the maximum
+(pass) persisted transcript cue collection bounds > accepts exactly the maximum number of snapshot cues [47.00ms]
+(pass) persisted transcript cue collection bounds > rejects one snapshot cue over the maximum
+(pass) persisted transcript cue collection bounds > accepts exactly the maximum number of cache cues [47.00ms]
+(pass) persisted transcript cue collection bounds > rejects one cache cue over the maximum
+(pass) persisted Ask message nested collection bounds > accepts exactly the maximum number of citations
+(pass) persisted Ask message nested collection bounds > rejects one citation over the maximum
+(pass) persisted Ask message nested collection bounds > accepts exactly the maximum number of suggested jumps [16.00ms]
+(pass) persisted Ask message nested collection bounds > rejects one suggested jump over the maximum
+(pass) persisted Ask message nested collection bounds > accepts exactly the maximum number of follow-ups
+(pass) persisted Ask message nested collection bounds > rejects one follow-up over the maximum
+(pass) legacy analysis collection bounds > accepts exactly the maximum legacy key points
+(pass) legacy analysis collection bounds > rejects one legacy key point over the maximum
+(pass) legacy analysis collection bounds > accepts exactly the maximum legacy topics
+(pass) legacy analysis collection bounds > rejects one legacy topic over the maximum
+(pass) legacy analysis collection bounds > accepts exactly the maximum legacy segments and moments
+(pass) legacy analysis collection bounds > rejects one legacy segment or moment over the maximum
+(pass) export snapshot table row bounds > rejects one providerConfigs row over the export ceiling
+(pass) export snapshot table row bounds > rejects one transcriptSnapshots row over the export ceiling
+(pass) export snapshot table row bounds > rejects one analysisRuns row over the export ceiling
+(pass) export snapshot table row bounds > rejects one segmentSummaries row over the export ceiling
+(pass) export snapshot table row bounds > rejects one recentVideos row over the export ceiling
+(pass) export snapshot table row bounds > rejects one videoRecords row over the export ceiling
+(pass) export snapshot table row bounds > rejects one transcriptCache row over the export ceiling
+(pass) export snapshot table row bounds > rejects one analysisCache row over the export ceiling
+(pass) export snapshot table row bounds > rejects one qaAnswers row over the export ceiling
+(pass) export snapshot table row bounds > rejects one qaThreads row over the export ceiling
+(pass) export snapshot table row bounds > rejects one qaMessages row over the export ceiling
+(pass) export snapshot table row bounds > rejects one knowledgeItems row over the export ceiling
+(pass) export snapshot table row bounds > accepts exactly the export ceiling for a representative table [125.00ms]
+(pass) export snapshot table row bounds > accepts exactly the export ceiling for a table with nested collections [78.00ms]
+(pass) export snapshot table row bounds > keeps every exported table at the same ceiling
+
+src\lib\schemas\persistence.test.ts:
+(pass) persistence schemas > accepts valid persisted entities [16.00ms]
+(pass) persistence schemas > rejects invalid persistence exports
+(pass) persistence schemas > normalizes legacy string key points and topics
+(pass) persistence schemas > rejects invalid persisted timestamp ranges
+(pass) knowledge item schema > accepts a point bookmark and an anchored note
+(pass) knowledge item schema > accepts an unanchored note
+(pass) knowledge item schema > rejects rows that carry properties the persisted shape does not own
+(pass) knowledge item schema > rejects a bookmark without a timestamp
+(pass) knowledge item schema > rejects a bookmark whose range is not a point
+(pass) knowledge item schema > rejects a bookmark that carries text
+(pass) knowledge item schema > rejects a one-sided anchor
+(pass) knowledge item schema > rejects an inverted note range and empty note text
+(pass) knowledge item schema > rejects note text beyond the maximum length
+(pass) knowledge export compatibility > parses a legacy payload that has no knowledgeItems field
+(pass) knowledge export compatibility > parses a payload that carries valid knowledge items
+(pass) knowledge export compatibility > rejects malformed knowledge items in an export
+
+src\sidepanel\analysis\analysis-controller.test.ts:
+(pass) analysis controller — common prefix > A. starts the workflow by entering the analyzing phase
+(pass) analysis controller — common prefix > B. resolves the provider from the task snapshot provider profile
+(pass) analysis controller — common prefix > C. runs the task-current guard only after provider resolution
+(pass) analysis controller — common prefix > D. persists the exact task transcript cache payload
+(pass) analysis controller — analysis cache > E. returns the exact cached publication without running the model
+(pass) analysis controller — analysis cache > E2. runs the task-current guard before returning the cached result
+(pass) analysis controller — analysis cache > E3. preserves a nullable analysis run identity on a genuine exact cache hit
+(pass) analysis controller — analysis cache > F. skips the cache lookup entirely when the execution policy bypasses it
+(pass) analysis controller — analysis cache > G. falls through to the model when the cached identity does not match
+(pass) analysis controller — analysis cache > G2. falls through to the model when the cached entry has no analysis
+(pass) M4 cancellation before model execution > does not start the model when cancellation lands during the cache lookup
+(pass) analysis controller — model execution > H. passes the frozen provider config with the resolved secret
+(pass) analysis controller — model execution > I. passes the exact transcript input
+(pass) analysis controller — model execution > J. forwards the abort signal unchanged
+(pass) analysis controller — model execution > M1. forwards typed progress metadata without changing task phase
+(pass) analysis controller — model execution > K. guards task currentness after the model and before finalizing
+(pass) analysis controller — completion timestamps and identifiers > L. reads the completion timestamp as a second now() value
+(pass) analysis controller — completion timestamps and identifiers > R. consumes deterministic run, snapshot and segment identifiers
+(pass) analysis controller — persistence > M. writes persistence records in the documented order
+(pass) analysis controller — persistence > N. persists the exact video record payload
+(pass) analysis controller — persistence > O. persists the exact transcript snapshot payload
+(pass) analysis controller — persistence > P. persists the exact analysis run, segments and recent video payload
+(pass) analysis controller — persistence > Q. persists the exact analysis cache payload [16.00ms]
+(pass) analysis controller — persistence > S. returns the exact completed publication projection
+(pass) analysis controller — M2 final checkpoint identity > rejects a startup endpoint and key replacement before any model request
+(pass) analysis controller — M2 final checkpoint identity > rejects a startup model and key replacement before any model request
+(pass) analysis controller — M2 final checkpoint identity > rejects a startup timeout and key replacement before any model request
+(pass) analysis controller — M2 final checkpoint identity > publishes an eligible Final failure with stable provider identity and no secret metadata
+(pass) analysis controller — M2 final checkpoint identity > rejects a same-profile key replacement during candidate preparation
+(pass) analysis controller — M2 final checkpoint identity > rejects a same-key provider metadata replacement during asynchronous preparation
+(pass) analysis controller — M2 final checkpoint identity > rejects execution metadata replacement even when the profile timestamp is unchanged
+(pass) analysis controller — M2 final checkpoint identity > rejects a key replacement at the asynchronous promotion boundary
+(pass) analysis controller — M2 final checkpoint identity > fails closed if the in-memory key differs even when its revision did not rotate
+(pass) analysis controller — M2 final checkpoint identity > discards before persistence so a later database failure cannot publish
+(pass) analysis controller — error propagation and dependency surface > T. propagates provider resolution rejection unchanged
+(pass) analysis controller — error propagation and dependency surface > U. propagates a task-current rejection after provider resolution
+(pass) analysis controller — error propagation and dependency surface > V. propagates model rejection unchanged
+(pass) analysis controller — error propagation and dependency surface > W. skips finalizing and persistence when the guard rejects after the model
+(pass) analysis controller — error propagation and dependency surface > X. propagates persistence rejection unchanged
+(pass) analysis controller — error propagation and dependency surface > Y. exposes no presentation, toast or workspace capability
+(pass) analysis controller — analysis preset identity > S1. keeps the standard cache identity byte-compatible with the pre-preset contract
+(pass) analysis controller — analysis preset identity > S2. sends the snapshot preset strategy to the model request
+(pass) analysis controller — analysis preset identity > S3. uses the snapshot prompt version for lookup, persistence and publication
+(pass) analysis controller — analysis preset identity > S4. never lets two presets share a cache identity
+(pass) analysis controller — analysis preset identity > S5. refuses a cache hit that belongs to another preset
+(pass) analysis controller — analysis preset identity > S6. reuses an exact cache hit that matches the concise snapshot identity
+(pass) analysis controller — standard cache compatibility > S7. does not reuse a Standard cache row written under the previous prompt contract
+(pass) analysis controller — standard cache compatibility > S7b. still reuses a Standard cache row written under the current prompt contract
+(pass) analysis controller — standard cache compatibility > S8. keeps two tasks with different presets fully isolated
+
+src\sidepanel\analysis\final-checkpoint-lifecycle.test.ts:
+(pass) Side Panel final-checkpoint lifecycle > keeps an identical source identity without invalidating
+(pass) Side Panel final-checkpoint lifecycle > invalidates when sourceTabId changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when platform changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when videoId changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when partId changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when contentKey changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when title changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when durationSec changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when workspaceEpoch changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when transcriptFingerprint changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when providerProfileId changes
+(pass) Side Panel final-checkpoint lifecycle > invalidates when analysisPresetId changes
+(pass) Side Panel final-checkpoint lifecycle > does not resurrect a checkpoint across A→B→A or P1→P2→P1
+(pass) Side Panel final-checkpoint lifecycle > invalidates for relevant cross-surface storage key yt-summarizer.provider.default
+(pass) Side Panel final-checkpoint lifecycle > invalidates for relevant cross-surface storage key yt-summarizer.provider.profiles
+(pass) Side Panel final-checkpoint lifecycle > invalidates for relevant cross-surface storage key yt-summarizer.provider.secrets
+(pass) Side Panel final-checkpoint lifecycle > invalidates for relevant cross-surface storage key yt-summarizer.analysis.preset
+(pass) Side Panel final-checkpoint lifecycle > ignores unrelated storage keys and non-local areas
+(pass) Side Panel final-checkpoint lifecycle > preserves matching status/favicon updates but invalidates removal and ignores unrelated tabs
+(pass) Side Panel final-checkpoint lifecycle > invalidates conservatively for unstable or changed URLs without A→B→A or P1→P2→P1 resurrection
+(pass) Side Panel final-checkpoint lifecycle > forwards destructive mutations without duplicating their matching policy
+(pass) Side Panel final-checkpoint lifecycle > destroy removes browser listeners and invalidates exactly once
+
+src\sidepanel\analysis\final-resume-availability.test.ts:
+(pass) final resume availability > shows the resume action for a matching, unexpired, available checkpoint
+(pass) final resume availability > hides the action once the TTL elapses without requiring a refresh
+(pass) final resume availability > notifies subscribers when the visibility changes
+(pass) final resume availability > hides the action while another analysis task owns the workspace
+(pass) final resume availability > hides the action when the live video, part, transcript or provider changed [16.00ms]
+(pass) final resume availability > hides the action when the checkpoint has no confirmed transient failure
+(pass) final resume availability > hides the action when the checkpoint is leased, candidate, or invalidated
+(pass) final resume availability > does not expose map summaries, prompts, cues or provider secrets in the view
+(pass) final resume availability > reports the resuming and saving phases so the button can be disabled
+(pass) final resume availability > keeps the error status but never the raw response body
+(pass) final resume TTL scheduling > wakes up exactly at metadata.expiresAt instead of polling a fixed interval
+(pass) final resume TTL scheduling > is already expired at or past expiresAt and has nothing to schedule without one
+(pass) final resume TTL scheduling > caps a long wait with the fallback interval but still lands on the exact expiry
+(pass) final resume TTL scheduling > reschedules when a new checkpoint moves expiresAt
+(pass) final resume TTL scheduling > stops scheduling once stopped and never fires afterwards
+(pass) final resume refresh on task release > refreshes when a running analysis task releases the workspace
+(pass) final resume refresh on task release > does not refresh while a task keeps running or when none was running
+(pass) final resume conflict source of truth > does not report a conflict once the authoritative task released
+(pass) final resume conflict source of truth > stops reporting a conflict as soon as the task is gone, even if the phase lags
+(pass) final resume conflict source of truth > keeps treating a genuinely running task as a conflict
+(pass) final resume conflict source of truth > does not treat a finished or failed phase as a conflict
+(pass) final resume TTL scheduler survives a missing checkpoint > keeps wake-ups alive when there is no expiry yet
+(pass) final resume TTL scheduler survives a missing checkpoint > stops arming once the checkpoint has expired, without spinning
+(pass) final resume conflict ordering > treats a new task as a conflict from its very first notification
+(pass) final resume conflict ordering > keeps a restarted task a conflict even though a release was observed
+(pass) final resume conflict ordering > still blocks on loading-transcript before any task exists
+(pass) final resume after a Final 502 > shows the entry the instant the failed task releases, then hides it at the TTL
+(pass) checkpoint identity seeding > seeds expected exactly once on the empty -> available transition
+(pass) checkpoint identity seeding > prefers the task snapshot that actually bound the checkpoint
+(pass) checkpoint identity seeding > never overwrites expected while the checkpoint stays non-empty
+(pass) checkpoint identity seeding > clears expected when the checkpoint returns to empty, so the next one reseeds
+(pass) checkpoint identity seeding > seeds from a candidate checkpoint too, because the entry gate still needs it
+(pass) checkpoint identity seeding > A/B regression: a checkpoint bound to A must never validate against B
+(pass) checkpoint identity seeding > A/B regression: the seeded identity makes the entry visible on A
+(pass) smoke path: Final 502 -> candidate promoted -> task released > shows the button after seeding, and still hides it for the wrong video
+(pass) A/B protection through transitions > keeps the entry hidden when switching A -> B, visible on A
+(pass) A/B protection through transitions > tab change is caught even for the same content
+
+src\sidepanel\analysis\final-resume-i18n.test.ts:
+(pass) final resume i18n > defines every English resume key in Chinese
+(pass) final resume i18n > keeps the Chinese continue action and cost notice distinct from regenerating
+(pass) final resume i18n > states the side-panel-only lifetime in both languages
+(pass) final resume i18n > carries no prompt, transcript or secret placeholder in resume copy
+(pass) final resume i18n > keeps the resuming and saving labels distinguishable
+(pass) final resume view shape > only exposes a sanitized status code, never a response body
+(pass) final resume view shape > disables starting while a resume or save is in flight
+
+src\sidepanel\analysis\final-resume-source-identity.test.ts:
+(pass) final resume live source identity > accepts a live source that still matches the frozen resume task
+(pass) final resume live source identity > rejects YouTube A -> B -> A: B while the frozen resume is A, A again afterwards
+(pass) final resume live source identity > rejects Bilibili P1 -> P2 -> P1 by partId and contentKey, then allows P1 again
+(pass) final resume live source identity > fails closed when the source changes during an await, so no Final call can publish A
+(pass) final resume live source identity > rejects a changed tab even when the video identity looks identical [16.00ms]
+(pass) final resume live source identity > rejects an unready source before anything else
+(pass) final resume live source identity > rejects a platform change
+(pass) final resume live source identity > takes the title from the live runtime and never from the frozen snapshot
+(pass) final resume live source identity > keeps the rejection message content-free
+(pass) final resume wiring source guards > calls the strict live-source guard inside readLiveSource
+(pass) final resume wiring source guards > persists the real transcript capture time, never the save completion time
+(pass) final resume duration ownership > keys the captured duration by content key instead of keeping a bare value
+(pass) final resume duration ownership > resolves the resume duration through the content-key-scoped reader
+(pass) final resume conflict wiring guards > decides conflict from authority mirrors, not render-era state
+(pass) final resume conflict wiring guards > keeps the TTL scheduler as the expiry-driven one, not a fixed poll
+(pass) checkpoint identity seeding wiring guards > no longer overwrites expected whenever the checkpoint is non-empty
+(pass) checkpoint identity seeding wiring guards > reconciles through the pure transition resolver
+(pass) checkpoint identity seeding wiring guards > turns a checkpoint transition into a render
+(pass) checkpoint identity seeding wiring guards > seeds from the task snapshot that actually bound the checkpoint
+
+src\sidepanel\ask\ask-controller.test.ts:
+(pass) AskController restoreConversation > returns an empty ready snapshot without touching the repository when analysisRunId is null
+(pass) AskController restoreConversation > returns stale without touching the repository when analysisRunId is null and the request is stale
+(pass) AskController restoreConversation > reads threads with the requested content key and analysis run
+(pass) AskController restoreConversation > filters threads by transcript fingerprint
+(pass) AskController restoreConversation > uses the first filtered thread as current
+(pass) AskController restoreConversation > reads messages only for the selected thread
+(pass) AskController restoreConversation > returns empty messages, null current thread, and null answer when no thread matches
+(pass) AskController restoreConversation > returns stale when the request stops being current after the reads complete
+(pass) AskController answer projection > projects the last assistant message
+(pass) AskController answer projection > falls back to startSec when a citation has no endSec
+(pass) AskController answer projection > defaults missing followUps and suggestedJumps to empty arrays
+(pass) AskController answer projection > returns null when the latest assistant message has no citations
+(pass) AskController openThread > does not read messages when the thread does not exist
+(pass) AskController openThread > does not read messages when the content key does not match
+(pass) AskController openThread > does not read messages when the analysis run does not match
+(pass) AskController openThread > does not read messages when the transcript fingerprint does not match
+(pass) AskController openThread > does not read messages when the requested transcript fingerprint is missing
+(pass) AskController openThread > reads messages and returns a ready snapshot on an exact identity match [15.00ms]
+(pass) AskController openThread > returns stale when the request stops being current after the messages read
+(pass) AskController deleteThread > calls the repository delete with the exact thread id
+(pass) AskController deleteThread > propagates a repository delete error unchanged
+(pass) AskController dependency errors > propagates thread read errors unchanged
+(pass) AskController dependency errors > propagates message read errors unchanged
+(pass) AskController prepareExecutionThread existing thread > does not read a thread when requestedThreadId is null
+(pass) AskController prepareExecutionThread existing thread > reuses an exact identity match without creating a thread
+(pass) AskController prepareExecutionThread existing thread > resolves the provider of the reused thread, not the selected provider
+(pass) AskController prepareExecutionThread existing thread > maps a reused-thread provider resolution failure to the exact conversation error
+(pass) AskController prepareExecutionThread existing thread > freezes the provider request from persisted thread fields and resolved secrets
+(pass) AskController prepareExecutionThread new thread > creates a new thread when the requested thread is missing
+(pass) AskController prepareExecutionThread new thread > creates a new thread when the content key mismatches
+(pass) AskController prepareExecutionThread new thread > creates a new thread when the analysis run mismatches
+(pass) AskController prepareExecutionThread new thread > creates a new thread when the transcript fingerprint mismatches
+(pass) AskController prepareExecutionThread new thread > resolves the selected provider on the new-thread path
+(pass) AskController prepareExecutionThread new thread > propagates the new-thread provider failure unchanged
+(pass) AskController prepareExecutionThread new thread > builds the exact new-thread payload
+(pass) AskController prepareExecutionThread new thread > truncates the title to the first 60 characters
+(pass) AskController prepareExecutionThread currentness > returns stale after the reuse decision without resolving a provider or creating a thread
+(pass) AskController prepareExecutionThread currentness > checks currentness before provider resolution and again after it
+(pass) AskController prepareExecutionThread currentness > resolves the provider only when the request is current
+(pass) AskController prepareExecutionThread currentness > returns stale without creating a new thread when provider resolution becomes stale
+(pass) AskController prepareExecutionThread currentness > returns stale for a reused thread when provider resolution becomes stale
+(pass) AskController prepareExecutionThread errors > propagates getQaThread failures unchanged
+(pass) AskController prepareExecutionThread errors > propagates createQaThread failures unchanged
+(pass) AskController prepareExecutionTurn > reads historical messages before appending the user message
+(pass) AskController prepareExecutionTurn > appends the exact narrow user payload
+(pass) AskController prepareExecutionTurn > returns the persisted user message unchanged
+(pass) AskController prepareExecutionTurn > excludes the current question from the returned conversation history
+(pass) AskController prepareExecutionTurn > applies the existing bounding policy to blank and oversized history
+(pass) AskController prepareExecutionTurn > propagates a message read failure without appending
+(pass) AskController prepareExecutionTurn > propagates an append failure after reading history once
+(pass) AskController prepareExecutionTurn > touches only the message list and append dependencies
+(pass) AskController prepareExecutionTaskInput cache identity > derives the cache key from the existing QA cache identity helper
+(pass) AskController prepareExecutionTaskInput cache identity > keeps the persisted thread analysisRunId in the cache key while the task snapshot uses the requested run
+(pass) AskController prepareExecutionTaskInput cache identity > takes cache provider identity from the thread, not the provider request
+(pass) AskController prepareExecutionTaskInput cache identity > keeps the conversation context inside the cache identity
+(pass) AskController prepareExecutionTaskInput cache identity > matches the helper semantics for an empty conversation history
+(pass) AskController prepareExecutionTaskInput frozen task inputs > builds the exact task snapshot from the captured sources
+(pass) AskController prepareExecutionTaskInput frozen task inputs > takes source metadata from the captured analysis view, not the thread
+(pass) AskController prepareExecutionTaskInput frozen task inputs > falls back to the 600 second default when the provider request omits the timeout
+(pass) AskController prepareExecutionTaskInput frozen task inputs > never lets the API key reach the task snapshot
+(pass) AskController prepareExecutionTaskInput frozen task inputs > returns the provider request as an execution capability copy
+(pass) AskController prepareExecutionTaskInput frozen task inputs > freezes the transcript cues with a shallow copy
+(pass) AskController prepareExecutionTaskInput frozen task inputs > freezes the conversation history with a shallow copy
+(pass) AskController prepareExecutionTaskInput frozen task inputs > returns the captured analysis payload unchanged
+(pass) AskController prepareExecutionTaskInput frozen task inputs > touches no repository or provider dependency
+(pass) AskController runExecutionTask cache behaviour > serves a cache hit without calling the model or writing the cache
+(pass) AskController runExecutionTask cache behaviour > runs the model, writes the cache, then persists the assistant message on a cache miss
+(pass) AskController runExecutionTask cache behaviour > never re-saves the cache for a cache hit
+(pass) AskController runExecutionTask persistence versus terminal UI publication > persists to the original thread and skips UI publication when another video is displayed
+(pass) AskController runExecutionTask persistence versus terminal UI publication > publishes an A -> B -> A completion once the displayed identity matches again
+(pass) AskController runExecutionTask task guards > checks the task exactly three times on the success path
+(pass) AskController runExecutionTask task guards > throws the exact inactive error before touching the cache
+(pass) AskController runExecutionTask task guards > checks task currentness before the abort flag
+(pass) AskController runExecutionTask task guards > throws the exact AbortError when the signal is already aborted
+(pass) AskController runExecutionTask task guards > stops after the cache read when the task becomes stale
+(pass) AskController runExecutionTask task guards > stops after the model resolves when the signal aborts during the call
+(pass) AskController runExecutionTask phases > reports repairing before finalizing when the model repairs
+(pass) AskController runExecutionTask phases > never reports repairing for a cache hit
+(pass) AskController runExecutionTask phases > stops guarding the task once finalizing starts
+(pass) AskController runExecutionTask model input > passes the frozen task inputs to the model unchanged
+(pass) AskController runExecutionTask persistence payloads > writes the exact QA cache row with a single timestamp
+(pass) AskController runExecutionTask persistence payloads > persists the requested analysis run rather than the cache identity run
+(pass) AskController runExecutionTask persistence payloads > writes the exact assistant message input
+(pass) AskController runExecutionTask persistence payloads > returns the assistant entity the dependency produced
+(pass) AskController runExecutionTask failure propagation > propagates a cache save failure without appending the assistant message [16.00ms]
+(pass) AskController runExecutionTask failure propagation > propagates an assistant append failure unchanged
+(pass) AskController runExecutionTask failure propagation > propagates a model failure without finalizing or persisting anything
+(pass) AskController prepareExecutionTranscriptIdentity > returns ok with the resolved fingerprint on an exact match
+(pass) AskController prepareExecutionTranscriptIdentity > reports transcript-unavailable when there are no cues
+(pass) AskController prepareExecutionTranscriptIdentity > reports transcript-unavailable when the transcript content does not match
+(pass) AskController prepareExecutionTranscriptIdentity > reports transcript-mismatch when the analysis fingerprint disagrees
+(pass) AskController prepareExecutionTranscriptIdentity > computes the cue fingerprint when no fingerprint is persisted yet
+(pass) AskController prepareExecutionTranscriptIdentity > matches the helper semantics for representative inputs
+(pass) AskController prepareExecutionTranscriptIdentity > touches no repository, provider, or cache dependency
+(pass) AskController resolveOpenThreadTranscriptFingerprint > returns null when there are no cues
+(pass) AskController resolveOpenThreadTranscriptFingerprint > keeps the current fingerprint when it already agrees with the cues
+(pass) AskController resolveOpenThreadTranscriptFingerprint > lets the computed cue fingerprint win over a stale persisted one
+(pass) AskController resolveOpenThreadTranscriptFingerprint > matches the helper semantics for representative inputs
+(pass) AskController resolveOpenThreadTranscriptFingerprint > touches no repository or provider dependency
+(pass) AskController execution generation > returns a stable token from capture without mutating the counter
+(pass) AskController execution generation > advances the execution generation exactly once per begin
+(pass) AskController execution generation > stales the current execution token when invalidated
+(pass) AskController execution generation > keeps repeated execution invalidation monotonic and currentness-safe
+(pass) AskController thread-load generation > returns a current token and stales the previous one on the next load
+(pass) AskController thread-load generation > stales the current thread-load token when invalidated
+(pass) AskController thread-load generation > keeps repeated thread-load invalidation monotonic
+(pass) AskController generation independence > keeps a thread-load token current when the execution generation is invalidated
+(pass) AskController generation independence > keeps an execution token current when the thread-load generation is invalidated
+(pass) AskController generation independence > keeps a thread-load token current when an execution begins
+(pass) AskController generation independence > keeps an execution token current when a thread load begins
+(pass) AskController generation independence > keeps both counters independent across interleaved commands
+(pass) AskController generation lifetime and isolation > starts both counters at zero for a fresh controller instance
+(pass) AskController generation lifetime and isolation > gives each controller instance its own counters
+(pass) AskController generation lifetime and isolation > touches no repository, provider, cache, or model dependency
+
+src\sidepanel\components\search-tab.test.tsx:
+(pass) Search tab > shows the idle state with a disabled submit for an empty query [15.00ms]
+(pass) Search tab > renders result rows with their typed kind and formatted anchor
+(pass) Search tab > announces the searching state while a scan is running
+(pass) Search tab > reports a failed scan without hiding the query
+(pass) Search tab > renders an explicit empty result state
+(pass) Search localization parity > ships every search string in both supported locales
+
+src\sidepanel\components\sidepanel-shell.test.tsx:
+(pass) Side Panel database notice > shows a retry action when local history is unavailable
+(pass) Side Panel database notice > disables repeated retry clicks while the database check is running
+
+src\sidepanel\history\history-controller.test.ts:
+(pass) HistoryController > limits and maps recent history while filtering entries without analysis
+(pass) HistoryController > reads legacy analysis, transcript, and recent title concurrently with video fallback
+(pass) HistoryController > keeps a legacy transcript restore when its analysis is absent
+(pass) HistoryController > clears legacy execution metadata even when the persisted row contains it
+(pass) HistoryController > applies current context platform, contentKey, partId, and title fallbacks
+(pass) HistoryController > returns a stale result before fingerprint preparation when currentness changes after reads
+(pass) HistoryController > preserves exact-run metadata and run-bound transcript identity fallbacks
+(pass) HistoryController > prefers persisted video record metadata for an exact run
+(pass) HistoryController > reuses the actual transcript cues for fingerprint semantics
+(pass) HistoryController > preserves the exact-run missing aggregate and content identity errors
+(pass) HistoryController > propagates repository dependency failures unchanged
+(pass) HistoryController > deletes only the requested analysis run through the matching destructive action
+(pass) HistoryController > deletes only the requested video data through the matching destructive action
+(pass) HistoryController > runs the repository mutation before destructive coordination completes
+(pass) HistoryController > does not delete when destructive coordination rejects
+(pass) HistoryController > propagates analysis deletion repository failures unchanged
+(pass) HistoryController > propagates video deletion coordination failures unchanged
+
+src\sidepanel\history\pending-history-open-adapter.test.ts:
+(pass) pending history open adapter > consumes an initial stored payload, then clears the key
+(pass) pending history open adapter > ignores a malformed initial payload without clearing the key
+(pass) pending history open adapter > opens on a local storage change for the pending key
+(pass) pending history open adapter > ignores changes from another storage area
+(pass) pending history open adapter > ignores changes to unrelated keys
+(pass) pending history open adapter > removes the key only after the open completes
+(pass) pending history open adapter > still clears the key when the open rejects [16.00ms]
+(pass) pending history open adapter > keeps the consumption settled when removal rejects
+(pass) pending history open adapter > stops delivering storage changes after stop
+(pass) pending history open adapter > ignores an initial read that resolves after stop
+(pass) pending history open adapter > registers only one listener across repeated start calls
+(pass) pending history open adapter > tolerates repeated stop calls
+
+src\sidepanel\knowledge\knowledge-controller.test.ts:
+(pass) KnowledgeController > starts with an empty snapshot
+(pass) KnowledgeController > loads the exact contentKey
+(pass) KnowledgeController > isolates YouTube videos
+(pass) KnowledgeController > isolates Bilibili p1 and p2
+(pass) KnowledgeController > rejects a stale load that finishes after a newer one
+(pass) KnowledgeController > reset invalidates a pending load so it cannot republish
+(pass) KnowledgeController > creates a bookmark at the normalized current second
+(pass) KnowledgeController > toggles off a repeat bookmark at the same normalized second
+(pass) KnowledgeController > keeps bookmarks on different seconds separate
+(pass) KnowledgeController > creates an unanchored note
+(pass) KnowledgeController > creates a timestamped note
+(pass) KnowledgeController > updates only note text and updatedAt
+(pass) KnowledgeController > deletes an item
+(pass) KnowledgeController > does not rely on its own snapshot while overlapping toggles are unresolved
+(pass) KnowledgeController > keeps the authoritative contentKey and recovers after a failed reload
+(pass) KnowledgeController > notifies subscribers once per published snapshot
+
+src\sidepanel\lib\analysis-preset-write.test.ts:
+(pass) analysis preset write coordination > F. refuses a second write while the first request is still pending
+(pass) analysis preset write coordination > G. restores the previous stable preset when persistence fails [16.00ms]
+(pass) analysis preset write coordination > H. publishes the persisted preset so UI and storage agree
+(pass) analysis preset write coordination > keeps the queued write available again once the first settles
+(pass) analysis preset write coordination > does not persist an unchanged selection
+
+src\sidepanel\lib\apply-data-mutation.test.ts:
+(pass) Side Panel destructive mutation handling > deleting the current run clears analysis and Ask but preserves transcript
+(pass) Side Panel destructive mutation handling > deleting a non-current run only refreshes history
+(pass) Side Panel destructive mutation handling > deleting a matching video identity clears transcript, analysis, and Ask
+(pass) Side Panel destructive mutation handling > clearing conversations preserves analysis and transcript
+(pass) Side Panel destructive mutation handling > clearing analysis history clears saved analysis and Ask but keeps transcript
+(pass) Side Panel destructive mutation handling > keeps non-persisted in-memory analysis on analysis-history clear
+(pass) Side Panel destructive mutation handling > does not evict loaded transcript for transcript-cache clear
+(pass) Side Panel destructive mutation handling > preserves the Knowledge collection when deleting a different video
+(pass) Side Panel destructive mutation handling > clears the Knowledge collection only for the deleted video identity
+(pass) Side Panel destructive mutation handling > keeps Knowledge across narrower destructive mutations
+(pass) Side Panel destructive mutation handling > clears full workspace and refreshes providers after clear all
+(pass) Side Panel destructive mutation handling > refreshes the global analysis preset only for clear all
+(pass) Side Panel destructive mutation handling > publishes the normalized global preset after clear all wipes Settings
+
+src\sidepanel\lib\ask-conversation-identity.test.ts:
+(pass) Ask conversation identity > reuses a thread only for the same content, run, and transcript
+(pass) Ask conversation identity > keeps the frozen thread endpoint and model when the resolved profile is current provider B
+
+src\sidepanel\lib\ask-transcript-identity.test.ts:
+(pass) Ask transcript identity > distinguishes matching, mismatched, legacy, and not-yet-known analysis identity
+(pass) Ask transcript identity > uses the fingerprint of the actual cues when persisted state is stale
+(pass) Ask transcript identity > uses the actual cue fingerprint for the Ask request and rejects a modern mismatch
+(pass) Ask transcript identity > does not restore or reuse threads from another transcript
+(pass) Ask transcript identity > allows legacy analysis only when a current transcript is available
+
+src\sidepanel\lib\load-current-transcript.test.ts:
+(pass) loadCurrentTranscript > returns normalized transcript data for the captured identity
+(pass) loadCurrentTranscript > sends an explicit source tab id and accepts the response while the active tab differs
+(pass) loadCurrentTranscript > rejects a transcript returned from a different source tab
+(pass) loadCurrentTranscript > rejects a stale response before callers can display it
+(pass) loadCurrentTranscript > surfaces runtime transcript errors without starting analysis
+(pass) resolveCurrentTranscript > uses session or IndexedDB candidates before remote fetch
+(pass) resolveCurrentTranscript > forces a remote reload when explicitly requested
+
+src\sidepanel\lib\sidepanel-components.test.tsx:
+(pass) Side Panel V1 components > renders canonical Summary, Key Points, chapter detail, and Regenerate in Overview
+(pass) Side Panel V1 components > shows Generate when displayed history is not the exact current identity
+(pass) Side Panel V1 components > renders actionable Ask prerequisites and the grounded answer surface [15.00ms]
+(pass) Side Panel V1 components > disables Ask conversation switching while an answer is in flight [31.00ms]
+(pass) Side Panel V1 components > renders transcript rows in a bounded panel and disables fake VTT download
+(pass) Side Panel V1 components > shows an analysis/transcript identity mismatch instead of a misleading load prompt
+(pass) Side Panel V1 components > embeds the existing Provider form and Connection Test in Settings [16.00ms]
+(pass) Side Panel V1 components > keeps all five accessible tabs usable at narrow widths
+(pass) Analysis preset selector > renders the three built-in presets with localized labels
+(pass) Analysis preset selector > marks the persisted preset as the selected option
+(pass) Analysis preset selector > disables the selector while the persisted preset is still loading
+(pass) Analysis preset selector > keeps the selector independent from the analyze action [16.00ms]
+(pass) Analysis preset selector > E. disables the selector while a preset save is pending
+(pass) Analysis preset selector > keeps the selector enabled when no save is pending
+(pass) Analysis preset selector > keeps Analyze blocked while a preset save is pending
+(pass) Knowledge panel > renders with no analysis, no provider and no transcript
+(pass) Knowledge panel > enables the bookmark action when a playback point is available
+(pass) Knowledge panel > disables the bookmark action when the playback point is unavailable
+(pass) Knowledge panel > keeps plain note authoring available without a playback point
+(pass) Knowledge panel > distinguishes anchored and unanchored notes
+(pass) Knowledge panel > offers edit and delete for notes and delete for bookmarks
+(pass) Knowledge panel > shows the loading state and the load error
+(pass) Knowledge panel > never renders a draft authored on another video identity
+(pass) Knowledge panel > ships Simplified Chinese translations for every Knowledge string
+
+src\sidepanel\lib\sidepanel-pure-helpers.test.ts:
+(pass) Side Panel pure helpers > preserves timestamp formatting and Math.round behavior
+(pass) Side Panel pure helpers > returns the canonical YouTube identity from a valid context
+(pass) Side Panel pure helpers > preserves distinct canonical Bilibili part identities
+(pass) Side Panel pure helpers > returns null when a context identity component is missing
+(pass) Side Panel pure helpers > projects only identity fields from analysis sources
+(pass) historyContextIdentityFromContentKey > projects a canonical YouTube key without a part
+(pass) historyContextIdentityFromContentKey > projects a canonical Bilibili key onto its canonical part id
+(pass) historyContextIdentityFromContentKey > keeps the projected part id identical to the parsed page index
+(pass) historyContextIdentityFromContentKey > rejects unknown providers and malformed keys instead of guessing a platform
+(pass) historyContextIdentityFromContentKey > rejects keys whose identity is only valid after trimming
+
+src\sidepanel\lib\sidepanel-ux.test.ts:
+(pass) Side Panel V1 state > defaults to Overview and supports every requested tab
+(pass) Side Panel V1 state > preserves navigation for same-identity refreshes and resets only on contentKey change
+(pass) Side Panel V1 state > chooses Generate, Regenerate, Cancel, Saving, and Configure provider deterministically
+(pass) Side Panel V1 state > routes Ask prerequisites to useful actions
+
+src\sidepanel\lib\task-presentation.test.ts:
+(pass) task presentation semantics > preserves Analysis task banner phase and cancellation semantics
+(pass) task presentation semantics > preserves Ask task banner phase and cancellation semantics
+(pass) task presentation semantics > keeps fetching ahead of every header phase
+(pass) task presentation semantics > preserves header status mapping for every phase and analysis state
+
+src\sidepanel\lib\transcript-search.test.tsx:
+(pass) transcript search > returns all rows for an empty query and matches case-insensitively
+(pass) transcript search > splits every plain-text occurrence for safe semantic highlighting
+(pass) transcript search > escapes transcript and query text instead of injecting HTML
+
+src\sidepanel\navigation\timestamp-navigation.test.ts:
+(pass) timestamp navigation boundary > returns missing-identity without invoking the runtime navigator
+(pass) timestamp navigation boundary > forwards the complete YouTube identity and timestamp
+(pass) timestamp navigation boundary > preserves the Bilibili P1 part identity
+(pass) timestamp navigation boundary > preserves the Bilibili P2 part identity without collapsing it into P1
+(pass) timestamp navigation boundary > returns jumped-active for an active-tab success
+(pass) timestamp navigation boundary > returns opened-new-tab for a new-tab success
+(pass) timestamp navigation boundary > preserves a runtime failure error verbatim
+
+src\sidepanel\search\search-controller.test.ts:
+(pass) search controller scope and identity > does not scan persistence for a blank query
+(pass) search controller scope and identity > resolves every result to its own canonical identity
+(pass) search controller scope and identity > keeps Bilibili parts isolated from each other
+(pass) search controller scope and identity > searches transcript cues only through the current runtime projection
+(pass) search controller scope and identity > never surfaces current runtime content that the projection withheld
+(pass) search controller scope and identity > lists bookmarks and notes with their persisted anchors
+(pass) search controller scope and identity > keeps point and range timestamps distinct in the result payload
+(pass) search controller scope and identity > includes only QA threads that can be restored to an exact saved run
+(pass) search controller scope and identity > prefers a title match over an equivalent body match
+(pass) search controller scope and identity > deduplicates the historical row that is already the current analysis
+(pass) search controller lifecycle > is deterministic for identical candidates and query
+(pass) search controller lifecycle > drops a superseded scan instead of publishing stale results
+(pass) search controller lifecycle > reports a repository failure without keeping partial results
+(pass) search controller lifecycle > clears results while unavailable and does not republish an in-flight scan
+(pass) search controller lifecycle > does not scan when only the query text changes
+(pass) search controller lifecycle > re-runs the active query for an explicit refresh
+(pass) search controller lifecycle > notifies subscribers for every published snapshot
+(pass) search controller query generation > keeps the newest typed query when an older scan resolves
+(pass) search controller query generation > lets a newer overlapping scan win over an older one that resolves last
+(pass) search controller query generation > drops previous results as soon as the query text changes
+(pass) search controller field completeness > matches the current runtime author
+(pass) search controller field completeness > matches the historical video record channel title
+(pass) search controller current content targeting > marks an analysis hit as an Overview target
+(pass) search controller current content targeting > marks a transcript-only hit as a Transcript target at the cue
+(pass) search controller QA cross-table gating > excludes a thread whose run belongs to another content key
+(pass) search controller QA cross-table gating > keeps a thread whose run belongs to the same content key
+(pass) search controller active content refresh > replaces the current runtime row with the new exact content key
+(pass) search controller active content refresh > swaps the Bilibili part row without leaking the previous part
+(pass) search controller active content refresh > drops an in-flight scan for the previous runtime once a refresh starts
+(pass) search controller active content refresh > keeps the query and the global rows while the identity is unavailable [15.00ms]
+
+src\sidepanel\search\search-opening.test.ts:
+(pass) search opening decision > routes a current runtime analysis hit to Overview
+(pass) search opening decision > routes a current runtime transcript hit to Transcript at the cue
+(pass) search opening decision > treats a transcript hit without a cue timestamp as Overview
+(pass) search opening decision > classifies knowledge, QA and historical rows
+(pass) current runtime result opening > never invokes the History restore path for current runtime content
+(pass) current runtime result opening > reveals the matching transcript cue instead of restoring history
+(pass) current runtime result opening > waits for the exact published content key when the video has to change
+(pass) historical result opening > restores the exact saved analysis run
+(pass) historical result opening > rejects a historical row that carries no run identity
+(pass) QA thread opening > publishes a thread only after the exact identity triple is restored
+(pass) QA thread opening > rejects the thread when the restored run belongs to another analysis
+(pass) QA thread opening > rejects the thread when the restored content key differs
+(pass) QA thread opening > rejects a thread whose restored fingerprint moved
+(pass) QA thread opening > rejects a QA row that carries no run identity
+(pass) QA thread opening > rejects a QA row that carries no thread identity
+(pass) Bilibili part isolation > never opens the second part from a request for the first part
+(pass) cross-video pending intent > clears the queue when navigation cannot reach the target
+(pass) cross-video pending intent > clears the queue when the runtime identity is missing
+(pass) cross-video pending intent > lets a newer pending request survive an older navigation failure
+(pass) current transcript navigation > moves the player to the cue through the navigation service and never restores history
+(pass) QA restore identity validation > validates the outcome the restore boundary reported, without waiting for a re-render
+(pass) QA restore identity validation > fails closed when the restore boundary publishes nothing
+(pass) search opening generation > never publishes a slow older QA thread after a newer thread opened
+(pass) search opening generation > supersedes a slow transcript opening with a newer overview opening
+(pass) QA opening across content domains > opens a historical QA thread while the player still shows another video
+(pass) QA opening across content domains > never publishes when another run replaces the displayed analysis while the thread loads
+
+src\sidepanel\transcript\transcript-acquisition.test.ts:
+(pass) transcript acquisition > uses a matching session candidate without reading cache or remote
+(pass) transcript acquisition > ignores a session with a different contentKey and continues to cache
+(pass) transcript acquisition > ignores an empty session candidate
+(pass) transcript acquisition > shapes cached transcript data without altering sourceUrl
+(pass) transcript acquisition > uses the cached canonical platform, videoId, and contentKey
+(pass) transcript acquisition > preserves Bilibili P1 and P2 identities distinctly
+(pass) transcript acquisition > does not use the request video partId without the task compatibility fallback
+(pass) transcript acquisition > uses the configured task compatibility fallback when cached partId is absent
+(pass) transcript acquisition > skips session and cache and calls remote exactly once for forceReload
+(pass) transcript acquisition > passes sourceTabId through the captured remote request
+(pass) transcript acquisition > rejects a result when currentness changes after acquisition
+(pass) transcript acquisition > propagates remote loader errors unchanged
+
+src\sidepanel\transcript\transcript-controller.test.ts:
+(pass) TranscriptController > starts with the empty transcript snapshot
+(pass) TranscriptController > notifies subscribers once for a mutation and stops after unsubscribe
+(pass) TranscriptController > publishes data fields while preserving error and loading
+(pass) TranscriptController > changes only the fingerprint through setFingerprint
+(pass) TranscriptController > changes only the error through setError
+(pass) TranscriptController > changes only loading through setLoading
+(pass) TranscriptController > resets data, error, and loading together
+(pass) TranscriptController > does not notify when a command leaves the snapshot unchanged
+(pass) TranscriptController > does not expose mutable internal arrays or objects
+(pass) TranscriptController > starts with load epoch token zero
+(pass) TranscriptController > increments load epochs and invalidates older tokens
+(pass) TranscriptController > invalidates a captured epoch once per invalidation
+(pass) TranscriptController > captures the current epoch without changing it
+(pass) TranscriptController > does not notify snapshot subscribers for epoch changes
+(pass) TranscriptController > does not implicitly invalidate the load epoch on reset
+(pass) TranscriptController > starts current loading in a new epoch and clears the prior error before acquisition
+(pass) TranscriptController > reuses the matching controller session without reading cache or remote
+(pass) TranscriptController > force reload skips session and cache and calls remote once
+(pass) TranscriptController > uses a cached candidate without calling remote
+(pass) TranscriptController > forwards the request, including sourceTabId, to the remote dependency
+(pass) TranscriptController > publishes the finalized transcript and persists the exact payload with injected time
+(pass) TranscriptController > calls fingerprint invalidation once, after fingerprint resolution and before publication
+(pass) TranscriptController > does not call fingerprint invalidation when the previous fingerprint is null
+(pass) TranscriptController > does not call fingerprint invalidation when the fingerprint is unchanged [15.00ms]
+(pass) TranscriptController > calls onPublished once with committed state before cache persistence
+(pass) TranscriptController > keeps publication and rejects the original cache error while clearing current loading
+(pass) TranscriptController > stores and rethrows an acquisition error for the current request
+(pass) TranscriptController > rejects target-stale results without publishing or setting stale error state
+(pass) TranscriptController > a second load invalidates the first without clearing newer loading or state
+(pass) TranscriptController > acquires a task transcript from the supplied session without cache or remote
+(pass) TranscriptController > force reloads a task transcript without cache or session reuse
+(pass) TranscriptController > preserves task cache part fallback and source tab in the remote request
+(pass) TranscriptController > does not use or change the current transcript load epoch for task acquisition
+(pass) TranscriptController > completes task acquisition when the current load epoch changes while remote loading is pending
+(pass) TranscriptController > rejects a task acquisition that is no longer current without mutating snapshot state
+(pass) TranscriptController > does not mutate loading, error, fingerprint, or transcript fields during task acquisition errors
+(pass) TranscriptController > prepares task finalization with existing metadata fallback and fingerprint semantics
+(pass) TranscriptController > saves task cache through the injected dependency with taskContentKey authority
+(pass) TranscriptController > rethrows task cache failures without changing controller snapshot state
+
+src\sidepanel\transcript\transcript-finalization.test.ts:
+(pass) current transcript finalization > computes the fingerprint from the actual cues
+(pass) current transcript finalization > does not invalidate Ask when there is no previous fingerprint
+(pass) current transcript finalization > does not invalidate Ask when the previous fingerprint matches
+(pass) current transcript finalization > invalidates Ask when the previous fingerprint differs
+(pass) current transcript finalization > keeps truthiness semantics when a non-null previous fingerprint meets empty cues
+(pass) current transcript finalization > rejects a stale result only after fingerprint resolution
+(pass) current transcript finalization > publishes the canonical YouTube identity and current transcript data
+(pass) current transcript finalization > preserves distinct Bilibili P1 and P2 publication identities
+(pass) current transcript finalization > builds the exact cache payload with explicit timestamps
+(pass) current transcript finalization > maps optional cache fields to null
+(pass) analysis task transcript finalization > computes the fingerprint from the final transcript cues
+(pass) analysis task transcript finalization > preserves truthy result metadata and falls back only for empty values
+(pass) analysis task transcript finalization > uses an empty canonical URL when both result and task metadata are empty
+(pass) analysis task transcript finalization > publishes the final YouTube identity and transcript data
+(pass) analysis task transcript finalization > preserves distinct Bilibili P1 and P2 task identities
+(pass) analysis task transcript finalization > does not invent a partId when the final source video has none
+(pass) analysis task transcript finalization > builds task cache payloads from the final source video and explicit task content key
+(pass) analysis task transcript finalization > maps optional task cache fields to null
+
+src\sidepanel\workspace\analysis-publication.test.ts:
+(pass) publishCompletedAnalysis > records display ownership in the same synchronous segment as the publication
+(pass) publishCompletedAnalysis > updates display ownership for a fresh analysis result as well
+(pass) publishCompletedAnalysis > keeps the displayed analysis untouched when the workspace epoch is stale
+(pass) history restore versus production analysis publication > never lets a history restore overwrite a fresh analysis publication
+(pass) history restore versus production analysis publication > never lets a history restore overwrite a cached analysis publication
+(pass) history restore versus production analysis publication > never publishes a stale QA thread when a fresh analysis publication wins
+(pass) history restore versus production analysis publication > reports a restore as stale when a competing publication landed during the history load
+(pass) history restore versus production analysis publication > does not let a restore commit when a competing publication lands during its QA restore
+(pass) history restore versus production analysis publication > keeps the QA restore owned when the render sync records the restored analysis
+(pass) history restore versus production analysis publication > lets the root refuse the QA write once display ownership is lost mid-restore
+(pass) history restore versus production analysis publication > never publishes a QA thread from an older analysis under a newer one
+(pass) history restore versus production analysis publication > refuses the QA write when a later publication took the display during its QA restore
+
+src\sidepanel\workspace\database-availability.test.ts:
+(pass) Side Panel database availability > publishes available only after the read-only probe succeeds
+(pass) Side Panel database availability > distinguishes database failure from an empty history result
+(pass) Side Panel database availability > shares concurrent manual retries and retries only once
+(pass) Side Panel database availability > remains unavailable after a failed retry
+(pass) Side Panel database availability > lets a runtime database failure revoke readiness
+(pass) Side Panel database availability > does not let a stale readiness result override a runtime failure
+(pass) Side Panel database availability > does not let an operation failure from before a successful retry revoke readiness
+(pass) Side Panel database availability > still accepts a database failure reported by the current generation after recovery
+
+src\sidepanel\workspace\restored-display-selection.test.ts:
+(pass) commitRestoredDisplaySelection > records the restored analysis identity and preserves the selected QA thread
+(pass) commitRestoredDisplaySelection > never commits once the captured load generation is stale
+(pass) commitRestoredDisplaySelection > reports no success when the restore published no analysis
+(pass) commitRestoredDisplaySelection > never mutates runtime content while committing a historical restore
+(pass) commitRestoredDisplaySelection > still commits after its own publication moved the display generation
+(pass) stale restore publication race > never lets an older restore overwrite a newer displayed analysis
+(pass) stale restore publication race > lets the newer Search opening publish while the stale one publishes nothing
+(pass) competing analysis publication > never lets a history restore overwrite a competing analysis publication
+(pass) competing analysis publication > never publishes a stale QA thread when a competing analysis publication wins
+
+src\sidepanel\workspace\workspace-bootstrap.test.ts:
+(pass) Side Panel workspace bootstrap > preserves fulfilled Settings reads when history rejects
+(pass) Side Panel workspace bootstrap > keeps an empty history as a successful result
+(pass) Side Panel workspace bootstrap > reports a current IndexedDB failure to the database availability owner
+(pass) Side Panel workspace bootstrap > does not report unrelated history read failures as database outages
+(pass) Side Panel workspace bootstrap > does not report a database failure after its workspace generation becomes stale
+
+src\sidepanel\workspace\workspace-controller.test.ts:
+(pass) projectWorkspaceRuntimeContent > preserves the canonical identity and runtime metadata
+(pass) projectWorkspaceRuntimeContent > falls back to the raw url when no canonical url is available
+(pass) projectWorkspaceRuntimeContent > never projects the playback timestamp
+(pass) projectWorkspaceRuntimeContent > preserves a raw contentKey even when the identity is incomplete
+(pass) WorkspaceController initial observation > returns initial + shouldReset for the first null content observation
+(pass) WorkspaceController initial observation > returns initial + shouldReset with a canonical identity for the first YouTube observation
+(pass) WorkspaceController same-content observations > does not reset or advance the epoch when only the title changes
+(pass) WorkspaceController same-content observations > does not reset or advance the epoch when only the active tab changes
+(pass) WorkspaceController same-content observations > updates author, canonical url, and readiness without advancing the epoch
+(pass) WorkspaceController same-content observations > ignores playback timestamp changes because they are outside the projection
+(pass) WorkspaceController identity transitions > advances the epoch once for YouTube A -> B
+(pass) WorkspaceController identity transitions > treats distinct Bilibili parts as distinct identities
+(pass) WorkspaceController identity transitions > advances the epoch for a supported video -> null
+(pass) WorkspaceController identity transitions > advances the epoch for null -> supported video after initialization
+(pass) WorkspaceController identity transitions > follows the raw contentKey when the identity cannot be constructed
+(pass) WorkspaceController epoch guards > keeps a captured epoch current until an identity transition
+(pass) WorkspaceController epoch guards > reports an unknown epoch as stale
+(pass) WorkspaceController snapshot isolation > returns a defensive copy that cannot mutate controller state
+(pass) WorkspaceController snapshot isolation > does not expose a subscribe API before Stage 6 publication migration
+(pass) WorkspaceController publishHistoryRestore stale decisions > returns stale with zero effects when the captured workspace epoch is no longer current
+(pass) WorkspaceController publishHistoryRestore stale decisions > returns stale with zero effects when the request generation is no longer current
+(pass) WorkspaceController publishHistoryRestore stale decisions > does not treat a historical contentKey that differs from runtime content as stale
+(pass) WorkspaceController publishHistoryRestore stale decisions > never mutates runtime content while publishing a historical restore
+(pass) WorkspaceController publishHistoryRestore no-analysis publication > publishes the legacy-video no-analysis reset sequence in order
+(pass) WorkspaceController publishHistoryRestore no-analysis publication > publishes the current-context no-analysis reset sequence without clearing the transcript error
+(pass) WorkspaceController publishHistoryRestore analysis publication > publishes the legacy-video analysis sequence in order
+(pass) WorkspaceController publishHistoryRestore analysis publication > publishes the current-context analysis sequence without clearing the transcript error
+(pass) WorkspaceController publishHistoryRestore analysis publication > publishes the saved-run analysis sequence in order
+(pass) WorkspaceController publishHistoryRestore publication payloads > projects the transcript publication payload without normalization
+(pass) WorkspaceController publishHistoryRestore publication payloads > uses the analysis identity and transcript fingerprint for the QA restore
+(pass) WorkspaceController publishHistoryRestore publication payloads > passes the HistoryController analysis object through without cloning or transforming
+(pass) WorkspaceController publishHistoryRestore failure and timing semantics > propagates a restoreQaConversation rejection after the prior effects ran
+(pass) WorkspaceController publishHistoryRestore failure and timing semantics > checks the request currentness predicate exactly once at the publication boundary
+(pass) WorkspaceController publishHistoryRestore failure and timing semantics > does not re-check stale conditions once publication has started
+(pass) WorkspaceController publishHistoryRestore failure and timing semantics > keeps a captured epoch current across a same-content metadata refresh
+(pass) WorkspaceController publishHistoryRestore failure and timing semantics > blocks every publication effect once a runtime contentKey transition makes the captured epoch stale
+(pass) WorkspaceController publishAskResult publication > publishes a matching identity in the assistant-message then answer order
+(pass) WorkspaceController publishAskResult publication > publishes an exact A -> B -> A re-entry even though the workspace epoch moved twice
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when the completion happens while another video is displayed
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when the Ask contentKey no longer matches
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when a returned video displays a different analysis run
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when the analysisRunId no longer matches
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when a returned video displays a different QA thread
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when the threadId no longer matches
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when the threadId became null
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when a returned video's transcript changed
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when the transcriptFingerprint no longer matches
+(pass) WorkspaceController publishAskResult publication > returns stale with zero effects when the transcriptFingerprint became null
+(pass) WorkspaceController publishAskResult workspace semantics > publishes into a historical display selection that differs from the runtime content
+(pass) WorkspaceController publishAskResult workspace semantics > publishes into a historical display selection recovered after two runtime identity transitions
+(pass) WorkspaceController publishAskResult workspace semantics > keeps publishing across a same-content metadata refresh
+(pass) WorkspaceController publishAskResult workspace semantics > does not re-check the identity once publication has started
+(pass) WorkspaceController publishAskResult workspace semantics > never mutates runtime content while publishing an Ask result
+(pass) WorkspaceController publishAskResult workspace semantics > never mutates runtime content when the Ask result is stale
+(pass) WorkspaceController publishAnalysisTranscript > publishes the task transcript exactly once when the target is current
+(pass) WorkspaceController publishAnalysisTranscript > returns stale with zero effects when the captured workspace epoch is no longer current
+(pass) WorkspaceController publishAnalysisTranscript > returns stale with zero effects when the current content no longer matches the task
+(pass) WorkspaceController publishAnalysisTranscript > returns stale without re-checking once the transcript effect has run
+(pass) WorkspaceController publishAnalysisResult > publishes the analysis result in the analysis-completed-QA order
+(pass) WorkspaceController publishAnalysisResult > returns stale with zero effects when the captured workspace epoch is no longer current
+(pass) WorkspaceController publishAnalysisResult > returns stale with zero effects when the current content no longer matches the task
+(pass) WorkspaceController publishAnalysisResult > propagates the restoreQaConversation rejection unchanged after the earlier effects ran
+(pass) WorkspaceController publishAnalysisResult > uses one policy for the cache-hit and fresh-completion callers
+(pass) WorkspaceController publishAnalysisResult > does not re-check eligibility once the first publication effect has run
+(pass) WorkspaceController publishAnalysisCancelled > publishes the cancelled state in order
+(pass) WorkspaceController publishAnalysisCancelled > returns stale with zero effects when the workspace epoch is stale
+(pass) WorkspaceController publishAnalysisCancelled > does not re-check eligibility once the first cancelled effect has run
+(pass) WorkspaceController publishAnalysisError > publishes the error state in order
+(pass) WorkspaceController publishAnalysisError > returns stale with zero effects when the workspace epoch is stale
+(pass) WorkspaceController publishAnalysisError > does not re-check eligibility once the first error effect has run
+(pass) WorkspaceController analysis publication epoch hardening > treats an A to B to A round trip as stale even though the current content matches the task again
+(pass) WorkspaceController analysis publication epoch hardening > treats an A to B to A round trip as stale for the analysis result publication
+(pass) WorkspaceController analysis publication epoch hardening > publishes across a same-content metadata refresh
+(pass) WorkspaceController analysis publication epoch hardening > rejects publication when the caller content still differs even though the epoch is current [16.00ms]
+(pass) WorkspaceController analysis publication epoch hardening > never mutates runtime content while publishing an analysis result
+(pass) WorkspaceController display selection > A. starts with no selected analysis and no selected QA thread
+(pass) WorkspaceController display selection > B. syncs the selected analysis reference exactly
+(pass) WorkspaceController display selection > C. preserves a nullable analysis run identity without normalizing it
+(pass) WorkspaceController display selection > D. syncs the selected QA thread reference
+(pass) WorkspaceController display selection > E. never advances the workspace epoch on a display selection update
+(pass) WorkspaceController display selection > F. never mutates runtime content on a display selection update
+(pass) WorkspaceController display selection > G. allows a historical analysis selection that differs from runtime content
+(pass) WorkspaceController display selection > H. updates only the selection when the same content selects a different run
+(pass) WorkspaceController display selection > I. preserves the selected analysis when selecting a QA thread
+(pass) WorkspaceController display selection > J. preserves the selected analysis when clearing the selected QA thread
+(pass) WorkspaceController display selection > K. returns defensive nested display selection copies from getSnapshot
+(pass) WorkspaceController display selection > L. returns defensive display selection copies from getDisplaySelection
+(pass) WorkspaceController display selection > M. does not rewrite display selection on a runtime identity transition
+(pass) WorkspaceController display selection > N. preserves display selection across a same-content metadata refresh
+(pass) WorkspaceController load generation > A. captureLoadGeneration is stable and non-mutating
+(pass) WorkspaceController load generation > B. beginLoadGeneration advances exactly once
+(pass) WorkspaceController load generation > C. beginning a newer load stales the older token
+(pass) WorkspaceController load generation > D. invalidateLoadGeneration stales the current token
+(pass) WorkspaceController load generation > E. keeps repeated invalidation monotonic and currentness-safe
+(pass) WorkspaceController load generation > F. never changes the workspace epoch when the load generation advances
+(pass) WorkspaceController load generation > G. advances the epoch on an identity transition but not the load generation
+(pass) WorkspaceController load generation > H. changes neither token on a same-content metadata refresh
+(pass) WorkspaceController load generation > I. keeps the load token current across a display-selection sync
+(pass) WorkspaceController load generation > J. keeps the load token current across setSelectedQaThreadId
+(pass) WorkspaceController load generation > K. keeps the load token current across a workspace publication
+(pass) WorkspaceController load generation > L. isolates load generations between controller instances
+(pass) WorkspaceController applyRuntimeReset > A. runs the twelve reset steps in the documented order
+(pass) WorkspaceController applyRuntimeReset > B. advances the load generation exactly once
+(pass) WorkspaceController applyRuntimeReset > C. never advances the workspace epoch
+(pass) WorkspaceController applyRuntimeReset > D. never mutates runtime content
+(pass) WorkspaceController applyRuntimeReset > E. leaves controller-owned display selection unchanged
+(pass) WorkspaceController applyRuntimeReset > F. keeps the transition and the explicit reset as two separate steps
+(pass) WorkspaceController applyRuntimeReset > G. never resets automatically on a same-content observation
+(pass) WorkspaceController applyRuntimeReset > H. propagates a throwing effect unchanged and skips later effects
+
+src\features\analysis\components\active-analysis-task.test.tsx:
+(pass) ActiveAnalysisTaskBanner M1 progress > renders counted map and reduction progress without private content
+(pass) ActiveAnalysisTaskBanner M1 progress > shows final model generation as cancellable, distinct from saving
+(pass) ActiveAnalysisTaskBanner M1 progress > suppresses progress detail in cancelling phase
+
+src\features\analysis\components\final-resume-panel.test.tsx:
+(pass) FinalResumePanel > shows the continue action, cost notice and remaining TTL for an available checkpoint
+(pass) FinalResumePanel > renders the Chinese continue action with the explicit cost difference
+(pass) FinalResumePanel > disables the continue action while resuming and offers cancel
+(pass) FinalResumePanel > shows the saving phase without a cancel action
+(pass) FinalResumePanel > offers only a fresh regeneration once the checkpoint is gone
+(pass) FinalResumePanel > explains an identity change instead of silently re-running the full analysis
+(pass) FinalResumePanel > renders nothing when there is no checkpoint and no error
+
+src\features\analysis\lib\analysis-budget.test.ts:
+(pass) analysis budget policy > provides a conservative valid default with positive derived budgets
+(pass) analysis budget policy > accepts an injected tiny but valid policy
+(pass) analysis budget policy > rejects non-positive and impossible configurations
+
+src\features\analysis\lib\analysis-compat.test.ts:
+(pass) legacy analysis compatibility > projects old segment rows into chapters and uses summary when detail is absent
+
+src\features\analysis\lib\analysis-preset.test.ts:
+(pass) analysis presets > defaults to standard
+(pass) analysis presets > exposes exactly three stable, unique preset ids
+(pass) analysis presets > normalizes missing, invalid and legacy values back to standard
+(pass) analysis presets > keeps standard on the existing prompt version and gives the new presets their own
+(pass) analysis presets > keeps standard free of style instructions so its prompt stays compatible
+(pass) analysis presets > freezes the strategy table so an execution strategy cannot drift
+(pass) analysis presets > captures an immutable snapshot that later lookups cannot mutate
+(pass) analysis presets > creates independent snapshot arrays per call
+(pass) analysis preset current-analysis identity > A. accepts a concise analysis while concise is selected
+(pass) analysis preset current-analysis identity > B. accepts a detailed analysis while detailed is selected
+(pass) analysis preset current-analysis identity > C. rejects a standard analysis while concise is selected
+(pass) analysis preset current-analysis identity > D. rejects a concise analysis while detailed is selected
+(pass) analysis preset current-analysis identity > keeps a standard analysis exact while standard is selected
+(pass) analysis preset current-analysis identity > keeps the pre-preset standard cache identity intact
+
+src\features\analysis\lib\analysis-schema.test.ts:
+(pass) VideoAnalysis schema > accepts valid structured analysis payloads
+(pass) VideoAnalysis schema > keeps schema v1 while versioning the Task 6 prompt/runtime
+(pass) VideoAnalysis schema > allows untimed key points but requires paired timestamps
+(pass) VideoAnalysis schema > rejects blank, empty, non-finite, negative, and reversed values
+(pass) VideoAnalysis schema > does not accept legacy topics, segments, or moments as canonical output
+(pass) VideoAnalysis schema > accepts structured Ask AI answers with citations
+
+src\features\analysis\lib\analysis-task-controller.test.ts:
+(pass) AnalysisTaskController > owns one task, exposes phase changes, and releases after completion
+(pass) AnalysisTaskController > keeps typed progress private to the active task and clears it before saving
+(pass) AnalysisTaskController > does not confuse the final provider call with non-cancellable persistence
+(pass) AnalysisTaskController > freezes the provider generation timeout in the task snapshot
+(pass) AnalysisTaskController > aborts the runner and reports cancelling
+(pass) AnalysisTaskController > does not abort a task once final persistence has started
+
+src\features\analysis\lib\analysis-task-lifecycle.test.ts:
+(pass) analysis task lifecycle policy > separates regenerate cache bypass from transcript reload
+(pass) analysis task lifecycle policy > captures completion time after the task start time
+(pass) analysis task lifecycle policy > publishes only when the workspace still shows the task source
+
+src\features\analysis\lib\ask-task-controller.test.ts:
+(pass) AskTaskController > owns one task, exposes phases, and releases after completion
+(pass) AskTaskController > cancels the signal but refuses cancellation during finalizing
+(pass) AskTaskController > aborts an answering task and releases it after cancellation
+(pass) AskTaskController > keeps a running task independent of external workspace identity
+
+src\features\analysis\lib\ask-video.test.ts:
+(pass) ask video > repairs invalid structured output exactly once
+(pass) ask video > passes the same abort signal to the initial and repair requests
+(pass) ask video > repairs citation grounding failures and errors after the second invalid response
+(pass) ask video > builds prompts with transcript context and JSON instructions
+(pass) ask video > includes bounded conversation history as auxiliary context
+(pass) ask video > uses real chat roles and sends bounded history exactly once
+(pass) ask video > keeps the bounded provider history identical to the fingerprint input
+(pass) ask video > parses structured answers and validates citation ranges
+(pass) ask video > rejects numeric inline citation residue but allows ordinary bracketed text
+(pass) ask video > accepts focused citation spans through the preferred threshold and rejects only hard-broad spans
+(pass) ask video > repairs inline citation residue and broad citation spans at most once
+(pass) ask video > derives citation text from overlapping transcript cues and ignores model prose
+(pass) ask video > deduplicates adjacent identical cues and truncates excerpts deterministically
+(pass) ask video > rejects malformed JSON and drops citations that don't overlap any cue
+(pass) ask video > runs Ask AI through the provider with prompt-only JSON instructions
+(pass) ask video > uses the generation timeout for Ask Video and structured repair
+(pass) ask video > does not automatically retry or wrap a provider timeout during Ask Video
+(pass) ask video > preserves timeout errors from Ask Video structured repair [16.00ms]
+(pass) ask video > returns clear errors for missing provider, transcript, and provider failures
+(pass) ask prompt untrusted boundaries > keeps a hostile video title inside its metadata fence
+(pass) ask prompt untrusted boundaries > keeps transcript boundary markers in existing-analysis fields as data
+(pass) ask prompt untrusted boundaries > keeps a transcript that forges the closing marker inside the transcript fence
+(pass) ask prompt untrusted boundaries > keeps the user question outside every fence and ahead of the evidence
+(pass) ask prompt untrusted boundaries > keeps the output contract and citation rules intact
+(pass) ask prompt untrusted boundaries > leaves conversation history untouched and outside the prompt text
+(pass) ask prompt untrusted boundaries > keeps a hostile video id inside the metadata fence instead of above the boundary
+(pass) ask prompt untrusted boundaries > validates the video id format instead of forwarding an unrecognized value
+(pass) ask prompt untrusted boundaries > keeps every platform id shape the adapters actually produce
+(pass) ask prompt untrusted boundaries > puts the video id inside the untrusted metadata fence, after the declaration
+(pass) ask prompt untrusted boundaries > accepts both platform identifier shapes
+(pass) ask prompt untrusted boundaries > keeps the question out of the fence but still scans it for collisions
+(pass) ask prompt untrusted boundaries > keeps chat history in real roles and scans it for fence collisions
+
+src\features\analysis\lib\chunk-transcript.test.ts:
+(pass) budget-aware transcript planning > greedily preserves cue order exactly once without splitting and is deterministic [16.00ms]
+(pass) budget-aware transcript planning > rejects an oversized single cue instead of splitting or truncating it
+(pass) budget-aware transcript planning > groups only adjacent summaries and rejects a budget that cannot merge any pair
+
+src\features\analysis\lib\final-only-resume.golden.test.ts:
+(pass) golden final-only resume flow > runs 5 Map then one 502 Final, and the manual resume issues only one Final [32.00ms]
+(pass) golden final-only resume flow > resumes a one-level Reduction plan without repeating Map or Reduction [31.00ms]
+(pass) golden final-only resume flow > resumes a two-level Reduction plan with only one Final request [78.00ms]
+(pass) golden final-only resume flow > requires a second explicit click when the resumed Final also fails transiently [31.00ms]
+
+src\features\analysis\lib\final-resume-checkpoint-resume.test.ts:
+(pass) final resume double identity > acquires a checkpoint from a new task and epoch while keeping the immutable source identity [16.00ms]
+(pass) final resume double identity > still rejects a plain acquire from the new task so strict matching is not weakened
+(pass) final resume double identity > rejects resume when the live execution is no longer admitted
+(pass) final resume double identity > refuses resume when the content key changed
+(pass) final resume double identity > refuses resume when the part id changed
+(pass) final resume double identity > refuses resume when the title changed
+(pass) final resume double identity > refuses resume when the duration changed
+(pass) final resume double identity > refuses resume when the source tab changed [15.00ms]
+(pass) final resume double identity > refuses resume when the transcript fingerprint changed
+(pass) final resume double identity > refuses resume when the credential revision changed
+(pass) final resume double identity > refuses resume when the provider model changed
+(pass) final resume double identity > refuses resume when the provider base url changed
+(pass) final resume double identity > refuses resume when the timeout changed [16.00ms]
+(pass) final resume double identity > refuses resume when the preset changed
+(pass) final resume double identity > refuses resume when the budget policy changed
+(pass) final resume double identity > keeps the lease valid across revalidation and revokes it when the execution ends
+(pass) final resume double identity > refuses resume after the checkpoint already expired
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live contentKey changed after acquisition [16.00ms]
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live credentialRevision changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live cues changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live timeoutMs changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live partId changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live videoId changed after acquisition [15.00ms]
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live title changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live durationSec changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live preset changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live budgetPolicy changed after acquisition
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when several live fields changed at once [16.00ms]
+(pass) F-01 lease.validate must re-check the live identity it receives > keeps the resume lease valid when only the normalized taskId and workspaceEpoch changed [47.00ms]
+(pass) F-01 lease.validate must re-check the live identity it receives > accepts the identical live context and stays reusable across repeated revalidation
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease once the checkpoint TTL expired
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease after it was destroyed
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease after it was released
+(pass) F-01 lease.validate must re-check the live identity it receives > refuses a resume lease when the live execution is no longer admitted
+(pass) F-01 plain acquire keeps its unnormalized strict identity contract > refuses a plain lease when the live videoId changed, with no resume normalization [15.00ms]
+(pass) F-01 plain acquire keeps its unnormalized strict identity contract > refuses a plain lease when the live partId changed, with no resume normalization
+(pass) F-01 plain acquire keeps its unnormalized strict identity contract > refuses a plain lease when the live contentKey changed, with no resume normalization
+(pass) F-01 plain acquire keeps its unnormalized strict identity contract > refuses a plain lease when the live credentialRevision changed, with no resume normalization
+(pass) F-01 plain acquire keeps its unnormalized strict identity contract > refuses a plain lease when the live cues changed, with no resume normalization
+(pass) F-01 plain acquire keeps its unnormalized strict identity contract > does not normalize a new taskId or workspaceEpoch for a plain lease [16.00ms]
+(pass) F-01 plain acquire keeps its unnormalized strict identity contract > still rejects a plain acquire from a new task with identity-mismatch
+
+src\features\analysis\lib\final-resume-checkpoint.test.ts:
+(pass) M2 final checkpoint — deterministic overlapping-cue plans > publishes a Final 502 checkpoint for nested cues split into different chunks [16.00ms]
+(pass) M2 final checkpoint — deterministic overlapping-cue plans > rejects tampered cue boundary in an overlapping-cue plan
+(pass) M2 final checkpoint — deterministic overlapping-cue plans > rejects swapped chunks in an overlapping-cue plan
+(pass) M2 final checkpoint — deterministic overlapping-cue plans > rejects missing cue in an overlapping-cue plan
+(pass) M2 final checkpoint — candidate and eligibility > keeps a candidate private until the actual Final request fails with an eligible error
+(pass) M2 final checkpoint — candidate and eligibility > publishes Final HTTP 502 without adding a retry
+(pass) M2 final checkpoint — candidate and eligibility > publishes Final HTTP 503 without adding a retry
+(pass) M2 final checkpoint — candidate and eligibility > publishes Final HTTP 504 without adding a retry
+(pass) M2 final checkpoint — candidate and eligibility > accepts an explicit timeout and rejects the over-broad unclassified network kind
+(pass) M2 final checkpoint — candidate and eligibility > rejects http-500 even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects http-400 even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects http-401 even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects http-403 even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects http-429 even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects cancelled even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects network even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects invalid-response even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > rejects other even when its message contains eligible words
+(pass) M2 final checkpoint — candidate and eligibility > does not publish after cancellation, replacement, or disposal
+(pass) M2 final checkpoint — candidate and eligibility > exposes only content-free failure metadata
+(pass) M2 final checkpoint — integrity and immutable data > freezes a deep clone so later caller mutation cannot alter the checkpoint [15.00ms]
+(pass) M2 final checkpoint — integrity and immutable data > rejects a record whose nested data changed after sealing
+(pass) M2 final checkpoint — integrity and immutable data > rejects duplicate chunk ids
+(pass) M2 final checkpoint — integrity and immutable data > rejects non-contiguous ranges
+(pass) M2 final checkpoint — integrity and immutable data > rejects infinite range
+(pass) M2 final checkpoint — integrity and immutable data > rejects plan/summary mismatch
+(pass) M2 final checkpoint — integrity and immutable data > rejects cue range mismatch
+(pass) M2 final checkpoint — integrity and immutable data > rejects fingerprint mismatch
+(pass) M2 final checkpoint — integrity and immutable data > rejects bad map count
+(pass) M2 final checkpoint — integrity and immutable data > rejects single-pass execution
+(pass) M2 final checkpoint — TTL and byte capacity > expires at now >= expiresAt, not one millisecond later
+(pass) M2 final checkpoint — TTL and byte capacity > accepts exactly 256 KiB of Map plus final-input summaries
+(pass) M2 final checkpoint — TTL and byte capacity > rejects one byte over capacity without truncating either summary [16.00ms]
+(pass) M2 final checkpoint — TTL and byte capacity > counts UTF-8 bytes rather than JavaScript characters
+(pass) M2 final checkpoint — strict identity > fails closed when source tab changes
+(pass) M2 final checkpoint — strict identity > fails closed when platform changes
+(pass) M2 final checkpoint — strict identity > fails closed when video changes
+(pass) M2 final checkpoint — strict identity > fails closed when part changes
+(pass) M2 final checkpoint — strict identity > fails closed when content key changes
+(pass) M2 final checkpoint — strict identity > fails closed when workspace epoch changes
+(pass) M2 final checkpoint — strict identity > fails closed when source task changes [16.00ms]
+(pass) M2 final checkpoint — strict identity > fails closed when cue text changes
+(pass) M2 final checkpoint — strict identity > fails closed when cue timing changes
+(pass) M2 final checkpoint — strict identity > fails closed when fingerprint changes
+(pass) M2 final checkpoint — strict identity > fails closed when title changes
+(pass) M2 final checkpoint — strict identity > fails closed when duration changes
+(pass) M2 final checkpoint — strict identity > fails closed when profile changes
+(pass) M2 final checkpoint — strict identity > fails closed when base URL changes
+(pass) M2 final checkpoint — strict identity > fails closed when model changes
+(pass) M2 final checkpoint — strict identity > fails closed when timeout changes
+(pass) M2 final checkpoint — strict identity > fails closed when credential revision changes [15.00ms]
+(pass) M2 final checkpoint — strict identity > fails closed when preset changes
+(pass) M2 final checkpoint — strict identity > fails closed when schema changes
+(pass) M2 final checkpoint — strict identity > fails closed when planning version changes
+(pass) M2 final checkpoint — strict identity > fails closed when budget changes
+(pass) M2 final checkpoint — strict identity > canonicalizes equivalent Provider base URLs but not different endpoints
+(pass) M2 final checkpoint — strict identity > does not resurrect a valid A checkpoint after observing A → B → A
+(pass) M2 final checkpoint — lease and async races > allows only one of two concurrent acquisitions
+(pass) M2 final checkpoint — lease and async races > cannot republish from a stale attempt after invalidation [16.00ms]
+(pass) M2 final checkpoint — lease and async races > does not revive a checkpoint while an async integrity read is in flight
+(pass) M2 final checkpoint — lease and async races > an old lease cannot release or destroy a newer generation
+(pass) M2 final checkpoint — lease and async races > release returns only the same live generation to the available state
+(pass) M2 final checkpoint — destructive mutation policy > handles clear-transcript-cache
+(pass) M2 final checkpoint — destructive mutation policy > handles clear-analysis-history
+(pass) M2 final checkpoint — destructive mutation policy > handles clear-all
+(pass) M2 final checkpoint — destructive mutation policy > handles related analysis deletion
+(pass) M2 final checkpoint — destructive mutation policy > handles clear-conversations
+(pass) M2 final checkpoint — destructive mutation policy > handles clear-diagnostics [15.00ms]
+(pass) M2 final checkpoint — destructive mutation policy > handles unrelated video deletion
+(pass) M2 final checkpoint — destructive mutation policy > invalidates when the checkpoint's own video is deleted
+
+src\features\analysis\lib\final-resume-coordinator.test.ts:
+(pass) final resume coordinator > runs only the Final stage under the new task and publishes a completed analysis
+(pass) final resume coordinator > keeps the checkpoint source task while the resume runs under the new task id [16.00ms]
+(pass) final resume coordinator > issues zero model requests when the live source identity changed
+(pass) final resume coordinator > issues zero model requests when the Bilibili part changed
+(pass) final resume coordinator > issues zero model requests when the credential revision changed
+(pass) final resume coordinator > issues zero model requests when the provider endpoint or model changed
+(pass) final resume coordinator > issues zero model requests when the transcript fingerprint changed
+(pass) final resume coordinator > issues zero model requests when the preset changed [16.00ms]
+(pass) final resume coordinator > uses an exact completed cache hit without any model request
+(pass) final resume coordinator > refuses a second concurrent resume while the first lease is held [15.00ms]
+(pass) final resume coordinator > reports a persistence failure separately from a provider failure
+(pass) final resume coordinator > treats a second transient Final failure as eligible for another manual resume
+(pass) final resume coordinator > discards the checkpoint when the resumed Final returned an unusable structure [16.00ms]
+(pass) final resume coordinator > discards the checkpoint when Repair fails with HTTP 503 after the Final response
+(pass) final resume coordinator > discards the checkpoint on non-retryable provider failures
+(pass) final resume coordinator > discards everything and reports cancellation without persisting [16.00ms]
+(pass) final resume coordinator > fails closed without a model request when the live task is no longer admitted
+(pass) final resume coordinator > fails closed without a model request when the checkpoint is unavailable
+(pass) final resume coordinator F-03: the lease precedes the cache fast path > F-03-a refuses a cached safety net owned by another checkpoint (no publication, zero model calls)
+(pass) final resume coordinator F-03: the lease precedes the cache fast path > F-03-b reports expired instead of publishing a matching cache for an expired checkpoint
+(pass) final resume coordinator F-03: the lease precedes the cache fast path > F-03-c publishes an exact cache hit, makes zero model requests and destroys the checkpoint
+(pass) final resume coordinator F-04: credentials are re-verified before use > F-04-a aborts before the Final request when the provider rotated during the cache lookup [15.00ms]
+(pass) final resume coordinator F-04: credentials are re-verified before use > F-04-b refuses to persist when the credential revision rotates after the Final request
+(pass) final resume coordinator F-01: the live source is re-captured, not just re-checked > re-reads the live source, transcript and provider before the Final request and before persistence
+(pass) final resume coordinator F-01: the live source is re-captured, not just re-checked > fails closed with zero model requests when the live transcript changes after admission [16.00ms]
+(pass) M4 cancellation, supersession and TTL races > expires during the cache lookup instead of publishing a stale cached result
+(pass) M4 cancellation, supersession and TTL races > does not publish a late successful Final after cancellation
+(pass) M4 cancellation, supersession and TTL races > does not publish a late successful Final after task supersession without an abort [15.00ms]
+(pass) M4 cancellation, supersession and TTL races > expires a retryable Final response while the provider request is in flight
+(pass) M4 cancellation, supersession and TTL races > keeps an in-flight HTTP %s retryable only while the original TTL is valid
+(pass) M4 cancellation, supersession and TTL races > keeps an in-flight HTTP %s retryable only while the original TTL is valid
+(pass) M4 cancellation, supersession and TTL races > keeps an in-flight HTTP %s retryable only while the original TTL is valid [16.00ms]
+(pass) M4 source and provider changes across real await boundaries > does not resurrect YouTube A after the transcript read observes B then A
+(pass) M4 source and provider changes across real await boundaries > does not resurrect Bilibili P1 after the provider read observes P2 then P1
+(pass) M4 source and provider changes across real await boundaries > rejects a post-Final apiKey rotation before any persistence [16.00ms]
+(pass) M4 source and provider changes across real await boundaries > rejects a post-Final credentialRevision rotation before any persistence
+(pass) M4 source and provider changes across real await boundaries > rejects a post-Final model rotation before any persistence
+(pass) M4 source and provider changes across real await boundaries > rejects a post-Final endpoint rotation before any persistence [15.00ms]
+(pass) M4 source and provider changes across real await boundaries > rejects a post-Final timeout rotation before any persistence
+(pass) final resume coordinator transcript capture timestamp > persists the real transcript acquisition time, not the save completion time [16.00ms]
+(pass) final resume coordinator transcript capture timestamp > persists the last real capture when the transcript is re-acquired before the write
+
+src\features\analysis\lib\normalize-video-analysis.test.ts:
+(pass) normalizeVideoAnalysis > rejects a chapter whose range is completely outside transcript evidence
+(pass) normalizeVideoAnalysis > rejects an untethered timestamped key point
+(pass) normalizeVideoAnalysis > rejects ranges entirely inside a transcript gap
+(pass) normalizeVideoAnalysis > allows partial overlap but clamps only to the effective duration
+(pass) normalizeVideoAnalysis > rejects a range in transcript text beyond the video duration
+(pass) normalizeVideoAnalysis > grounds ranges to cue boundaries and sorts chapters
+(pass) normalizeVideoAnalysis > clamps to duration and ignores non-finite duration
+(pass) normalizeVideoAnalysis > deduplicates chapters and key points while retaining untimed points
+
+src\features\analysis\lib\openai-compatible-client.test.ts:
+(pass) createOpenAICompatibleClient > posts chat completions and returns assistant text
+(pass) createOpenAICompatibleClient > keeps final content compatible when a relay misroutes native JSON mode output
+(pass) createOpenAICompatibleClient > does not treat reasoning content as assistant output when content is absent
+(pass) createOpenAICompatibleClient > flattens structured text content
+(pass) createOpenAICompatibleClient > surfaces provider errors in connection probes
+(pass) createOpenAICompatibleClient > surfaces HTML gateway 502 as HTTP status without leaking HTML or retry metadata
+(pass) createOpenAICompatibleClient > reports non-JSON server errors by HTTP status when no JSON error is available
+(pass) createOpenAICompatibleClient > preserves structured provider errors and redacts provider-echoed secrets
+(pass) createOpenAICompatibleClient > reports malformed 200 JSON without returning server-controlled fragments
+(pass) createOpenAICompatibleClient > handles 404, malformed, and network connection failures without exposing request details
+(pass) M1 typed provider failure diagnostics > classifies HTML gateway failures by numeric HTTP status without body text
+(pass) M1 typed provider failure diagnostics > classifies structured JSON HTTP errors without losing secret redaction
+(pass) M1 typed provider failure diagnostics > distinguishes client timeout from network failure without retrying
+(pass) M1 typed provider failure diagnostics > classifies parent cancellation separately from provider timeout
+(pass) M1 typed provider failure diagnostics > classifies successful HTTP with invalid JSON as invalid-response
+(pass) provider transport boundaries > joins endpoints against the configured prefix exactly once
+(pass) provider transport boundaries > discovers unique model IDs without making failure fatal
+(pass) provider transport boundaries > uses the control timeout for model discovery by default
+(pass) provider transport boundaries > allows an explicit timeoutMs override for model discovery
+(pass) provider transport boundaries > uses the control timeout for test connection by default
+(pass) provider transport boundaries > uses the generation timeout for chat completion by default
+(pass) provider transport boundaries > uses the configured provider generation timeout without sending it in the request body [15.00ms]
+(pass) provider transport boundaries > allows generation requests to run beyond the former 30-second boundary
+(pass) provider transport boundaries > lets explicit timeoutMs override both control and generation defaults
+(pass) provider transport boundaries > does not misreport parent cancellation as a provider timeout
+(pass) provider transport boundaries > does not automatically retry a generation timeout
+(pass) provider transport boundaries > leaves an injected timeout handle with its own scheduler when no clearTimeoutImpl is supplied
+(pass) provider transport boundaries > supports the explicit per-request timeout override
+(pass) provider transport boundaries > shares timeout handling across provider requests [16.00ms]
+(pass) provider transport boundaries > redacts key, bearer, authorization, and header dumps
+(pass) provider transport boundaries > includes the explicit model in connection requests and redacts echoed provider errors
+
+src\features\analysis\lib\parse-video-analysis.test.ts:
+(pass) structured video analysis parser > accepts a single JSON fence and rejects arrays/non-JSON
+(pass) structured video analysis parser > does not guess JSON fragments or synthesize missing fields
+
+src\features\analysis\lib\prompts.test.ts:
+(pass) analysis prompts > builds the direct canonical prompt with timed untrusted transcript evidence
+(pass) analysis prompts > builds map prompts with every cue range and no JSON requirement
+(pass) analysis prompts > builds final prompts with source ranges and untrusted partial-analysis fences
+(pass) analysis prompts > builds prose-only reducer prompts with adjacent evidence ranges
+(pass) untrusted boundary hardening > keeps a transcript that forges the legacy end marker inside the real fence
+(pass) untrusted boundary hardening > raises the nonce when a transcript forges the live fence marker itself
+(pass) untrusted boundary hardening > keeps a hostile video title inside its own metadata fence
+(pass) untrusted boundary hardening > keeps a hostile partial analysis inside the partial-analyses fence
+(pass) untrusted boundary hardening > keeps a hostile previous response inside the invalid-output fence
+(pass) untrusted boundary hardening > keeps hostile original-task markers inside the original-task fence
+(pass) untrusted boundary hardening > keeps hostile original-task markers out of the Ask repair fence
+(pass) untrusted boundary hardening > never emits a second closing marker anywhere in the prompt
+(pass) fence nonce overflow regression > keeps a transcript's real terminator unique when the payload claims the top nonce
+(pass) fence nonce overflow regression > keeps a 16-digit title marker from terminating the transcript block
+(pass) fence nonce overflow regression > keeps the video analysis repair terminator unique against a pre-planted nonce
+(pass) fence nonce overflow regression > keeps the ask repair terminator unique against a pre-planted nonce
+(pass) fence nonce overflow regression > keeps partial-analysis and reduction terminators unique
+(pass) fence nonce overflow regression > keeps the chunk prompt terminator unique
+(pass) fence nonce overflow regression > stays safe when entity-encoded captions decode into live markers
+(pass) fence nonce overflow regression > stays safe when a decoded marker claims the top readable nonce
+(pass) fence nonce overflow regression > keeps angle-bracket captions from the Bilibili route inside the fence
+(pass) analysis preset prompt strategies > keeps the standard prompts byte-identical to the pre-preset contract
+(pass) analysis preset prompt strategies > applies the concise strategy to direct, chunk, final and reduction prompts
+(pass) analysis preset prompt strategies > applies the detailed strategy to direct, chunk, final and reduction prompts
+(pass) analysis preset prompt strategies > carries the active preset into the structured-output repair request
+(pass) analysis preset prompt strategies > preserves the schema and evidence fences for every preset
+(pass) analysis preset prompt strategies > keeps normal transcript and analysis text readable
+(pass) nonce policy hardening > does not let a self-consistent forged BEGIN/END pair become the boundary
+(pass) nonce policy hardening > adds no structural marker beyond the payload's own plus one real pair
+(pass) nonce policy hardening > keeps the described system markers identical to the rendered user markers
+(pass) nonce policy hardening > keeps the video id inside the metadata fence and the question outside it
+(pass) nonce policy hardening > keeps the Ask system description identical to the rendered fences [15.00ms]
+
+src\features\analysis\lib\provider-response-body.test.ts:
+(pass) readJsonBodyWithLimit > parses a body that fits under the ceiling and releases the reader lock
+(pass) readJsonBodyWithLimit > rejects on a declared Content-Length above the ceiling without streaming the body
+(pass) readJsonBodyWithLimit > cancels an abandoned body when a declared Content-Length exceeds the ceiling
+(pass) readJsonBodyWithLimit > keeps the size error when cancelling the abandoned body itself fails
+(pass) readJsonBodyWithLimit > returns the size error without waiting for a cancel that never settles
+(pass) readJsonBodyWithLimit > aborts the stream as soon as the running total crosses the ceiling
+(pass) readJsonBodyWithLimit > cancels an oversized streaming body without waiting for a cancel that never settles
+(pass) readJsonBodyWithLimit > keeps the size error when the streaming cancel itself fails
+(pass) readJsonBodyWithLimit > cancels a stream that crosses the ceiling exactly once
+(pass) readJsonBodyWithLimit > propagates a body read failure unchanged and releases the reader lock
+(pass) readJsonBodyWithLimit > propagates an AbortError from the body read unchanged
+(pass) readJsonBodyWithLimit > does not trust a non-numeric Content-Length and still enforces the streaming ceiling
+(pass) readJsonBodyWithLimit > surfaces a JSON syntax error unchanged when the body fits
+(pass) readJsonBodyWithLimit > keeps the default ceiling large enough for real provider payloads
+(pass) provider transport honours the response body ceiling > rejects an oversized chat completion body with the size error, not a JSON error
+(pass) provider transport honours the response body ceiling > rejects an oversized model-list body with the size error
+(pass) provider transport honours the response body ceiling > still parses a normal chat completion payload end to end
+
+src\features\analysis\lib\qa-conversation-context.test.ts:
+(pass) Ask Video conversation context > keeps only the bounded recent messages and drops oldest text first [16.00ms]
+(pass) Ask Video conversation context > changes the fingerprint when conversation context changes
+(pass) Ask Video conversation context > hashes the exact already-bounded history without trimming it again
+
+src\features\analysis\lib\qa-conversation-repository.test.ts:
+(pass) Ask Video conversation repository > creates, appends, orders, and restores a conversation [16.00ms]
+(pass) Ask Video conversation repository > isolates multiple threads and analysis runs, and cascades deletes
+(pass) Ask Video conversation repository > keeps a submitted user message when the provider produces no assistant message
+(pass) Ask Video conversation repository > persists cached assistant answers as ordered conversation messages
+(pass) Ask Video conversation repository > persists and restores suggested jumps without an optional reason
+
+src\features\analysis\lib\repair-analysis.test.ts:
+(pass) strict analysis parse and normalization > trims, snaps, sorts, and deduplicates without synthesizing fields
+(pass) strict analysis parse and normalization > rejects missing required chapters instead of creating Full video
+
+src\features\analysis\lib\repair-boundary.test.ts:
+(pass) repair validation diagnostics are fenced untrusted data > keeps forged ORIGINAL_TASK markers inside the video validation fence
+(pass) repair validation diagnostics are fenced untrusted data > keeps forged ORIGINAL_TASK markers inside the ask validation fence
+(pass) repair validation diagnostics are fenced untrusted data > resolves validation nonces against the whole message, not just its own payload
+(pass) repair validation diagnostics are fenced untrusted data > describes the validation fence in the system prompt exactly as rendered
+(pass) repair validation diagnostics are fenced untrusted data > does not regress the trusted repair contract or schema diagnostics
+(pass) structured diagnostics stay bounded > bounds a single diagnostic and the rendered total
+(pass) structured diagnostics stay bounded > clamps a single oversized diagnostic to exactly the per-issue bound [16.00ms]
+(pass) structured diagnostics stay bounded > clamps the rendered total to exactly the total bound across many issues
+(pass) structured diagnostics stay bounded > bounds an unbounded non-issue error message
+(pass) structured diagnostics stay bounded > never renders a validation payload larger than the diagnostic bound
+(pass) structured diagnostics stay bounded > reduces a raw escaped ZodError to bounded readable diagnostics
+(pass) structured diagnostics stay bounded > caps the number of rendered issues
+(pass) ask repair budget gate > fails closed before calling the model when the repair prompt exceeds budget
+(pass) ask repair budget gate > still repairs normal-sized asks within budget
+(pass) ask repair budget gate > scans retained conversation history for Ask repair fence collisions
+(pass) ask repair budget gate > bounds a raw ZodError when the repair response is also invalid
+(pass) ask repair budget gate > keeps the default budget policy available to callers
+
+src\features\analysis\lib\run-analysis-final-checkpoint.integration.test.ts:
+(pass) publishes a real 1-level Reduction checkpoint with intact Map and merged identities [31.00ms]
+(pass) publishes a real 2-level Reduction checkpoint with intact Map and merged identities [94.00ms]
+(pass) publishes a real 1-level Reduction checkpoint for overlapping and nested cues [31.00ms]
+(pass) publishes a real 2-level Reduction checkpoint for overlapping and nested cues [109.00ms]
+(pass) fully invalidates the real candidate when asynchronous preparation throws [31.00ms]
+(pass) fully invalidates even when a promotion hook throws after publishing [32.00ms]
+
+src\features\analysis\lib\run-analysis.test.ts:
+(pass) runAnalysis > emits only typed direct/repair progress without source text
+(pass) runAnalysis > emits ordered map completion counts and final before the provider request [15.00ms]
+(pass) runAnalysis > counts every reduction group including deterministic pass-through groups [32.00ms]
+(pass) runAnalysis > emits final exactly once before an upstream HTTP failure; no implicit retry [15.00ms]
+(pass) runAnalysis > uses one structured request for a valid short transcript
+(pass) runAnalysis > repairs one schema-invalid short response exactly once
+(pass) runAnalysis > uses the generation timeout for the initial analysis and structured repair
+(pass) runAnalysis > does not retry a provider timeout during analysis
+(pass) runAnalysis > reports parent cancellation through the existing AnalysisAbortedError flow
+(pass) runAnalysis > preserves a generation timeout from structured repair
+(pass) runAnalysis > repairs CR-05 grounding failures and fails after the second invalid response
+(pass) runAnalysis > runs sequential maps then one final structured request when summaries fit [16.00ms]
+(pass) runAnalysis > performs deterministic adjacent one-level reduction with local union ranges [31.00ms]
+(pass) runAnalysis > supports multiple bounded reduction levels [78.00ms]
+(pass) runAnalysis > fails before provider calls for an oversized cue
+(pass) runAnalysis > fails with bounded calls when reduction cannot make progress
+(pass) runAnalysis > stops subsequent calls when cancelled during map or reduction [47.00ms]
+(pass) runAnalysis > keeps CR-05 repair on the map-reduce final result [16.00ms]
+(pass) runAnalysis > prepares the real map/final input once and publishes only the initial Final failure [15.00ms]
+(pass) runAnalysis > discards on the first Final response and never publishes a Repair failure [32.00ms]
+(pass) runAnalysis > does not prepare or publish for Map, Reduction, or single-pass failures [31.00ms]
+(pass) runAnalysis > does not publish when candidate preparation declines or fails [31.00ms]
+(pass) runAnalysis > fails fast when transcript cues are missing
+
+src\features\analysis\lib\run-final-only-analysis.test.ts:
+(pass) runFinalOnlyAnalysis > issues exactly one Final request and preserves the original map-reduce shape
+(pass) runFinalOnlyAnalysis > reports the final progress stage without emitting map or reduction events
+(pass) runFinalOnlyAnalysis > performs at most one repair after an invalid structure
+(pass) runFinalOnlyAnalysis > surfaces a provider failure without any automatic retry
+(pass) runFinalOnlyAnalysis > stops before the request when the resume task was already aborted
+(pass) runFinalOnlyAnalysis > notifies the response hook before parsing so a returned response ends resume eligibility
+(pass) runFinalOnlyAnalysis > forwards the initial request failure to the resume eligibility hook
+
+src\features\analysis\lib\token-estimate.test.ts:
+(pass) analysis token estimator > is deterministic and monotonic for empty and ASCII text
+(pass) analysis token estimator > does not estimate CJK as English characters divided by four
+(pass) analysis token estimator > includes deterministic chat and per-message overhead
+
+src\features\analysis\lib\untrusted-data.test.ts:
+(pass) untrusted data fences > keeps a deterministic zero nonce for ordinary content
+(pass) untrusted data fences > raises the nonce above every marker the payload already carries
+(pass) untrusted data fences > never lets a closing marker occur inside the rendered payload
+(pass) untrusted data fences > never lets an opening marker occur inside the payload either
+(pass) untrusted data fences > scans the whole message when extra text shares the prompt
+(pass) untrusted data fences > resolves nonces per label so labels cannot interfere
+(pass) untrusted data fences > does not let a payload predict and pre-plant the nonce it will receive
+(pass) untrusted data fences > keeps the closing marker unique when the candidate nonce is pre-planted
+(pass) untrusted data fences > continues past Number.MAX_SAFE_INTEGER instead of failing closed
+(pass) untrusted data fences > handles twenty-digit and longer nonces without losing precision
+(pass) untrusted data fences > normalizes leading zeros before comparing values
+(pass) untrusted data fences > keeps cross-block isolation when one block carries another block's marker
+(pass) untrusted data fences > rejects duplicate labels instead of silently sharing one terminator
+(pass) untrusted data fences > adds no structural marker beyond the opening and closing lines
+(pass) untrusted data fences > reads markers of any digit length instead of silently skipping them
+(pass) untrusted data fences > keeps the fence valid for markers longer than the representable range
+(pass) untrusted data fences > stays linear on payloads saturated with marker-shaped noise
+(pass) untrusted data fences > preserves payload bytes verbatim
+(pass) untrusted data fences > renders an empty payload as an empty block body
+(pass) untrusted data fences > exposes every label through the shared builder
+(pass) untrusted data fences > states the fence grammar without claiming payload immunity from instructions
+
+src\features\export\components\markdown-export-panel.test.tsx:
+(pass) MarkdownExportPanel > explains that export needs supported runtime content
+(pass) MarkdownExportPanel > renders the three section toggles and both actions
+(pass) MarkdownExportPanel > disables both actions when no section is selected
+(pass) MarkdownExportPanel > disables an unavailable section control
+(pass) MarkdownExportPanel > disables both actions when no section has available content
+
+src\features\export\lib\markdown-delivery.test.ts:
+(pass) markdown export delivery > copies exactly the built markdown
+(pass) markdown export delivery > downloads the same payload that is copied
+(pass) markdown export delivery > produces identical text for two independently built payloads
+(pass) markdown export delivery > propagates a clipboard failure
+(pass) download success toast keys > reports the markdown-specific success key for Markdown download
+(pass) download success toast keys > keeps the transcript success key for the VTT download
+
+src\features\export\lib\markdown-export.test.ts:
+(pass) markdown export formatter > writes the header with the canonical runtime identity
+(pass) markdown export formatter > omits URL metadata when canonicalUrl is null
+(pass) markdown export formatter > never writes a wall-clock timestamp
+(pass) markdown export formatter > writes sections in a stable order
+(pass) markdown export formatter > renders point and range timestamps without locale formatting
+(pass) markdown export formatter > renders anchored, ranged and unanchored notes
+(pass) markdown export formatter > keeps transcript cues in order and skips blank text
+(pass) markdown export formatter > drops sections whose contentKey does not match the runtime identity
+(pass) markdown export formatter > never mixes data across a video switch
+(pass) markdown export formatter > keeps Bilibili parts isolated
+(pass) markdown export formatter > honours user-selected sections
+(pass) markdown export formatter > omits everything when no section is selected
+(pass) markdown export formatter > is byte-deterministic for identical input
+(pass) markdown export formatter > sanitizes filenames while preserving CJK characters
+(pass) markdown export formatter > keeps Bilibili part filenames distinct even for long titles [16.00ms]
+(pass) authoritative export metadata > falls back to the runtime identity instead of a displayed analysis title
+(pass) authoritative export metadata > takes the author only from authoritative runtime metadata
+(pass) authoritative export metadata > omits the author line when the runtime author is null
+(pass) authoritative export metadata > omits the author line when the runtime author is empty
+(pass) markdown export availability > reports every section available for the matching identity
+(pass) markdown export availability > reports nothing available after a YouTube A to B switch
+(pass) markdown export availability > reports nothing available after a Bilibili P1 to P2 switch
+(pass) markdown export availability > keeps each section independent
+(pass) markdown export availability > treats whitespace-only cues as unavailable
+(pass) markdown export availability > does not count knowledge items from another part
+(pass) markdown export i18n parity > defines every export key in both locales
+
+src\features\history\components\recent-analysis-list.keyboard.test.ts:
+(pass) RecentAnalysisList keyboard activation > opens the card exactly once for Enter
+(pass) RecentAnalysisList keyboard activation > does not open the card when More actions receives Enter
+(pass) RecentAnalysisList keyboard activation > does not open the card when Delete receives Enter
+
+src\features\history\components\recent-analysis-list.load-error.test.tsx:
+(pass) RecentAnalysisList history load failure > shows a retry action instead of reporting empty history
+
+src\features\history\lib\content-key-cache.test.ts:
+(pass) content-key persistence repository > isolates transcript and analysis cache rows by content key
+(pass) content-key persistence repository > keeps distinct transcript fingerprints and reuses the same fingerprint row
+(pass) content-key persistence repository > retains cached cues while clearing only stale raw VTT
+(pass) content-key persistence repository > ignores corrupt QA rows so the caller can re-request
+(pass) content-key persistence repository > lists and reopens every canonical run without writing legacy recentVideos
+(pass) content-key persistence repository > restores Bilibili parts by exact run and content identity
+(pass) content-key persistence repository > keeps latest active transcripts separate from exact historical run transcripts
+(pass) content-key persistence repository > keeps legacy YouTube rows readable through the contentKey authority
+
+src\features\history\lib\destructive-operation-coordinator.test.ts:
+(pass) destructive-operation conflict rules > blocks matching run/content Analysis and Ask, but allows unrelated content
+(pass) destructive-operation conflict rules > does not invoke delete for matching active Analysis or Ask
+(pass) destructive-operation conflict rules > blocks clear conversations only for Ask tasks
+(pass) destructive-operation conflict rules > blocks history and all clears for any task, but not diagnostics
+(pass) destructive-operation conflict rules > allows frozen transcript tasks but blocks transcript-loading analysis
+(pass) destructive-operation live coordination > collects active snapshots from multiple live Side Panels [16.00ms]
+(pass) destructive-operation live coordination > broadcasts a successful mutation but never mutates after a conflict
+(pass) destructive/task admission serialization > rejects Analysis and Ask admission after destructive reservation
+(pass) destructive/task admission serialization > rejects destructive operations for active Analysis and Ask
+(pass) destructive/task admission serialization > serializes competing destructive and task requests so both cannot succeed
+(pass) destructive/task admission serialization > serializes a competing destructive and Ask request
+(pass) destructive/task admission serialization > releases a failed destructive reservation
+(pass) destructive/task admission serialization > does not retain a task after admission starter failure
+(pass) destructive/task admission serialization > allows destructive mutation after task completion
+(pass) destructive/task admission serialization > allows Analysis and Ask after destructive mutation completes
+(pass) destructive task phase identity merge > query merge keeps live Ask phase and allows transcript-cache clear [15.00ms]
+(pass) destructive task phase identity merge > query merge keeps live analyzing and finalizing Analysis phases allowed [32.00ms]
+(pass) destructive task phase identity merge > query merge keeps loading-transcript blocked and lock-only fallback fail-closed [31.00ms]
+(pass) destructive task phase identity merge > deduplicates a live Ask snapshot with its unknown lock fallback
+(pass) destructive task phase identity merge > deduplicates live analyzing and finalizing Analysis snapshots by taskId
+(pass) destructive task phase identity merge > preserves the loading-transcript live phase when the fallback matches
+(pass) destructive task phase identity merge > keeps an unknown lock-only task fail-closed
+(pass) destructive task phase identity merge > does not deduplicate different taskIds
+
+src\features\history\lib\history-repository.test.ts:
+(pass) historyRepository.saveAnalysisRun retention > trims oldest recent videos beyond the configured limit [15.00ms]
+(pass) historyRepository.saveAnalysisRun recentVideos validation > rejects invalid recent video data before any legacy transaction writes
+(pass) historyRepository.saveAnalysisRun recentVideos validation > continues to persist and return valid legacy recent video data
+(pass) historyRepository.saveAnalysisRun recentVideos validation > does not validate or write recent video data for canonical runs
+(pass) historyRepository quota error surfacing > surfaces QuotaExceededError as a structured PersistenceError on saveAnalysisRun
+(pass) historyRepository quota error surfacing > surfaces QuotaExceededError on saveTranscriptSnapshot
+(pass) historyRepository quota error surfacing > wraps non-quota errors as write_failed
+(pass) historyRepository.getLatestTranscriptSnapshotByVideoId > returns the snapshot with the most recent updatedAt for the videoId
+(pass) historyRepository.getLatestTranscriptSnapshotByVideoId > returns null when no snapshot matches the videoId
+(pass) historyRepository.getLatestTranscriptSnapshotByVideoId > uses the [videoId+updatedAt] indexed query when available
+(pass) historyRepository.saveTranscriptSnapshot rawVtt retention > clears rawVtt for snapshots older than the retention window
+(pass) historyRepository.saveTranscriptSnapshot rawVtt retention > persists transcript caches and analysis snapshots without fetch URLs
+(pass) historyRepository.saveTranscriptSnapshot rawVtt retention > surfaces IndexedDB read failures instead of treating them as a cache miss
+(pass) historyRepository.saveTranscriptSnapshot rawVtt retention > reuses old cache cues while hiding its stored fetch URL
+(pass) historyRepository.saveTranscriptSnapshot rawVtt retention > sanitizes legacy source URLs in the export projection without mutating stored data
+(pass) historyRepository.saveTranscriptSnapshot rawVtt retention > does not recreate a transcript cache deleted while its sanitized export read is pending
+(pass) historyRepository Ask Video persistence > exports and clears qaThreads and qaMessages without leaving cache rows
+(pass) historyRepository granular deletion > deletes one run and its dependent analysis/Ask rows while preserving another run and shared transcript
+(pass) historyRepository granular deletion > does not resurrect a deleted run through legacy recentVideos
+(pass) historyRepository granular deletion > deletes all data for one Bilibili part while preserving the other part
+(pass) historyRepository granular deletion > keeps providers and transcript cache when clearing analysis history
+(pass) historyRepository granular deletion > clears conversations and transcript cache independently
+(pass) knowledge destructive semantics > preserves knowledge when deleting an analysis run
+(pass) knowledge destructive semantics > preserves knowledge when clearing analysis history, conversations and transcript cache
+(pass) knowledge destructive semantics > deletes only the matching contentKey on deleteVideoData
+(pass) knowledge destructive semantics > keeps Bilibili p2 knowledge when deleting p1
+(pass) knowledge destructive semantics > clears every knowledge item on clear all and exports them beforehand
+(pass) historyRepository transcript snapshot write validation > rejects a transcript snapshot whose cue count exceeds the persisted ceiling [16.00ms]
+(pass) historyRepository transcript snapshot write validation > still stores a transcript snapshot that fits under the ceiling
+(pass) historyRepository export row boundary > exports exactly 100,000 rows without changing the existing payload [140.00ms]
+(pass) historyRepository export row boundary > rejects 100,001 rows from the production export path
+(pass) historyRepository export row boundary > rejects an invalid required-table row before producing an export
+
+src\features\history\lib\pending-history-open.test.ts:
+(pass) pending history open identity > accepts an exact analysisRunId alongside platform content identity
+(pass) pending history open identity > rejects malformed run identities
+
+src\features\knowledge\components\knowledge-panel-draft.test.ts:
+(pass) knowledge panel draft > starts empty and bound to the given identity
+(pass) knowledge panel draft > keeps the very same draft while the identity is unchanged
+(pass) knowledge panel draft > drops the whole authoring state when the identity changes
+(pass) knowledge panel draft > drops the draft when the runtime stops supporting the content
+(pass) knowledge panel draft > applies an action against the new identity instead of the stale draft
+(pass) knowledge panel draft > tracks the timestamp attachment and inline edit actions
+(pass) knowledge panel draft > refuses to submit a note that was authored for another identity
+(pass) knowledge panel draft > never anchors a note when the runtime has no timestamp
+(pass) knowledge panel draft > rejects empty and oversized note drafts
+(pass) knowledge panel draft > refuses to submit an edit that belongs to another identity
+(pass) knowledge panel draft > keeps one live draft across successive renders and clears it on switch
+
+src\features\knowledge\lib\knowledge-repository.test.ts:
+(pass) normalizeKnowledgeTimestamp > floors to whole seconds and never returns a negative anchor
+(pass) Knowledge repository > creates a point bookmark with identical start and end seconds
+(pass) Knowledge repository > creates anchored and unanchored notes
+(pass) Knowledge repository > rejects notes without text through schema validation
+(pass) Knowledge repository > updates only note text and updatedAt
+(pass) Knowledge repository > refuses to edit a bookmark through updateNote
+(pass) Knowledge repository > lists newest-updated first and isolates by exact contentKey
+(pass) Knowledge repository > keeps Bilibili p1 and p2 isolated
+(pass) Knowledge repository > ignores corrupt rows instead of rendering them unchecked
+(pass) Knowledge repository > deletes only the exact contentKey
+(pass) Knowledge repository > deletes a single item and clears all rows
+(pass) Knowledge repository > surfaces quota failures as PersistenceError
+(pass) Knowledge repository > toggles an existing same-second bookmark off instead of stacking it
+(pass) Knowledge repository > serializes overlapping toggles at the same second so no duplicate row persists
+(pass) Knowledge repository > keeps overlapping toggles on different seconds independent
+
+src\features\platform\bilibili\bilibili-adapter.test.ts:
+(pass) BilibiliAdapter metadata and multi-part resolution > reuses successful metadata for repeated same-document reads
+(pass) BilibiliAdapter metadata and multi-part resolution > deduplicates concurrent metadata reads for the same document and identity
+(pass) BilibiliAdapter metadata and multi-part resolution > evicts rejected metadata so a later read can retry
+(pass) BilibiliAdapter metadata and multi-part resolution > reuses BV metadata across parts but derives each part's cid
+(pass) BilibiliAdapter metadata and multi-part resolution > does not reuse metadata between different BV identities
+(pass) BilibiliAdapter metadata and multi-part resolution > reads metadata and resolves the current part's cid and duration
+(pass) BilibiliAdapter metadata and multi-part resolution > resolves P1 to its page entry instead of the collection cid shortcut
+(pass) BilibiliAdapter metadata and multi-part resolution > uses P2 cid for P2 subtitles and exposes no Bilibili raw track fields
+(pass) BilibiliAdapter metadata and multi-part resolution > fails out-of-range parts without falling back to data.cid or P1
+(pass) BilibiliAdapter metadata and multi-part resolution > shares the resolved page metadata when info and transcript run together
+(pass) Bilibili subtitle discovery and normalization > chooses Chinese manual, Chinese AI, English manual, English AI, then other
+(pass) Bilibili subtitle discovery and normalization > uses the modern subtitle view after signed WBI returns no tracks
+(pass) Bilibili subtitle discovery and normalization > extracts valid nav WBI keys despite code -101 and continues with signed player discovery
+(pass) Bilibili subtitle discovery and normalization > rejects other nav error codes and missing WBI image keys
+(pass) Bilibili subtitle discovery and normalization > does not fall back when WBI succeeds with no subtitles [15.00ms]
+(pass) Bilibili subtitle discovery and normalization > rejects a signed player response for another bvid or cid
+(pass) Bilibili subtitle discovery and normalization > normalizes finite subtitle entries, trims text, filters invalid rows, and sorts
+(pass) Bilibili subtitle discovery and normalization > returns captions_unavailable when the selected body is empty or wholly invalid
+(pass) Bilibili subtitle discovery and normalization > maps source from Bilibili AI track metadata without leaking raw language labels
+(pass) Bilibili chapters, seeking, timestamps, and stale requests > maps and sorts official view_points, drops invalid and duplicate points
+(pass) Bilibili chapters, seeking, timestamps, and stale requests > returns no chapters when the official endpoint has none and does not invent any
+(pass) Bilibili chapters, seeking, timestamps, and stale requests > seeks with the standard video element, clamps negatives, and rejects non-finite values
+(pass) Bilibili chapters, seeking, timestamps, and stale requests > builds P1/P2 timestamp URLs and preserves the current part
+(pass) Bilibili chapters, seeking, timestamps, and stale requests > discards a P1 subtitle response that arrives after the page changes to P2
+(pass) Bilibili chapters, seeking, timestamps, and stale requests > discards a P1 modern subtitle discovery response after the page changes to P2
+(pass) Bilibili chapters, seeking, timestamps, and stale requests > deduplicates concurrent WBI key discovery
+(pass) Bilibili API failure classification > distinguishes metadata fetch, API, player, and missing-cid errors
+(pass) Bilibili API failure classification > does not include request URLs, headers, or credentials in transport errors
+
+src\features\platform\bilibili\bilibili-transport.test.ts:
+(pass) Bilibili background transport allowlist > reads binary endpoint bodies within a strict byte limit
+(pass) Bilibili background transport allowlist > reads text endpoint bodies within the same strict byte limit
+(pass) Bilibili background transport allowlist > rejects a declared oversized text body before reading the stream
+(pass) Bilibili background transport allowlist > aborts a streaming text body that exceeds the limit without a content-length header
+(pass) Bilibili background transport allowlist > allows only the required HTTPS Bilibili API endpoints and subtitle CDN hosts
+(pass) Bilibili background transport allowlist > rejects arbitrary endpoints, suffix-confusion hosts, non-HTTPS schemes, and unsafe senders
+(pass) Bilibili background transport allowlist > normalizes protocol-relative CDN URLs and rejects unsafe subtitle URLs
+
+src\features\platform\bilibili\bilibili-url.test.ts:
+(pass) Bilibili URL and identity > accepts a single-part URL with and without a trailing slash
+(pass) Bilibili URL and identity > keeps P1 and P2 identities distinct synchronously from the URL
+(pass) Bilibili URL and identity > rejects invalid BV IDs, invalid page indexes, and unsupported locations
+(pass) Bilibili URL and identity > builds canonical URLs for P1 and later parts
+(pass) Bilibili URL and identity > classifies invalid BV IDs and page indexes without mislabeling unsupported pages
+
+src\features\platform\bilibili\subtitle-view.test.ts:
+(pass) modern Bilibili subtitle view decoder > decodes bounded protobuf track fields
+(pass) modern Bilibili subtitle view decoder > decodes multiple tracks and preserves AI/manual metadata
+(pass) modern Bilibili subtitle view decoder > accepts a JSON deployment response and fails closed on malformed bytes
+(pass) modern Bilibili subtitle view decoder > rejects oversized protobuf response bytes
+
+src\features\platform\bilibili\wbi.test.ts:
+(pass) Bilibili WBI signing > extracts image keys and derives the mixin key
+(pass) Bilibili WBI signing > matches an independent fixed WBI signing vector with encoded and sanitized values
+(pass) Bilibili WBI signing > matches RFC 1321 MD5 known vectors
+
+src\features\platform\youtube\youtube-adapter.test.ts:
+(pass) YouTubeAdapter contract > handles supported desktop YouTube watch URLs
+(pass) YouTubeAdapter contract > rejects home, missing-video, non-YouTube, Shorts, and unsupported mobile URLs
+(pass) YouTubeAdapter contract > returns a platform-neutral stable identity
+(pass) YouTubeAdapter contract > reads normalized video info
+(pass) YouTubeAdapter contract > prefers matching live player title and author over an unrelated channel DOM node
+(pass) YouTubeAdapter contract > ignores stale live metadata and uses only current-watch DOM authors
+(pass) YouTubeAdapter contract > does not use an unrelated global channel node as the author fallback
+(pass) YouTubeAdapter contract > refreshes live player state for every transcript request
+(pass) YouTubeAdapter contract > reloads the current caption resource before opening transcript fallbacks
+(pass) YouTubeAdapter contract > keeps caption reload diagnostics URL-free [15.00ms]
+(pass) YouTubeAdapter contract > does not attempt caption reload when subtitles are off and continues fallback
+(pass) YouTubeAdapter contract > uses the current caption language before an older English json3 entry
+(pass) YouTubeAdapter contract > continues to rendered DOM after one caption reload timeout
+(pass) YouTubeAdapter contract > discards a caption reload result after a YouTube SPA identity change [16.00ms]
+(pass) YouTubeAdapter contract > returns normalized segments for a manual timedtext track
+(pass) YouTubeAdapter contract > fetches a current live JSON3 timedtext URL unchanged when panel and legacy tracks are unavailable
+(pass) YouTubeAdapter contract > does not persist a signed live URL in transcript output or diagnostic logs [15.00ms]
+(pass) YouTubeAdapter contract > continues to legacy tracks when the live timedtext request fails
+(pass) YouTubeAdapter contract > uses rendered DOM without activating captions when Resource Timing has no candidate
+(pass) YouTubeAdapter contract > maps an automatic timedtext track to auto
+(pass) YouTubeAdapter contract > normalizes transcript-panel fallback output
+(pass) YouTubeAdapter contract > continues to normalized DOM fallback after a rejected panel request
+(pass) YouTubeAdapter contract > does not return stale A transcript metadata for current video B
+(pass) YouTubeAdapter contract > keeps transcript identity safe across an A to B SPA transition
+(pass) YouTubeAdapter contract > discards an asynchronously returned A live state after the page changes to B
+(pass) YouTubeAdapter contract > seeks normally and clamps negative seconds
+(pass) YouTubeAdapter contract > rejects NaN and Infinity without writing currentTime
+(pass) YouTubeAdapter contract > reads a finite current playback time
+(pass) YouTubeAdapter contract > builds a canonical YouTube timestamp URL
+(pass) YouTubeAdapter contract > returns an explicit empty native-chapter boundary
+
+src\features\platform\youtube\youtube-live-state.test.ts:
+(pass) YouTube live player state > accepts matching live metadata and only current-video timedtext candidates
+(pass) YouTube live player state > rejects live state whose player videoId does not match the page
+(pass) YouTube live player state > rejects malformed, non-YouTube, non-HTTPS, wrong-path, and wrong-video resource URLs
+(pass) YouTube live player state > prefers the current caption language, then json3, then the newest entry
+(pass) YouTube live player state > reads only the bounded current MAIN-world player state and resource entries
+(pass) YouTube live player state > reloads captions and returns only a new current-language timedtext entry
+(pass) YouTube live player state > does not mutate captions when subtitles are off
+(pass) YouTube live player state > returns null after the bounded reload wait when no new entry appears
+(pass) YouTube live player state > does not return MAIN-world metadata after the URL changes to another video
+(pass) YouTube live player state > records only approved timedtext diagnostic fields, never the signed URL
+
+src\features\platform\youtube\youtube-url.test.ts:
+(pass) YouTube watch URL support boundary > keeps adapter support, content-script matches, and manifest matcher aligned
+
+src\features\search\lib\search-query.test.ts:
+(pass) search query normalization > folds full-width characters and case into a stable comparison form [16.00ms]
+(pass) search query normalization > collapses interior whitespace into single spaces
+(pass) search query normalization > splits distinct tokens and drops duplicates
+(pass) search query normalization > returns no tokens for a blank query
+(pass) search token matching > requires every token to match
+(pass) search token matching > never matches without tokens
+(pass) search field scoring > prefers the strongest field and rewards additional tokens
+(pass) search field scoring > rejects a candidate when one token is missing anywhere
+(pass) search field scoring > rejects an empty query
+(pass) search field scoring > ignores blank fields
+(pass) deterministic search ranking > orders by score, then recency, then stable tie break
+(pass) deterministic search ranking > caps the result count at the deterministic maximum
+(pass) deterministic search ranking > produces the same order for the same input
+(pass) search snippets > keeps a short matching text unchanged apart from whitespace collapse
+(pass) search snippets > windows a long text around the first token hit
+(pass) search snippets > is deterministic for the same input
+
+src\features\search\lib\search-repository.test.ts:
+(pass) search repository candidate loading > keeps only completed analysis runs and their segments
+(pass) search repository candidate loading > drops rows that no longer satisfy the persisted contract
+(pass) search repository candidate loading > returns empty candidates when optional stores are absent
+(pass) search repository candidate loading > orders QA messages by their persisted sequence
+
+src\features\settings\components\data-management.test.ts:
+(pass) data-management storage lifecycle > blocks database clears while inventory is unavailable and keeps diagnostics clear enabled
+(pass) data-management storage lifecycle > clears only the selected data category
+(pass) data-management storage lifecycle > does not clear language preference for categorized actions
+(pass) data-management storage lifecycle > blocks conversations clear for active Ask but allows analysis-only tasks
+(pass) data-management storage lifecycle > blocks analysis-history and all clears for active tasks while allowing diagnostics
+(pass) data-management storage lifecycle > allows an active task to persist normally after a blocked clear
+(pass) data-management storage lifecycle > includes diagnostic transcript logs in exports
+(pass) data-management storage lifecycle > excludes API keys from settings and IndexedDB provider exports [15.00ms]
+(pass) data-management storage lifecycle > clears diagnostic transcript logs with local data
+(pass) data-management storage lifecycle > does not clear settings or diagnostic logs when local database clearing fails
+
+src\features\settings\components\diagnostic-log.test.ts:
+(pass) copyDiagnosticLogsToClipboard > calls notifySuccess after a successful clipboard write
+(pass) copyDiagnosticLogsToClipboard > surfaces a toast.error when navigator.clipboard.writeText rejects
+(pass) copyDiagnosticLogsToClipboard > falls back to a generic message for non-Error rejection values
+
+src\features\settings\components\provider-form.test.ts:
+(pass) ProviderForm secret boundary > never maps a saved API key into React draft state
+
+src\features\settings\lib\provider-permissions.test.ts:
+(pass) provider host permissions > derives one concrete origin pattern without exposing a path
+(pass) provider host permissions > does not request an already granted permission
+(pass) provider host permissions > requests only the current provider host when missing
+(pass) provider host permissions > propagates a denied permission without retrying
+(pass) provider host permissions > omits ports from contains and request origins
+
+src\features\settings\lib\provider-schema.test.ts:
+(pass) provider schema > normalizes whitespace and strips trailing slashes
+(pass) provider schema > rejects invalid connection inputs
+(pass) provider schema > accepts model discovery input without a model
+(pass) provider schema > defaults and validates generation timeout presets
+(pass) provider URL safety classifier > treats https URLs as ok
+(pass) provider URL safety classifier > treats loopback http URLs as ok so Ollama and LM Studio still work
+(pass) provider URL safety classifier > flags http URLs aimed at non-loopback hosts as untrusted-http
+(pass) provider URL safety classifier > rejects unparseable or unsupported URLs
+(pass) provider URL safety classifier > rejects credentials, query strings, fragments, and non-loopback http in saved profiles
+(pass) provider URL safety classifier > accepts arbitrary https prefixes and loopback http prefixes without adding /v1
+(pass) provider URL safety classifier > identifies loopback hosts case-insensitively
+
+src\features\settings\lib\settings-storage-concurrency.test.ts:
+(pass) provider credential cross-panel serialization > preserves both key replacements and revisions when panels edit different profiles
+(pass) provider credential cross-panel serialization > serializes two replacements of the same provider without a revision rollback
+(pass) provider credential cross-panel serialization > does not recreate a credential when deletion wins a key-write race
+(pass) provider credential cross-panel serialization > keeps the surviving credentials consistent after a failed locked write
+(pass) provider credential cross-panel serialization > fails explicitly instead of silently writing credentials without Web Locks
+(pass) provider credential cross-panel serialization > serializes legacy migration with clear-settings so no secret is resurrected
+(pass) provider default read normalization > does not overwrite another panel's default from a delayed snapshot read
+(pass) provider default read normalization > does not recreate a default key when clear-settings wins a snapshot read race
+(pass) provider default read normalization > fails explicitly without Web Locks without repairing the stored default
+
+src\features\settings\lib\settings-storage-credential-revision.test.ts:
+(pass) provider credential revisions > returns a non-secret revision outside profile metadata and keeps it stable across reads
+(pass) provider credential revisions > rotates the revision when the same profile receives a replacement key
+(pass) provider credential revisions > retains the revision for metadata-only edits and rotates it for key edits
+(pass) provider credential revisions > migrates a legacy string secret once and shares its stable revision across instances
+(pass) provider credential revisions > does not overwrite another panel's key replacement with a stale metadata-only save
+(pass) provider credential revisions > observes another panel's key replacement without relying on profile timestamps
+(pass) provider credential revisions > invalidates on removal and creates a fresh revision when a key is added again
+(pass) provider credential revisions > deleting a profile removes its credential entry without introducing a new storage key
+
+src\features\settings\lib\settings-storage.test.ts:
+(pass) createSettingsStorage > persists theme and default provider selection
+(pass) createSettingsStorage > persists, exports, and clears the language preference
+(pass) createSettingsStorage > exports and clears persisted settings without native helper configuration
+(pass) createSettingsStorage > persists, exports and clears the global analysis preset
+(pass) createSettingsStorage > falls back to standard for missing or invalid stored preset values
+(pass) createSettingsStorage > normalizes an invalid preset written through the setter
+(pass) createSettingsStorage > migrates legacy secret-bearing records idempotently and keeps secrets out of profile metadata
+(pass) createSettingsStorage > keeps an existing secret when an edited profile omits a replacement key
+(pass) createSettingsStorage > normalizes invalid generation timeout metadata to 600 seconds
+(pass) createSettingsStorage > keeps the legacy secret-bearing record when migration writes fail
+(pass) createSettingsStorage > removes the corresponding secret when a provider is deleted or all data is cleared
+
+src\features\transcript\lib\download-vtt.test.ts:
+(pass) downloadRawVtt > downloads cached transcript text without requiring a source URL [16.00ms]
+
+src\features\transcript\lib\fetch-transcript-dom.test.ts:
+(pass) parseTranscriptTimestamp > parses minute-second transcript timestamps
+(pass) parseTranscriptTimestamp > parses hour-minute-second transcript timestamps
+(pass) parseTranscriptTimestamp > returns null for invalid transcript timestamps
+(pass) readTranscriptSegments > reads transcript rows from transcript segment renderers
+(pass) convertTranscriptDomToVtt > converts transcript rows into VTT
+(pass) convertTranscriptDomToVtt > reads modern transcript-segment-view-model rows
+(pass) fetchTranscriptDom modern discovery > queries modern row descendants of a real container without treating a row as its own root
+(pass) fetchTranscriptDom modern discovery > uses a document-level modern-row fallback when no container exists
+
+src\features\transcript\lib\fetch-transcript-panel.test.ts:
+(pass) fetchTranscriptPanel > returns null when transcript panel bootstrap is unavailable
+(pass) fetchTranscriptPanel > converts transcript panel segments into VTT
+
+src\features\transcript\lib\fetch-vtt.test.ts:
+(pass) buildRawVttUrl > adds a VTT format query param
+(pass) pickTranscriptTrack > prefers an exact language match
+(pass) pickTranscriptTrack > falls back to a regional language match
+(pass) fetchVtt > returns raw VTT for a supported video
+(pass) fetchVtt > keeps every signed legacy-track parameter on the transient successful fetch [15.00ms]
+(pass) fetchVtt > falls back to JSON3 when VTT returns an empty body
+(pass) fetchVtt > falls back to raw XML timedtext when formatted responses are empty
+(pass) fetchVtt > tries other tracks when the preferred track has no usable transcript
+(pass) fetchVtt > returns a typed error when captions are unavailable
+(pass) fetchExactTimedtext > fetches the signed player URL byte-for-byte and converts JSON3 through the existing path
+(pass) fetchExactTimedtext > returns a URL-free failure when the live request fails
+
+src\features\transcript\lib\parse-vtt.test.ts:
+(pass) parseTimestamp > parses timestamps with or without an hour segment
+(pass) parseTimestamp > rejects malformed timestamps
+(pass) parseVtt > parses cues with identifiers settings and multiline text
+(pass) parseVtt > skips NOTE blocks and unrelated text
+
+src\features\transcript\lib\transcript-log.test.ts:
+(pass) transcript diagnostic log storage > clears persisted logs containing video context
+(pass) transcript diagnostic log storage > redacts signed timedtext URLs from thrown and structured errors [16.00ms]
+(pass) transcript diagnostic log storage > does not restore diagnostic logs when a pending read overlaps clear
+(pass) transcript diagnostic log storage > does not overwrite a concurrent append when sanitizing historical read output
+
+src\features\transcript\lib\transcript-pipeline.test.ts:
+(pass) parseTimestamp > parses hour and minute based timestamps
+(pass) parseVtt > parses VTT cues with identifiers
+(pass) normalizeCues > keeps cue timing while normalizing text
+(pass) normalizeCues > decodes entity-encoded fence markers into real markers
+(pass) normalizeCues > strips verbatim markers that are not entity encoded
+(pass) downloadRawVtt > builds a stable filename and forwards the payload
+
+src\features\youtube\lib\extract-video-id.test.ts:
+(pass) extractVideoId > accepts raw IDs and common YouTube URL shapes [16.00ms]
+(pass) extractVideoId > rejects invalid hosts malformed IDs and missing parameters
+
+src\features\youtube\lib\youtube-metadata.test.ts:
+(pass) extractVideoId > normalizes common YouTube URL shapes
+(pass) extractVideoId > returns null for invalid video URLs
+(pass) readPageMetadata > extracts the canonical video ID title and caption tracks
+(pass) readPageMetadata > returns a captionless state when no tracks exist
+(pass) readPageMetadata > rejects stale player transcript metadata when the URL identity differs
+
+ 1793 pass
+ 0 fail
+ 6370 expect() calls
+Ran 1793 tests across 130 files. [37.43s]
+
+Exit code: 0

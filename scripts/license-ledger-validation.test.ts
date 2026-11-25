@@ -413,6 +413,6 @@ describe("formal ledger acceptance regressions", () => {
     expect(radixComponents.length).toBeGreaterThan(0)
     expect(radixComponents.every((component) => component.license.licenseMaterialIds.length === 1)).toBe(true)
     expect(radixComponents.every((component) => component.license.copyrightStatements.includes("Copyright (c) 2022 WorkOS"))).toBe(true)
-    expect(validateLicenseLedger(repositoryRoot, ledger)).toEqual([])
+    expect(validateLicenseLedger(repositoryRoot, ledger, true)).toEqual([])
   })
 })

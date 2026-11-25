@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync, realpathSync } from "node:fs"
 import { isAbsolute, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -661,7 +662,9 @@ function readPinnedJson(root: string, relativePath: string, expectedHash: string
   }
 }
 
-function validateFixedClosure(root: string, ledger: UnknownRecord, errors: string[]): void {
+const HISTORICAL_INPUT_COMMIT = "d596c2c366c5aa0d4538a6c7c274cc018eb7dc29"
+
+function validateFixedClosure(root: string, ledger: UnknownRecord, errors: string[], historical: boolean): void {
   const closure = readPinnedJson(root, PINNED_EVIDENCE[0].path, PINNED_EVIDENCE[0].sha256, errors)
   const matrix = readPinnedJson(root, PINNED_EVIDENCE[1].path, PINNED_EVIDENCE[1].sha256, errors)
   const dependencyClosure = ledger.dependencyClosure
@@ -755,8 +758,13 @@ function validateFixedClosure(root: string, ledger: UnknownRecord, errors: strin
   const components = Array.isArray(ledger.components) ? ledger.components.filter(isRecord) : []
   const npmComponents = components.filter((component) => component.kind === "npm-package")
   const nonNpmComponents = components.filter((component) => component.kind !== "npm-package")
-  const packageBytes = readRepositoryFile(root, "package.json", errors)
-  const lockBytes = readRepositoryFile(root, "bun.lock", errors)
+  const input = (path: "package.json" | "bun.lock") => {
+    if (!historical) return readRepositoryFile(root, path, errors)
+    try { return execFileSync("git", ["show", `${HISTORICAL_INPUT_COMMIT}:${path}`], { cwd: root }) }
+    catch { errors.push(`Unable to read fixed historical Git input: ${path}`) }
+  }
+  const packageBytes = input("package.json")
+  const lockBytes = input("bun.lock")
   let runtimeRootDependencies: UnknownRecord = {}
   if (packageBytes) {
     if (![EXPECTED_PACKAGE_JSON_SHA256, GIT_PACKAGE_JSON_SHA256].includes(sha256(packageBytes))) {
@@ -910,10 +918,10 @@ function readRepositoryFile(root: string, relativePath: string, errors: string[]
   }
 }
 
-export function validateLicenseLedger(root: string, ledger: unknown): string[] {
+export function validateLicenseLedger(root: string, ledger: unknown, historical = false): string[] {
   const errors = validateLicenseLedgerDocument(root, ledger)
   if (!isRecord(ledger)) return errors
-  validateFixedClosure(root, ledger, errors)
+  validateFixedClosure(root, ledger, errors, historical)
   return errors
 }
 
@@ -923,7 +931,9 @@ if (import.meta.main && invokedPath === resolve(fileURLToPath(import.meta.url)))
   const ledgerPath = resolve(root, "docs/licensing/third-party-license-ledger.json")
   try {
     const ledger = JSON.parse(readFileSync(ledgerPath, "utf8")) as unknown
-    const errors = validateLicenseLedger(root, ledger)
+    const args = process.argv.slice(2)
+    if (args.length && (args.length !== 1 || args[0] !== "--historical")) throw new Error("Use --historical to validate fixed historical Git inputs")
+    const errors = validateLicenseLedger(root, ledger, args[0] === "--historical")
     if (errors.length > 0) {
       console.error(`FAIL ${errors.length} license-ledger validation issue(s):`)
       for (const error of errors) console.error(`- ${error}`)

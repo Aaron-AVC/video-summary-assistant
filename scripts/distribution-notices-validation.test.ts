@@ -8,7 +8,7 @@ import { deriveScope, load, noticeFiles, verifyOutput } from "./distribution-not
 const evidence = "docs/licensing/evidence/R002-PR23"
 const scopePath = `${evidence}/distribution-scope.json`
 const cli = (args: string[], cwd = process.cwd()) => {
-  const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args], { cwd })
+  const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
 }
 function scratch(run: (dir: string) => void) {
@@ -27,7 +27,7 @@ test("fixed scope validates as blocked and preserves all closure and supplementa
 })
 
 test("separates graph observation, conservative coverage, and source attribution", () => {
-  const inputs = load()
+  const inputs = load(true)
   const derived = deriveScope(inputs)
   const notices = noticeFiles(inputs, derived, false)
   const manifest = JSON.parse(notices.files.get("THIRD_PARTY/manifest.json")!.toString())
@@ -63,7 +63,8 @@ test("unresolved component prevents candidate output before any file is written"
   const out = join(dir, "out")
   const result = cli(["generate", out, "--candidate"])
   expect(result.code).toBe(1)
-  expect(result.text).toContain("react-remove-scroll-bar@2.3.8")
+  expect(result.text).toContain("Historical snapshot mode does not generate release candidates")
+  expect(() => noticeFiles(load(true), deriveScope(load(true)), true)).toThrow("react-remove-scroll-bar@2.3.8")
   expect(() => readFileSync(join(out, "THIRD_PARTY_NOTICES.md"))).toThrow()
 }))
 
@@ -80,7 +81,7 @@ test("preview preserves notice bytes and directory identities and rejects missin
   expect(createHash("sha256").update(src).digest("hex")).toBe(notice.sha256)
   expect(manifest.components.filter((r: any) => r.name === "@radix-ui/react-slot" && r.version === "1.2.3")).toHaveLength(5)
   expect(manifest.components.some((r: any) => r.name === "@parcel/transformer-js" && r.materials.length)).toBe(true)
-  const inputs = load()
+  const inputs = load(true)
   const plan = noticeFiles(inputs, deriveScope(inputs), false)
   verifyOutput(out, plan.files)
   unlinkSync(target)

@@ -22,7 +22,7 @@ scope is:
   `bun.lock`, `background.ts`, `options.tsx`, `popup.tsx`, `sidepanel.tsx`,
   `.postcssrc.json`, `components.json`, `tailwind.config.ts`, `tsconfig.json`,
   and `vitest.config.ts`).
-- The supplied extension icon under `assets/`.
+- The extension icon supplied in Task 1 (historical; replaced in R002-B).
 - The reusable UI components under `src/components/ui/`.
 - YouTube content/runtime code under `src/contents/`, `src/features/youtube/`,
   and the relevant modules under `src/lib/runtime/`.
@@ -83,22 +83,36 @@ tracks the installed closure and original legal bytes. The independent
 the observed production assets, additional generated content and the broader
 notice coverage. It also explains the shadcn MIT and icon attribution.
 
-## Reproduce the third-party audit preview
+## Reproduce the current third-party notice review
 
-The current corpus is **`BLOCKED_AUDIT_PREVIEW`**. It preserves third-party
-license and NOTICE bytes in `THIRD_PARTY/`, including separately mapped
-package-directory identities and a checksum list. `react-remove-scroll-bar`
-2.3.8 is present in the production build and its exact-version copyright and
-license text remain open; see the build and notice review for the other items.
+The [R002-B review](docs/licensing/evidence/R002-B/REVIEW.md) binds the
+31-file notice corpus at
+[`notice-preview-v3/`](docs/licensing/evidence/R002-B/notice-preview-v3/)
+to the observed Chrome MV3 build. It includes the complete upstream MIT text
+for `react-remove-scroll-bar@2.3.7` and the full shadcn and YouTube-Summarizer
+MIT notices. Twelve runtime-closure packages with no direct Parcel asset
+remain `UNKNOWN` and are conservatively included. Third-party materials are
+verified for the reviewed scope; the overall release remains **HOLD**.
 
 ```sh
-bun scripts/distribution-notices.ts scope
-bun scripts/distribution-notices.ts scope --artifact build/chrome-mv3-prod
-bun scripts/distribution-notices.ts generate <new-external-directory>
-bun scripts/distribution-notices.ts verify <generated-directory>
+bun scripts/licensing/r002-b-candidate.ts scope --artifact build/chrome-mv3-prod
+bun scripts/licensing/r002-b-candidate.ts ledger --artifact build/chrome-mv3-prod
+bun scripts/licensing/r002-b-candidate.ts generate <new-external-directory> --artifact build/chrome-mv3-prod --candidate
+bun scripts/licensing/r002-b-candidate.ts verify <generated-directory> --artifact build/chrome-mv3-prod --candidate
 ```
 
-`--artifact` verifies the audited build bytes when available; the preview can
-also be built from the retained evidence. Candidate generation refuses open
-items and requires a verified artifact. The final ZIP gate and project
+These commands verify the versioned `distribution-scope-v3.json` and
+`candidate-ledger.json` against the captured build and installed artifact.
+The checked-in `notice-preview-v3/` was generated and byte-verified in
+candidate mode. The pre-final staged version of the unversioned scope and
+preview is retained under
+[`old/index/`](docs/licensing/evidence/R002-B/old/index/).
+A later draft that marked 12 graph-absent identities excluded without
+positive evidence is retained under
+[`old/excluded/`](docs/licensing/evidence/R002-B/old/excluded/)
+for audit history; it is not a current notice input. Use
+`bun scripts/distribution-notices.ts scope --historical` and
+`bun scripts/validate-license-ledger.ts --historical` to verify the
+historical PR-2/3 and PR-1 snapshots with the fixed Git inputs. The historical
+preview remains `BLOCKED_AUDIT_PREVIEW`. The final ZIP gate and project
 licensing policy are separate stages.

@@ -1,0 +1,3 @@
+Command: bun scripts/validate-license-ledger.ts --historical
+PASS third-party license ledger: 78 components; accepted closure, source mappings, lock integrities, material hashes, and UNKNOWN bundle membership verified
+Exit code: 0

@@ -1,0 +1,16 @@
+Command: bun scripts/licensing/verify-r002-b-browser.ts D:/tools/chrome-for-testing/chrome-win64/chrome.exe build/chrome-mv3-prod
+PASS Options Select: two keyboard open/close cycles; scroll lock/unlock and focus restoration
+PASS Chrome decoded manifest icons: [[16,16,16],[32,32,32],[48,48,48],[64,64,64],[128,128,128]]
+PASS Side Panel IndexedDB failure and Retry recovery: {"status":"available","alert":"连接检查仅在浏览器本地执行。此探测仅验证已配置的提供商、模型和 API 密钥路径，不会启动完整转录分析。","testOpen":"ok"}
+23 |   do {
+24 |     const value = await promise()
+25 |     if (value) return value
+26 |     await Bun.sleep(100)
+27 |   } while (Date.now() < deadline)
+28 |   throw new Error(`Timed out: ${label}`)
+             ^
+error: Timed out: select control ready
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\licensing\verify-r002-b-browser.ts:28:9)
+
+Bun v1.2.5 (Windows x64)
+Exit code: 1

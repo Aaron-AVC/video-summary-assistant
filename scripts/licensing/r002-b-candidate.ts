@@ -31,6 +31,32 @@ type Tuple = readonly [string, string, { dependencies?: Record<string, string>, 
 type Lock = { overrides?: Record<string, string>, packages: Record<string, Tuple> }
 type Manifest = { overrides?: Record<string, string>, [key: string]: unknown }
 
+export function assertPackagingManifestEquivalent(before: Manifest, after: Manifest): void {
+  const scripts = before.scripts as Record<string, string> | undefined
+  assert(scripts?.package === "plasmo package", "Fixed package script identity differs")
+  const expected = structuredClone(before) as Manifest
+  expected.scripts = {
+    ...scripts,
+    package: "bun scripts/release-package.ts release",
+    "package:internal": "bun scripts/release-package.ts internal",
+    "verify:package": "bun scripts/release-package.ts verify",
+  }
+  assert(stable(expected) === stable(after), "Unreviewed package.json change")
+}
+
+export function assertCandidateBuildInputsUnchanged(paths: {
+  changed: readonly string[]
+  untracked: readonly string[]
+  ignored: readonly string[]
+}): void {
+  const product = /^(?:src[\/]|assets[\/]|public[\/]|(?:background|options|sidepanel|popup)\.[jt]sx?$|(?:package\.json|bun\.lock|plasmo\.config\.[cm]?[jt]sx?|tailwind\.config\.[cm]?[jt]sx?|postcss\.config\.[cm]?[jt]sx?|\.postcssrc(?:\..+)?|\.parcelrc(?:\..+)?|tsconfig(?:\..+)?\.json|(?:vite|webpack|rollup)\.config\.[cm]?[jt]sx?|\.env(?:\..+)?|plasmo\.d\.ts)$)/
+  const changedProduct = [...paths.changed, ...paths.untracked]
+    .filter(path => path !== "package.json" && product.test(path))
+  const ignoredBuildInputs = paths.ignored.filter(path => product.test(path))
+  assert(changedProduct.length === 0 && ignoredBuildInputs.length === 0,
+    `Candidate product files differ from captured source: ${[...changedProduct, ...ignoredBuildInputs].join(", ")}`)
+}
+
 export function validateDependencyDelta(
   beforeManifest: Manifest,
   afterManifest: Manifest,
@@ -124,14 +150,23 @@ export function loadCandidate() {
   for (const [path, record] of Object.entries(build.gitInputs)) {
     const committed = inputGit(path)
     const live = read(path)
-    assert(sha256(committed) === record.gitBlobSha256 && (matches(live, record) || live.equals(committed)
-      || (path.endsWith(".json") || path.endsWith(".lock") || path.endsWith(".svg")) && normalizedText(live) === normalizedText(committed)),
-      `Candidate source input differs: ${path}`)
+    assert(sha256(committed) === record.gitBlobSha256, `Fixed build input Git blob differs: ${path}`)
+    if (path === "package.json") {
+      assertPackagingManifestEquivalent(parse<Manifest>(committed), parse<Manifest>(live))
+      continue
+    }
+    const unchanged = matches(live, record) || live.equals(committed)
+      || ((path.endsWith(".json") || path.endsWith(".lock") || path.endsWith(".svg"))
+        && normalizedText(live) === normalizedText(committed))
+    assert(unchanged, `Candidate source input differs: ${path}`)
   }
-  const product = /^(?:src[\/]|assets[\/]|(?:background|options|sidepanel|popup)\.tsx?$|(?:package\.json|bun\.lock|tailwind\.config\.ts|\.postcssrc\.json|tsconfig\.json)$|\.env(?:\.|$))/
   const changed = git("diff", "--name-only", "-z", BUILD_SOURCE, "--").toString().split("\0")
   const untracked = git("ls-files", "--others", "--exclude-standard", "-z").toString().split("\0")
-  assert(![...changed, ...untracked].some(path => product.test(path)), "Candidate product files differ from captured source")
+  const ignoredBuildInputs = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--",
+    ".env", ".env.*", "src", "assets", "public", ".parcelrc*", ".postcssrc*", "plasmo.config.*",
+    "tailwind.config.*", "postcss.config.*", "tsconfig*.json", "vite.config.*", "webpack.config.*", "rollup.config.*",
+  ).toString().split("\0").filter(Boolean)
+  assertCandidateBuildInputsUnchanged({ changed, untracked, ignored: ignoredBuildInputs })
   for (const [path, record] of Object.entries(build.evidenceFiles)) {
     assert(matches(read(`${EVIDENCE}/build/${path}`), record), `Same-build evidence differs: ${path}`)
   }
@@ -235,7 +270,15 @@ export function loadCandidate() {
     sourceInventory: { path: `${EVIDENCE}/source-rights-v3.json`, sha256: inputs.sourceInventorySha256,
       observedYouTubeSummarizerOrigins: derived.sourceInventory.observedYouTubeSummarizerOrigins },
   }
-  return { inputs, scope, delta }
+  const candidateLedger = {schema: "vsa-r002-b-ledger/v1", buildSha256: BUILD_SHA, base: BASE,
+    changedNpmIdentities: delta.map(name => `node_modules/${name}/package.json`), inheritedLedgerSha256: inputs.build.ledgerSha256,
+    blockerDisposition: {
+      "B-01": "RESOLVED_FOR_CANDIDATE",
+      "B-02": "RESOLVED_REPLACED",
+      "B-03": "PARTIAL_PROVENANCE_NOTICE_SATISFIED",
+      "B-04": "PARTIAL_PROJECT_RIGHTS_HOLD",
+    }, ...inputs.ledger, supplementalComponents: inputs.extras}
+  return { inputs, scope, delta, ledger: candidateLedger }
 }
 
 function cli() {
@@ -252,18 +295,10 @@ function cli() {
     } else if (flag === "--candidate" && !candidate && ["generate", "verify"].includes(command)) candidate = true
     else throw new Error(`Unexpected argument: ${flag}`)
   }
-  const { inputs, scope, delta } = loadCandidate()
+  const { inputs, scope, ledger } = loadCandidate()
   if (artifact) verifyArtifact(artifact, inputs.build)
   assert(!candidate || artifact, "Candidate notice generation and verification require a verified artifact")
   const plan = noticeFiles(inputs, scope, candidate)
-  const ledger = {schema: "vsa-r002-b-ledger/v1", buildSha256: BUILD_SHA, base: BASE,
-    changedNpmIdentities: delta.map(name => `node_modules/${name}/package.json`), inheritedLedgerSha256: inputs.build.ledgerSha256,
-    blockerDisposition: {
-      "B-01": "RESOLVED_FOR_CANDIDATE",
-      "B-02": "RESOLVED_REPLACED",
-      "B-03": "PARTIAL_PROVENANCE_NOTICE_SATISFIED",
-      "B-04": "PARTIAL_PROJECT_RIGHTS_HOLD",
-    }, ...inputs.ledger, supplementalComponents: inputs.extras}
   const snapshots = {"candidate-ledger.json": ledger, "distribution-scope-v3.json": scope}
   for (const [file, value] of Object.entries(snapshots)) {
     const path = `${EVIDENCE}/${file}`

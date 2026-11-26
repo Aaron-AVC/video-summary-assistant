@@ -13,6 +13,7 @@
 | [Platform architecture](platform-architecture.md) | 双平台身份与适配器 |
 | [Provider architecture](provider-architecture.md) | Provider、可选权限与秘密隔离 |
 | [Analysis architecture](analysis-architecture.md) | 结构化总结与长视频分析 |
+| [发行打包与合规门禁](release-packaging.md) | 内部 ZIP、通知覆盖、正式发行 HOLD 与 PR-5 接入点 |
 
 ## 后续计划与进度
 

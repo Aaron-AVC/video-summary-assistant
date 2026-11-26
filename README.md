@@ -112,11 +112,15 @@ bun install --frozen-lockfile
 bun test
 bun run typecheck
 bun run build
-bun run package
+bun run package:internal
+bun run verify:package
 ```
 
-The production build is emitted under `build/chrome-mv3-prod`. The package
-command creates a local archive for inspection; it does not publish anything.
+The production build is emitted under `build/chrome-mv3-prod`. The internal
+package command creates a local `INTERNAL/HOLD` archive for compliance and
+engineering review. The ordinary `bun run package` command is blocked while
+project-rights approval is on hold. Neither command uploads or publishes.
+See [release packaging and the compliance gate](docs/release-packaging.md).
 
 ## Load the unpacked extension
 

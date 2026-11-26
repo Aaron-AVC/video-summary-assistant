@@ -1,0 +1,263 @@
+{
+  "schema": "vsa-project-rights-decision/v1",
+  "decisionId": "VSA-R002-PR5-2026-11-27-v3",
+  "status": "QUALIFIED_FOR_LOCAL_CANDIDATE",
+  "decisionSource": {
+    "kind": "RIGHTSHOLDER_DECLARATION_AND_REVIEWED_PROJECT_RECORD",
+    "source": "User-confirmed VSA-R002-PR5 task authorization",
+    "date": "2026-11-27",
+    "digitalSignature": "NOT_REPRESENTED",
+    "independentLegalReview": "NOT_CLAIMED"
+  },
+  "rightsHolder": {
+    "publicAttribution": "Aaron-AVC",
+    "authorityStatement": "The rights holder confirmed authority over project-owned contributions and no additional joint, employer, client, or separately disposed project rights requiring another grant.",
+    "scopeLimit": "Only portions the rights holder owns or is authorized to license; separate third-party rights remain unaffected.",
+    "commercialAuthorizationContact": "Project GitHub Issues; a request is not itself authorization."
+  },
+  "projectLicense": {
+    "version": "1.0",
+    "path": "LICENSE",
+    "sha256": "2033de464f1eaee84272cf1283dfafe6f505ebae08a65ac929941352ab0409d5",
+    "packageMetadata": "SEE LICENSE IN LICENSE",
+    "packagePrivate": true
+  },
+  "licenseScope": {
+    "path": "licenses/LICENSE-SCOPE.md",
+    "sha256": "e9c545ca4610fb7def4a9fc67e60bc632cc780f1037029445be1a910eb72042b"
+  },
+  "sourceRights": {
+    "historicalInventory": {
+      "path": "docs/licensing/evidence/R002-B/source-rights-v3.json",
+      "sha256": "aed77e5c89bc36cb226648016f26b1693cfb97bf3f90408e8acf24757f15ad53",
+      "pathCount": 172,
+      "status": "HISTORICAL_SNAPSHOT_PRESERVED"
+    },
+    "pr4Pr5Supplement": {
+      "path": "docs/licensing/evidence/R002-PR5/project-rights-supplement-v4.json",
+      "sha256": "bf6d8e0de0a9a69794c9b5c40ba19e4f24dd7f6df36f11fea64b5c912304a2a4"
+    }
+  },
+  "contributionAuthority": {
+    "termsPath": "CONTRIBUTING.md",
+    "termsVersion": "1.0",
+    "termsSha256": "63aaf70e6e2be3eda8b5cb8706de376f22840320c7e3251ee8b3a6a8849525e6",
+    "recordPath": "docs/licensing/evidence/R002-PR5/contributor-authority-v4.json",
+    "recordSha256": "c237570164bda89fc3e0ac3d91cac842eb311fe03c427d6c592a2794fb5e67b2",
+    "unresolvedExternalRightsHolders": 0
+  },
+  "productionBuild": {
+    "path": "docs/licensing/evidence/R002-B/build/build-identity-v3.json",
+    "sha256": "3d8a9d547cc506a5544e0f7a5a519803de549276191021ecfce88039b21c56c2",
+    "sourceCommit": "7eda9fdbe0cd414c16a755f0b5da390c0fd37a57",
+    "sourceTree": "cfec44a94ee5a2053a361b7a3087373562378ec5",
+    "productFileCount": 14,
+    "changedProductInputs": false,
+    "qualification": "Exact historical 14-file identity is checked against the build output before packaging."
+  },
+  "thirdPartyDistribution": {
+    "status": "MATERIALS_VERIFIED_FOR_REVIEWED_SCOPE",
+    "blockers": 0,
+    "historicalScope": {
+      "path": "docs/licensing/evidence/R002-B/distribution-scope-v3.json",
+      "sha256": "e09fea47e9f8d5b3e5987e44276daa428436c3f2df39090707d702b3b9fd8e92"
+    },
+    "historicalLedger": {
+      "path": "docs/licensing/evidence/R002-B/candidate-ledger.json",
+      "sha256": "22a63c552980c60923897ffcb0b8ad0b9ee1c6c42b44da65e967e914c52c2335"
+    },
+    "currentScope": {
+      "path": "docs/licensing/evidence/R002-PR5/current-scope-v4.json",
+      "sha256": "fad251709525bbd0c01c68530eccd469438f77b4a555130f96e772663a526958"
+    },
+    "currentLedger": {
+      "path": "docs/licensing/evidence/R002-PR5/current-ledger-v4.json",
+      "sha256": "88874bb55a26b6a3f3c0176d0fc037abd027838602bd87eef38fd625716df411"
+    },
+    "componentMembershipCounts": {
+      "total": 84,
+      "included": 71,
+      "unknown": 13,
+      "excluded": 0,
+      "unknownNpm": 12
+    },
+    "unknownNpmComponentsRemainInNotice": true,
+    "noticePreview": {
+      "directory": "docs/licensing/evidence/R002-PR5/notice-preview-v4",
+      "fileCount": 31,
+      "manifestSha256": "9ae8c6666f54e2fb9c4d01a2c101b657ac345178f9c1231632c3f7669dbf39ba",
+      "payloadIdentities": [
+        {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "sha256": "cf3fd8d8f4b75b566398ce908404142daf2a29f183c6a2ee9f3722b0729a8674",
+          "byteLength": 38639
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/0ccbf956cffc8dcf515809433cb5242ee67c94513d46e48c261d68d0880de406/LICENSE",
+          "sha256": "0ccbf956cffc8dcf515809433cb5242ee67c94513d46e48c261d68d0880de406",
+          "byteLength": 10753
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce/LICENSE",
+          "sha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+          "byteLength": 1089
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138/LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "byteLength": 1063
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e/LICENSE",
+          "sha256": "11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e",
+          "byteLength": 1062
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f/LICENSE",
+          "sha256": "1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f",
+          "byteLength": 1063
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/1e7290b35280a048667bbf0ebabac1c7fd52a75300e8b2946ac165715997f2bc/LICENSE",
+          "sha256": "1e7290b35280a048667bbf0ebabac1c7fd52a75300e8b2946ac165715997f2bc",
+          "byteLength": 880
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751/LICENSE",
+          "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751",
+          "byteLength": 655
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1/LICENSE",
+          "sha256": "2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1",
+          "byteLength": 1103
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/2289170d75e6cc94e97988f5eab52752a09f10bd97c41f6d6fcab93dbcc06a3b/LICENSE",
+          "sha256": "2289170d75e6cc94e97988f5eab52752a09f10bd97c41f6d6fcab93dbcc06a3b",
+          "byteLength": 1139
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9/LICENSE",
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "byteLength": 1071
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8/LICENSE",
+          "sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+          "byteLength": 1072
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893/LICENSE",
+          "sha256": "4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893",
+          "byteLength": 1100
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85/LICENSE",
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "byteLength": 1086
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/54b32293ea560d22cd9b62af9b2cda1a030d910a48c6601d227c5ff2338d95f8/LICENSE",
+          "sha256": "54b32293ea560d22cd9b62af9b2cda1a030d910a48c6601d227c5ff2338d95f8",
+          "byteLength": 1068
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/5cfba9d5711264d45a2431a53c79f597cef12720cc7c764db2602daa92d0bd2a/LICENSE",
+          "sha256": "5cfba9d5711264d45a2431a53c79f597cef12720cc7c764db2602daa92d0bd2a",
+          "byteLength": 1077
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985/LICENSE",
+          "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985",
+          "byteLength": 1071
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/9a9edad7baae52622bddf3c15b2ef8a33d2c89f2d25408ad13e8a7481c6b0c97/LICENSE",
+          "sha256": "9a9edad7baae52622bddf3c15b2ef8a33d2c89f2d25408ad13e8a7481c6b0c97",
+          "byteLength": 1104
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/a6051897936080c684f88c52dfb2283d106e96d7aa4eccb93dc975a27d9383c4/LICENSE",
+          "sha256": "a6051897936080c684f88c52dfb2283d106e96d7aa4eccb93dc975a27d9383c4",
+          "byteLength": 1072
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84/LICENSE",
+          "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84",
+          "byteLength": 1093
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/acf3b087b348d2f2e731b9d4131af185aad694c1204ce14a46909483fd42da05/LICENSE",
+          "sha256": "acf3b087b348d2f2e731b9d4131af185aad694c1204ce14a46909483fd42da05",
+          "byteLength": 1071
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/afcab584f9ecaf796069d8b3cd2a02e3135d89743a2cf17def2e7935dad91e5d/LICENSE",
+          "sha256": "afcab584f9ecaf796069d8b3cd2a02e3135d89743a2cf17def2e7935dad91e5d",
+          "byteLength": 1081
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/c15f7afc9058d8a9995c2922a4c5812ac16a17647b2eb84014bb2fccada131c9/LICENSE",
+          "sha256": "c15f7afc9058d8a9995c2922a4c5812ac16a17647b2eb84014bb2fccada131c9",
+          "byteLength": 1226
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383/LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "byteLength": 1141
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14/LICENSE",
+          "sha256": "cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14",
+          "byteLength": 11325
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/d06945a5d85f4f6062393af30ad07d8afd1efa190c46cea6819b85c11764c7cd/LICENSE",
+          "sha256": "d06945a5d85f4f6062393af30ad07d8afd1efa190c46cea6819b85c11764c7cd",
+          "byteLength": 1067
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/d4c70c7ce38cea8778f0aed3fc0bef0a9dbd27f13bd8b6773cbd6d37941971e5/LICENSE",
+          "sha256": "d4c70c7ce38cea8778f0aed3fc0bef0a9dbd27f13bd8b6773cbd6d37941971e5",
+          "byteLength": 1070
+        },
+        {
+          "path": "THIRD_PARTY/LICENSES/da9201378c36ffd81f51ad0b305f3f0981e90bc558789210ad65d1161eec3b7d/LICENSE",
+          "sha256": "da9201378c36ffd81f51ad0b305f3f0981e90bc558789210ad65d1161eec3b7d",
+          "byteLength": 1070
+        },
+        {
+          "path": "THIRD_PARTY/manifest.json",
+          "sha256": "9ae8c6666f54e2fb9c4d01a2c101b657ac345178f9c1231632c3f7669dbf39ba",
+          "byteLength": 770750
+        },
+        {
+          "path": "THIRD_PARTY/NOTICES/6176d2e8a3fd8a881828a1a27bbcc5a9e03a75f437ce3c4ddbedd94fdac475c1/NOTICE",
+          "sha256": "6176d2e8a3fd8a881828a1a27bbcc5a9e03a75f437ce3c4ddbedd94fdac475c1",
+          "byteLength": 575
+        },
+        {
+          "path": "THIRD_PARTY/SHA256SUMS.txt",
+          "sha256": "5f80640eeb66d83afd5d667f82d61f8432c4a8c397235c9a2c4aa6dc6d9470cd",
+          "byteLength": 4659
+        }
+      ]
+    }
+  },
+  "projectRightDisposition": {
+    "status": "RESOLVED_FOR_LOCAL_CANDIDATE",
+    "historicalPathMembership": "NOT_CHANGED_BY_THIS_DECISION",
+    "aiAssistedExpression": "No exclusive copyright claim is inferred solely from AI assistance.",
+    "unresolvedBlockingItems": []
+  },
+  "qualification": {
+    "packageType": "RELEASE_CANDIDATE",
+    "releaseEligible": true,
+    "releaseStatus": "PR6_REVIEW_REQUIRED",
+    "releaseApproved": false,
+    "finalReleaseReview": "PENDING",
+    "publicationAuthorized": false,
+    "nextStage": "PR-6 final release review"
+  }
+}

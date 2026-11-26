@@ -54,7 +54,9 @@ type Manifest = { overrides?: Record<string, string>, [key: string]: unknown }
 export function assertPackagingManifestEquivalent(before: Manifest, after: Manifest): void {
   const scripts = before.scripts as Record<string, string> | undefined
   assert(scripts?.package === "plasmo package", "Fixed package script identity differs")
+  assert(before.license === undefined, "Fixed package license baseline differs")
   const expected = structuredClone(before) as Manifest
+  expected.license = "SEE LICENSE IN LICENSE"
   expected.scripts = {
     ...scripts,
     package: "bun scripts/release-package.ts release",

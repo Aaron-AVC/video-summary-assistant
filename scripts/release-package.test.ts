@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test"
 import { mkdtempSync, readdirSync, rmSync } from "node:fs"
+import { execFileSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { zipSync } from "fflate"
@@ -11,6 +12,7 @@ import {
   sha256,
   verifyPackageArchive,
 } from "./lib/release-package"
+import * as packageGate from "./lib/release-package"
 import {
   assertCandidateBuildInputsUnchanged,
   assertPackagingManifestEquivalent as assertCandidatePackagingManifestEquivalent,
@@ -52,6 +54,7 @@ const packaged = {
     "verify:package": "bun scripts/release-package.ts verify",
   },
 }
+const licensed = { ...packaged, license: "SEE LICENSE IN LICENSE" }
 
 const files = new Map<string, Buffer>([
   ["manifest.json", Buffer.from('{"manifest_version":3,"version":"2026.8.22"}')],
@@ -60,7 +63,7 @@ const files = new Map<string, Buffer>([
   ["THIRD_PARTY/manifest.json", Buffer.from('{"releaseApproved":false}')],
   ["THIRD_PARTY/LICENSES/abc/LICENSE", Buffer.from("MIT license bytes\n")],
   ["THIRD_PARTY/NOTICES/def/NOTICE", Buffer.from("Required upstream notice bytes\n")],
-  ["INTERNAL_HOLD.txt", Buffer.from("INTERNAL — HOLD\n")],
+  ["INTERNAL_VALIDATION_ONLY.txt", Buffer.from("INTERNAL_VALIDATION_ONLY\n")],
 ])
 
 function flatZip(entries: Record<string, Uint8Array | [Uint8Array, { os?: number, attrs?: number }]>) {
@@ -98,30 +101,59 @@ function withDuplicateCentralEntry(bytes: Buffer): Buffer {
 }
 
 describe("PR4 package manifest compatibility", () => {
-  it("accepts only the three exact packaging script values", () => {
-    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, packaged)).not.toThrow()
+  it("accepts the exact packaging scripts and root-license metadata", () => {
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, licensed)).not.toThrow()
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, packaged)).toThrow()
+  })
+
+  it("accepts the exact root-license metadata addition without relaxing other fields", () => {
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, licensed)).not.toThrow()
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
+      ...licensed,
+      license: "MIT",
+    })).toThrow()
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
+      ...licensed,
+      license: "SEE LICENSE IN LICENSE.md",
+    })).toThrow()
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
+      ...licensed,
+      version: "2026.8.23",
+    })).toThrow()
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
+      ...licensed,
+      dependencies: { react: "^19.0.0" },
+    })).toThrow()
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
+      ...licensed,
+      manifest: { permissions: ["storage", "tabs"] },
+    })).toThrow()
+    expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
+      ...licensed,
+      scripts: { ...licensed.scripts, build: "plasmo build --target=firefox-mv3" },
+    })).toThrow()
   })
 
   it("rejects dependency, build, permission, and unrelated script changes", () => {
     expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
-      ...packaged,
+      ...licensed,
       dependencies: { react: "^19.0.0" },
     })).toThrow()
     expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
-      ...packaged,
-      scripts: { ...packaged.scripts, "package:internal": "plasmo package" },
+      ...licensed,
+      scripts: { ...licensed.scripts, "package:internal": "plasmo package" },
     })).toThrow()
     expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
-      ...packaged,
+      ...licensed,
       manifest: { permissions: ["storage", "tabs"] },
     })).toThrow()
     expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
-      ...packaged,
-      scripts: { ...packaged.scripts, postinstall: "node scripts/anything.js" },
+      ...licensed,
+      scripts: { ...licensed.scripts, postinstall: "node scripts/anything.js" },
     })).toThrow()
     expect(() => assertCandidatePackagingManifestEquivalent(packageJson, {
-      ...packaged,
-      scripts: { ...packaged.scripts, build: "plasmo build --target=firefox-mv3" },
+      ...licensed,
+      scripts: { ...licensed.scripts, build: "plasmo build --target=firefox-mv3" },
     })).toThrow()
   })
 
@@ -148,11 +180,97 @@ describe("PR4 package manifest compatibility", () => {
 })
 
 describe("PR4 ZIP archive gate", () => {
+  it("rejects external approval flags and decision-file arguments in the production CLI", () => {
+    for (const args of [
+      ["release", "--approved"],
+      ["release", "--qualification", "qualification.json"],
+      ["release", "--decision", "decision.json"],
+    ]) {
+      let failure: (Error & { status?: number, stderr?: Buffer }) | undefined
+      try {
+        execFileSync("bun", ["scripts/release-package.ts", ...args], {
+          cwd: process.cwd(),
+          stdio: ["ignore", "pipe", "pipe"],
+        })
+      } catch (error) {
+        failure = error as Error & { status?: number, stderr?: Buffer }
+      }
+      expect(failure?.status).toBe(1)
+      expect(failure?.stderr?.toString("utf8")).toContain("Usage: bun scripts/release-package.ts")
+    }
+  })
+
+  it("rewrites repository-relative legal links to paths that resolve inside the archive", () => {
+    const source = Buffer.from([
+      "# License scope",
+      "",
+      "[LICENSE](../LICENSE)",
+      "[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)",
+      "[Contributor terms](https://github.com/Aaron-AVC/video-summary-assistant/blob/main/CONTRIBUTING.md)",
+      "",
+    ].join("\n"))
+    const prepareScope = (packageGate as unknown as Record<string, unknown>).prepareArchiveLicenseScope
+    expect(prepareScope).toBeFunction()
+    const archived = (prepareScope as (bytes: Buffer) => Buffer)(source).toString("utf8")
+
+    expect(archived).toContain("[LICENSE](LICENSE)")
+    expect(archived).toContain("[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)")
+    expect(archived).toContain("https://github.com/Aaron-AVC/video-summary-assistant/blob/main/CONTRIBUTING.md")
+    expect(archived).not.toMatch(/\]\(\.\.\//)
+  })
+
   it("round-trips the exact planned members and byte identities", () => {
     const archive = flatZip(Object.fromEntries(files))
     const extracted = verifyPackageArchive(archive, files)
     expect([...extracted.keys()].sort()).toEqual([...files.keys()].sort())
     for (const [path, bytes] of files) expect(extracted.get(path)).toEqual(bytes)
+  })
+
+  it("keeps a caller-created package identity internal and unqualified", () => {
+    const archive = createPackageArchive(files)
+    const identity = createPackageIdentity({
+      sourceCommit: "a".repeat(40),
+      sourceTree: "b".repeat(40),
+      productFiles: new Map([["manifest.json", files.get("manifest.json")!]]),
+      noticeFiles: new Map([...files].filter(([path]) => path.startsWith("THIRD_PARTY"))),
+      zipBytes: archive,
+      archiveFiles: files,
+      version: "2026.8.22",
+    })
+
+    expect(identity.package.type).toBe("INTERNAL")
+    expect(identity.package.status).toBe("INTERNAL_VALIDATION_ONLY")
+    expect(identity.distribution.releaseStatus).toBe("NOT_QUALIFIED")
+    expect(identity.distribution.releaseEligible).toBe(false)
+    expect(identity.package.releaseApproved).toBe(false)
+    expect(identity.package.publicationAuthorized).toBe(false)
+    expect(() => verifyPackageArchive(archive, files, identity)).not.toThrow()
+  })
+
+  it("rejects caller-supplied candidate status and hash-shaped rights records", () => {
+    const forgedQualification = {
+      schema: "vsa-project-rights-qualification/v1",
+      status: "QUALIFIED_FOR_LOCAL_CANDIDATE",
+      decisionSha256: "a".repeat(64),
+      licenseSha256: "b".repeat(64),
+      licenseScopeSha256: "c".repeat(64),
+      sourceRightsSha256: "d".repeat(64),
+      contributorRecordSha256: "e".repeat(64),
+      buildEvidenceSha256: "f".repeat(64),
+    }
+
+    expect(() => createPackageIdentity({
+      sourceCommit: "a".repeat(40),
+      sourceTree: "b".repeat(40),
+      productFiles: new Map([["manifest.json", files.get("manifest.json")!]]),
+      noticeFiles: new Map([...files].filter(([path]) => path.startsWith("THIRD_PARTY"))),
+      zipBytes: Buffer.alloc(0),
+      archiveFiles: files,
+      version: "2026.8.22",
+      packageMode: "RELEASE_CANDIDATE",
+      releaseQualification: forgedQualification,
+      releaseApproved: true,
+    } as Parameters<typeof createPackageIdentity>[0])).toThrow()
   })
 
   it("rejects missing or altered legal and product files and unauthorized files", () => {
@@ -232,7 +350,7 @@ describe("PR4 ZIP archive gate", () => {
     expect(readdirSync(root)).toEqual([])
 
     const output = publishPackageAtomically(root, "good-package", archive, identityBytes, files, identity)
-    expect(readdirSync(output).sort()).toEqual(["extension-INTERNAL-HOLD.zip", "package-identity.json"])
+    expect(readdirSync(output).sort()).toEqual(["extension-INTERNAL-VALIDATION.zip", "package-identity.json"])
     expect(() => publishPackageAtomically(root, "good-package", archive, identityBytes, files, identity))
       .toThrow("Refusing to overwrite")
     expect(readdirSync(root).sort()).toEqual(["good-package"])

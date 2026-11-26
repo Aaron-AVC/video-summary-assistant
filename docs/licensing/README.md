@@ -46,10 +46,11 @@ also match the published version and tarball identity. Reusing one identical
 license file across packages is allowed only when each package has its own
 matching source-artifact and scope record.
 
-Validate the committed ledger from the repository root with:
+Validate the fixed PR-1 ledger against its historical package and lock inputs
+from the repository root with:
 
 ```sh
-bun scripts/validate-license-ledger.ts
+bun scripts/validate-license-ledger.ts --historical
 bun test scripts/license-ledger-validation.test.ts
 ```
 
@@ -60,6 +61,18 @@ required versus optional reachability, and strict `UNKNOWN` bundle membership.
 The root manifest and lockfile may match either the recorded Windows checkout
 bytes or the fixed Git blob bytes. License and pinned evidence files always
 use their exact original bytes.
+
+The current PR-5 rights, distribution scope, candidate ledger, and notice
+snapshot are a separate versioned record. The active local-candidate snapshot
+is v4; its Git attributes preserve the exact bytes used by the decision hashes.
+Verify the active PR-5 record with:
+
+```sh
+bun scripts/licensing/r002-pr5-record.ts verify
+```
+
+This keeps the preserved PR-1 ledger bound to its original dependency identity
+while validating the current candidate against its separately derived inputs.
 
 `evidence/` contains the accepted input matrix and closure records plus a
 fixed-commit source path inventory used to build this ledger. npm tarball

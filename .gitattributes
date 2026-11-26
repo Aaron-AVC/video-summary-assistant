@@ -14,3 +14,8 @@
 /docs/licensing/evidence/R002-B/superseded-draft/** -text whitespace=cr-at-eol,-blank-at-eof
 /docs/licensing/evidence/R002-B/icon-previews/*.png binary
 /licenses/third-party/r002-b-materials/** -text whitespace=cr-at-eol
+/LICENSE -text whitespace=cr-at-eol,-blank-at-eof
+/CONTRIBUTING.md -text whitespace=cr-at-eol,-blank-at-eof
+/licenses/LICENSE-SCOPE.md -text whitespace=cr-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-PR5/*.json -text whitespace=cr-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-PR5/notice-preview-*/** -text whitespace=cr-at-eol,-blank-at-eof

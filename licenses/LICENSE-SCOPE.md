@@ -13,7 +13,7 @@ records are maintained in the project repository and are not included in this
 extension archive:
 
 - [Historical 172-path source-rights inventory](https://github.com/Aaron-AVC/video-summary-assistant/blob/main/docs/licensing/evidence/R002-B/source-rights-v3.json)
-- [PR-5 source-rights supplement](https://github.com/Aaron-AVC/video-summary-assistant/blob/main/docs/licensing/evidence/R002-PR5/project-rights-supplement-v2.json)
+- [PR-5 source-rights supplement](https://github.com/Aaron-AVC/video-summary-assistant/blob/main/docs/licensing/evidence/R002-PR5/project-rights-supplement-v4.json)
 - [R002-B fixed production-build identity](https://github.com/Aaron-AVC/video-summary-assistant/blob/main/docs/licensing/evidence/R002-B/build/build-identity-v3.json)
 
 Third-party code, assets, and license texts remain governed by their original

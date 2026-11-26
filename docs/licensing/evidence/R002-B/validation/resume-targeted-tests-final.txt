@@ -1,0 +1,296 @@
+bun test v1.2.5 (013fdddc)
+
+scripts\distribution-notices-validation.test.ts:
+(pass) fixed scope validates as blocked and preserves all closure and supplemental rows [1734.00ms]
+(pass) separates graph observation, conservative coverage, and source attribution [1703.00ms]
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) rejects forged evidence
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) rejects another build
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) rejects wrong source
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) rejects UNKNOWN relabeled excluded
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) rejects required component omitted
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) rejects outside-closure finding omitted
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) unresolved component prevents candidate output before any file is written
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) preview preserves notice bytes and directory identities and rejects missing or modified output
+10 | const cli = (args: string[], cwd = process.cwd()) => {
+11 |   const run = Bun.spawnSync([process.execPath, resolve("scripts/distribution-notices.ts"), ...args, "--historical"], { cwd })
+12 |   return { code: run.exitCode, text: `${run.stdout}${run.stderr}` }
+13 | }
+14 | function scratch(run: (dir: string) => void) {
+15 |   const dir = mkdtempSync(join(tmpdir(), "vsa-pr23-test-"))
+                   ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-pr23-test-XXXXXX'
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:15:15)
+(fail) rejects a capture or artifact without the pinned production output bytes
+error: Cannot read directory "C:\Users\kqing\": EPERM
+
+scripts\license-ledger-validation.test.ts:
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:117:30)
+(fail) third-party license ledger validator > accepts an evidenced npm package while preserving UNKNOWN bundle membership
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:125:30)
+(fail) third-party license ledger validator > rejects duplicate package-directory identities even when versions match
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:132:30)
+(fail) third-party license ledger validator > rejects a verified license claim without fixed release provenance
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:145:30)
+(fail) third-party license ledger validator > keeps an expanded-optional package outside the required closure
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:155:30)
+(fail) third-party license ledger validator > rejects a material whose recorded hash differs from its bytes
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:162:30)
+(fail) third-party license ledger validator > rejects a material path that escapes the legal-material directory
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:167:30)
+(fail) third-party license ledger validator > rejects a material path that leaves the directory through a junction
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:180:30)
+(fail) third-party license ledger validator > rejects a package marked as both required and optional-only
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:185:30)
+(fail) third-party license ledger validator > rejects an incomplete component list for the fixed 74-directory closure
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:194:30)
+(fail) third-party license ledger validator > rejects npm evidence whose tarball integrity is not present in bun.lock
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:202:30)
+(fail) third-party license ledger validator > rejects a mismatch between installed closure flags and the recorded closure status
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:209:30)
+(fail) third-party license ledger validator > rejects unknown license evidence labels instead of letting them bypass verification
+74 |     },
+75 |   }],
+76 | }
+77 | 
+78 | function createLedger(components = [structuredClone(validComponent)], materials = [structuredClone(validMaterial)]) {
+79 |   const root = mkdtempSync(join(tmpdir(), "vsa-license-ledger-"))
+                    ^
+error: ENOENT: no such file or directory, mkdtemp 'undefined\temp\vsa-license-ledger-XXXXXX'
+      at createLedger (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:79:16)
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:216:30)
+(fail) third-party license ledger validator > rejects a confirmed bundle state without direct membership evidence [15.00ms]
+(pass) formal ledger acceptance regressions > requires verified tarball text to name a legal file in that exact tarball [204.00ms]
+(pass) formal ledger acceptance regressions > rejects a license material borrowed from a different package and version [187.00ms]
+(pass) formal ledger acceptance regressions > rejects a NOTICE material that does not belong to the exact npm release [188.00ms]
+(pass) formal ledger acceptance regressions > does not verify upstream license text from evidence kind alone [171.00ms]
+(pass) formal ledger acceptance regressions > rejects an unrelated license appended to a valid upstream mapping [188.00ms]
+(pass) formal ledger acceptance regressions > requires every source-component license reference to match its fixed license source [172.00ms]
+(pass) formal ledger acceptance regressions > rejects a borrowed NOTICE even for an unresolved npm release [172.00ms]
+(pass) formal ledger acceptance regressions > requires an upstream license path, blob, digest, and material mapping [172.00ms]
+(pass) formal ledger acceptance regressions > rejects a versioned upstream mapping without the exact manifest and source-map evidence [171.00ms]
+(pass) formal ledger acceptance regressions > requires fixed path, commit, blob, digest, and material identity for source components [156.00ms]
+(pass) formal ledger acceptance regressions > rejects an upstream Git blob that does not match the preserved license bytes [188.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry Git head that differs from the exact npm publication metadata [172.00ms]
+(pass) formal ledger acceptance regressions > rejects a deleted component even when ledger counts are changed to match [172.00ms]
+(pass) formal ledger acceptance regressions > rejects changing a required package to optional-only while preserving total counts [188.00ms]
+(pass) formal ledger acceptance regressions > keeps actual bundle membership UNKNOWN despite a non-empty claim string [187.00ms]
+(pass) formal ledger acceptance regressions > rejects a SHA-512 SRI that decodes to fewer than 64 bytes [172.00ms]
+(pass) formal ledger acceptance regressions > matches every recorded npm integrity against the actual bun.lock record [188.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry URL that names a different package version [187.00ms]
+(pass) formal ledger acceptance regressions > retains the deduplicated fixed MIT text for every Radix component [391.00ms]
+
+scripts\licensing\r002-b-candidate.test.ts:
+(pass) R002-B dependency delta > allows only the reviewed compatible substitution [15.00ms]
+(pass) R002-B dependency delta > fails closed on an unrelated dependency or permission change
+(pass) R002-B dependency delta > rejects a wrong publication binding
+(pass) R002-B dependency delta > preserves the shadcn MIT text while separating partial provenance from notice completeness [2797.00ms]
+(pass) R002-B dependency delta > keeps package identities absent from the Parcel graph unknown and conservatively notices them [2891.00ms]
+
+22 tests failed:
+(fail) rejects forged evidence
+(fail) rejects another build
+(fail) rejects wrong source
+(fail) rejects UNKNOWN relabeled excluded
+(fail) rejects required component omitted
+(fail) rejects outside-closure finding omitted
+(fail) unresolved component prevents candidate output before any file is written
+(fail) preview preserves notice bytes and directory identities and rejects missing or modified output
+(fail) rejects a capture or artifact without the pinned production output bytes
+(fail) third-party license ledger validator > accepts an evidenced npm package while preserving UNKNOWN bundle membership
+(fail) third-party license ledger validator > rejects duplicate package-directory identities even when versions match
+(fail) third-party license ledger validator > rejects a verified license claim without fixed release provenance
+(fail) third-party license ledger validator > keeps an expanded-optional package outside the required closure
+(fail) third-party license ledger validator > rejects a material whose recorded hash differs from its bytes
+(fail) third-party license ledger validator > rejects a material path that escapes the legal-material directory
+(fail) third-party license ledger validator > rejects a material path that leaves the directory through a junction
+(fail) third-party license ledger validator > rejects a package marked as both required and optional-only
+(fail) third-party license ledger validator > rejects an incomplete component list for the fixed 74-directory closure
+(fail) third-party license ledger validator > rejects npm evidence whose tarball integrity is not present in bun.lock
+(fail) third-party license ledger validator > rejects a mismatch between installed closure flags and the recorded closure status
+(fail) third-party license ledger validator > rejects unknown license evidence labels instead of letting them bypass verification
+(fail) third-party license ledger validator > rejects a confirmed bundle state without direct membership evidence [15.00ms]
+
+ 26 pass
+ 22 fail
+ 50 expect() calls
+Ran 48 tests across 3 files. [13.18s]

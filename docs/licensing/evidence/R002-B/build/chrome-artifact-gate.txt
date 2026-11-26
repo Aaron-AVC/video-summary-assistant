@@ -1,0 +1,18 @@
+Command: bun run verify:artifact --chrome D:/tools/chrome-for-testing/chrome-win64/chrome.exe --artifact build/chrome-mv3-prod
+$ bun scripts/verify-build-artifact.ts --chrome "D:/tools/chrome-for-testing/chrome-win64/chrome.exe" --artifact "build/chrome-mv3-prod"
+Artifact runtime gate
+Artifact: build/chrome-mv3-prod
+Profile path: C:\Users\kqing\AppData\Local\Temp\vsa-artifact-gate-11G34g
+Profile resolved path: C:\Users\kqing\AppData\Local\Temp\vsa-artifact-gate-11G34g
+Profile path UTF-16 length: 58
+Chrome: Chrome/156.0.8078.73
+Chrome executable: D:/tools/chrome-for-testing/chrome-win64/chrome.exe
+Extension ID: ekaeiglkkkgocednbijlnbjnfomcmohg (discovered from CDP targets)
+[PASS] Extension loaded
+[PASS] Background service worker evaluated
+[PASS] Side Panel production bundle mounted
+[PASS] Options production bundle mounted
+[PASS] No uncaught runtime exceptions
+
+ARTIFACT RUNTIME GATE PASS
+Exit code: 0

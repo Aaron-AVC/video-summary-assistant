@@ -1,3 +1,16 @@
 /docs/licensing/evidence/R002-PR23/** -text whitespace=cr-at-eol
 /scripts/licensing/capture-parcel-build-graph.cjs -text whitespace=cr-at-eol
 /licenses/third-party/pr23-materials/** -text whitespace=cr-at-eol
+/docs/licensing/evidence/R002-B/raw/** -text whitespace=cr-at-eol
+/docs/licensing/evidence/R002-B/build/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-B/*.json -text
+/docs/licensing/evidence/R002-B/REVIEW.md -text
+/docs/licensing/evidence/R002-B/SHA256SUMS.txt -text
+/docs/licensing/evidence/R002-B/shadcn-review.md -text whitespace=cr-at-eol,-blank-at-eol
+/docs/licensing/evidence/R002-B/validation/*.txt -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-B/notice-preview/** -text whitespace=cr-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-B/notice-preview-v3/** -text whitespace=cr-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-B/old/** -text whitespace=cr-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-B/superseded-draft/** -text whitespace=cr-at-eol,-blank-at-eof
+/docs/licensing/evidence/R002-B/icon-previews/*.png binary
+/licenses/third-party/r002-b-materials/** -text whitespace=cr-at-eol

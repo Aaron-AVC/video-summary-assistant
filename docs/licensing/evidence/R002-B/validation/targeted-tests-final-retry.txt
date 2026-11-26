@@ -1,0 +1,104 @@
+bun test v1.2.5 (013fdddc)
+
+scripts\distribution-notices-validation.test.ts:
+(pass) fixed scope validates as blocked and preserves all closure and supplemental rows [1547.00ms]
+(pass) separates graph observation, conservative coverage, and source attribution [1453.00ms]
+(pass) rejects forged evidence [1344.00ms]
+(pass) rejects another build [1328.00ms]
+(pass) rejects wrong source [1297.00ms]
+(pass) rejects UNKNOWN relabeled excluded [1281.00ms]
+(pass) rejects required component omitted [1344.00ms]
+(pass) rejects outside-closure finding omitted [1328.00ms]
+(pass) unresolved component prevents candidate output before any file is written [2734.00ms]
+68 |   expect(() => readFileSync(join(out, "THIRD_PARTY_NOTICES.md"))).toThrow()
+69 | }))
+70 | 
+71 | test("preview preserves notice bytes and directory identities and rejects missing or modified output", () => scratch(dir => {
+72 |   const out = join(dir, "out")
+73 |   expect(cli(["generate", out]).code).toBe(0)
+                                           ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:73:39)
+      at scratch (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\distribution-notices-validation.test.ts:16:9)
+(fail) preview preserves notice bytes and directory identities and rejects missing or modified output [1484.00ms]
+(pass) rejects a capture or artifact without the pinned production output bytes [1250.00ms]
+error: Cannot read directory "C:\Users\kqing\": EPERM
+
+error: Cannot read directory "C:\Users\kqing\.codex\worktrees\": EPERM
+
+scripts\generate-extension-icons.test.ts:
+(pass) project extension icon artwork > generates the production icon and four reproducible size previews from the editable SVG [1922.00ms]
+
+scripts\license-ledger-validation.test.ts:
+(pass) third-party license ledger validator > accepts an evidenced npm package while preserving UNKNOWN bundle membership [16.00ms]
+(pass) third-party license ledger validator > rejects duplicate package-directory identities even when versions match
+(pass) third-party license ledger validator > rejects a verified license claim without fixed release provenance
+(pass) third-party license ledger validator > keeps an expanded-optional package outside the required closure [15.00ms]
+(pass) third-party license ledger validator > rejects a material whose recorded hash differs from its bytes [16.00ms]
+(pass) third-party license ledger validator > rejects a material path that escapes the legal-material directory
+166 |   it("rejects a material path that leaves the directory through a junction", () => {
+167 |     const { root, ledger } = createLedger()
+168 |     const outside = mkdtempSync(join(tmpdir(), "vsa-license-outside-"))
+169 |     roots.push(outside)
+170 |     writeFileSync(join(outside, "external.txt"), materialText)
+171 |     symlinkSync(outside, join(root, "licenses", "third-party", "materials", "external"), "junction")
+          ^
+error: EPERM: operation not permitted, symlink 'C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\docs\licensing\evidence\R002-B\validation\test-tmp\vsa-license-outside-HDIB83' -> 'C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\docs\licensing\evidence\R002-B\validation\test-tmp\vsa-license-ledger-vs67LM\licenses\third-party\materials\external'
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\license-ledger-validation.test.ts:171:5)
+(fail) third-party license ledger validator > rejects a material path that leaves the directory through a junction [79.00ms]
+(pass) third-party license ledger validator > rejects a package marked as both required and optional-only
+(pass) third-party license ledger validator > rejects an incomplete component list for the fixed 74-directory closure
+(pass) third-party license ledger validator > rejects npm evidence whose tarball integrity is not present in bun.lock [16.00ms]
+(pass) third-party license ledger validator > rejects a mismatch between installed closure flags and the recorded closure status [16.00ms]
+(pass) third-party license ledger validator > rejects unknown license evidence labels instead of letting them bypass verification [15.00ms]
+(pass) third-party license ledger validator > rejects a confirmed bundle state without direct membership evidence [16.00ms]
+(pass) formal ledger acceptance regressions > requires verified tarball text to name a legal file in that exact tarball [187.00ms]
+(pass) formal ledger acceptance regressions > rejects a license material borrowed from a different package and version [172.00ms]
+(pass) formal ledger acceptance regressions > rejects a NOTICE material that does not belong to the exact npm release [188.00ms]
+(pass) formal ledger acceptance regressions > does not verify upstream license text from evidence kind alone [156.00ms]
+(pass) formal ledger acceptance regressions > rejects an unrelated license appended to a valid upstream mapping [172.00ms]
+(pass) formal ledger acceptance regressions > requires every source-component license reference to match its fixed license source [187.00ms]
+(pass) formal ledger acceptance regressions > rejects a borrowed NOTICE even for an unresolved npm release [188.00ms]
+(pass) formal ledger acceptance regressions > requires an upstream license path, blob, digest, and material mapping [171.00ms]
+(pass) formal ledger acceptance regressions > rejects a versioned upstream mapping without the exact manifest and source-map evidence [188.00ms]
+(pass) formal ledger acceptance regressions > requires fixed path, commit, blob, digest, and material identity for source components [172.00ms]
+(pass) formal ledger acceptance regressions > rejects an upstream Git blob that does not match the preserved license bytes [157.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry Git head that differs from the exact npm publication metadata [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a deleted component even when ledger counts are changed to match [172.00ms]
+(pass) formal ledger acceptance regressions > rejects changing a required package to optional-only while preserving total counts [156.00ms]
+(pass) formal ledger acceptance regressions > keeps actual bundle membership UNKNOWN despite a non-empty claim string [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a SHA-512 SRI that decodes to fewer than 64 bytes [156.00ms]
+(pass) formal ledger acceptance regressions > matches every recorded npm integrity against the actual bun.lock record [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry URL that names a different package version [172.00ms]
+(pass) formal ledger acceptance regressions > retains the deduplicated fixed MIT text for every Radix component [406.00ms]
+
+scripts\licensing\r002-b-candidate.test.ts:
+(pass) R002-B dependency delta > allows only the reviewed compatible substitution
+(pass) R002-B dependency delta > fails closed on an unrelated dependency or permission change
+(pass) R002-B dependency delta > rejects a wrong publication binding
+(pass) R002-B dependency delta > preserves the shadcn MIT text while separating partial provenance from notice completeness [2734.00ms]
+
+src\sidepanel\workspace\database-availability.test.ts:
+(pass) Side Panel database availability > publishes available only after the read-only probe succeeds
+(pass) Side Panel database availability > distinguishes database failure from an empty history result
+(pass) Side Panel database availability > shares concurrent manual retries and retries only once
+(pass) Side Panel database availability > remains unavailable after a failed retry
+(pass) Side Panel database availability > lets a runtime database failure revoke readiness
+(pass) Side Panel database availability > does not let a stale readiness result override a runtime failure
+(pass) Side Panel database availability > does not let an operation failure from before a successful retry revoke readiness
+(pass) Side Panel database availability > still accepts a database failure reported by the current generation after recovery
+
+2 tests failed:
+(fail) preview preserves notice bytes and directory identities and rejects missing or modified output [1484.00ms]
+(fail) third-party license ledger validator > rejects a material path that leaves the directory through a junction [79.00ms]
+
+ 54 pass
+ 2 fail
+ 115 expect() calls
+Ran 56 tests across 5 files. [25.30s]
+
+Exit code: 1

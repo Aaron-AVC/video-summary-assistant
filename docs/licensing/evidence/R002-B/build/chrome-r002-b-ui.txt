@@ -1,0 +1,6 @@
+Command: bun scripts/licensing/verify-r002-b-browser.ts D:/tools/chrome-for-testing/chrome-win64/chrome.exe build/chrome-mv3-prod
+PASS Options Select: two keyboard open/close cycles; scroll lock/unlock and focus restoration
+PASS Chrome decoded manifest icons: [[16,16,16],[32,32,32],[48,48,48],[64,64,64],[128,128,128]]
+PASS Side Panel IndexedDB failure and Retry recovery: {"status":"available","alert":"连接检查仅在浏览器本地执行。此探测仅验证已配置的提供商、模型和 API 密钥路径，不会启动完整转录分析。","testOpen":"ok"}
+PASS Side Panel Settings and two Select keyboard/scroll/focus cycles after IndexedDB retry on Chrome/156.0.8078.73
+Exit code: 0

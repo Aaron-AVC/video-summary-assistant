@@ -1,0 +1,14 @@
+bun test v1.2.5 (013fdddc)
+
+scripts\licensing\r002-b-candidate.test.ts:
+(pass) R002-B dependency delta > allows only the reviewed compatible substitution
+(pass) R002-B dependency delta > fails closed on an unrelated dependency or permission change
+(pass) R002-B dependency delta > rejects a wrong publication binding
+(pass) R002-B dependency delta > preserves the shadcn MIT text while separating partial provenance from notice completeness [2953.00ms]
+(pass) R002-B dependency delta > keeps package identities absent from the Parcel graph unknown and conservatively notices them [2969.00ms]
+error: Cannot read directory "C:\Users\kqing\": EPERM
+
+ 5 pass
+ 0 fail
+ 17 expect() calls
+Ran 5 tests across 1 files. [6.27s]

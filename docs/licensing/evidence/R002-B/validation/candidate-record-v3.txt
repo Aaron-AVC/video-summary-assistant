@@ -1,0 +1,1 @@
+THIRD_PARTY_NOTICES_COMPLETE_RELEASE_HOLD: 84 scope rows; 31 files; 0 third-party notice blockers in scope; 1 release hold items

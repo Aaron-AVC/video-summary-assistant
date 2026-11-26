@@ -1,0 +1,275 @@
+{
+  "publications": {
+    "2.3.7": {
+      "version": "2.3.7",
+      "gitHead": "29e9fcd1eecf7d3b77a767941c4a57fe461fc1e4",
+      "url": "https://registry.npmjs.org/react-remove-scroll-bar/-/react-remove-scroll-bar-2.3.7.tgz",
+      "integrity": "sha512-UzA0npskGFA2bUqwWsSRJscuQEt7zyfVtMpCtBl/lk+k/ky6lzYImEks9jwgxTDe/B0tb5hyrYgbQv/JQaHjDw==",
+      "tarball": {
+        "sha256": "5ee31e784254a1a0c80b2a14a569c3dc254af4c75d709a04f79ff409e856df91",
+        "byteLength": 4938
+      },
+      "legalFiles": [],
+      "entries": {
+        "package/dist/es2015/component.js": {
+          "sha256": "3baec61523006aedf14321423427b0c50aa17bfe48faf344bebff9d883149f29",
+          "byteLength": 3395
+        },
+        "package/dist/es2019/component.js": {
+          "sha256": "ac214bb2783fdf743a0c949fef47784741db109dcc6f4426f46e77386dee1c8f",
+          "byteLength": 2811
+        },
+        "package/dist/es5/component.js": {
+          "sha256": "d95ae68cda75b262f01b7c3eba3d530c6a24579778cbb3e320b2449348dabb13",
+          "byteLength": 3807
+        },
+        "package/dist/es2015/constants.js": {
+          "sha256": "1c73582ef730bbca1d536a6995c7eea438dcd0632fee2856337627e44b5872e2",
+          "byteLength": 375
+        },
+        "package/dist/es2019/constants.js": {
+          "sha256": "f597b4036280caca4cc58d3476ffc02dc5c16564090229e6685e98b80a8e2a33",
+          "byteLength": 383
+        },
+        "package/dist/es5/constants.js": {
+          "sha256": "20bf238e562be0830b10b1813d36fa321e81cd07fd99b27724833132304b73bc",
+          "byteLength": 571
+        },
+        "package/dist/es2015/index.js": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es2019/index.js": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es5/index.js": {
+          "sha256": "0e1ab245d6b12ef80409b988b0f29b498c562b6cff6e7365714cb0c351914a12",
+          "byteLength": 1186
+        },
+        "package/dist/es2015/utils.js": {
+          "sha256": "2c4105ab772a5cbf4b3d1e54f49e94d03fde867d20767b46bb3e5c27f4d82f00",
+          "byteLength": 998
+        },
+        "package/dist/es2019/utils.js": {
+          "sha256": "dafd773a756cca848d359153df92315235becb2ed8e10b1146458be4bfd38826",
+          "byteLength": 949
+        },
+        "package/dist/es5/utils.js": {
+          "sha256": "ee6c64e8690475db96ec1a1b2ede342ffdc45ccf739bd28dd6f86c8c9a5917c3",
+          "byteLength": 1156
+        },
+        "package/constants/package.json": {
+          "sha256": "9b557c166960d4a096abc83259b8787a4072516f666856f8cf51656e38ed904b",
+          "byteLength": 234
+        },
+        "package/package.json": {
+          "sha256": "484ad46c8cc261e168d7e2602bbb70b80f8d10307b7de91d99485da28c350a03",
+          "byteLength": 2221
+        },
+        "package/README.md": {
+          "sha256": "486442209236ffa3893312e508694699a6b8834d30a2f9c083c1f3379983e4f9",
+          "byteLength": 1716
+        },
+        "package/dist/es2015/component.d.ts": {
+          "sha256": "8b9441c9166045f81e5000001f95521319692124baea142b228efdc370883736",
+          "byteLength": 415
+        },
+        "package/dist/es2019/component.d.ts": {
+          "sha256": "8b9441c9166045f81e5000001f95521319692124baea142b228efdc370883736",
+          "byteLength": 415
+        },
+        "package/dist/es5/component.d.ts": {
+          "sha256": "8b9441c9166045f81e5000001f95521319692124baea142b228efdc370883736",
+          "byteLength": 415
+        },
+        "package/dist/es2015/constants.d.ts": {
+          "sha256": "cd9dd3a7b0b95c3068f3b43b82da6dc6bee018f56d975b248d4bb6c484e61ed1",
+          "byteLength": 415
+        },
+        "package/dist/es2019/constants.d.ts": {
+          "sha256": "cd9dd3a7b0b95c3068f3b43b82da6dc6bee018f56d975b248d4bb6c484e61ed1",
+          "byteLength": 415
+        },
+        "package/dist/es5/constants.d.ts": {
+          "sha256": "cd9dd3a7b0b95c3068f3b43b82da6dc6bee018f56d975b248d4bb6c484e61ed1",
+          "byteLength": 415
+        },
+        "package/dist/es2015/index.d.ts": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es2019/index.d.ts": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es5/index.d.ts": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es2015/utils.d.ts": {
+          "sha256": "c4304c2114b48bb2778de565b4a0274ebbbbd71f6d7f5c57e116bd1656ea2c32",
+          "byteLength": 328
+        },
+        "package/dist/es2019/utils.d.ts": {
+          "sha256": "c4304c2114b48bb2778de565b4a0274ebbbbd71f6d7f5c57e116bd1656ea2c32",
+          "byteLength": 328
+        },
+        "package/dist/es5/utils.d.ts": {
+          "sha256": "c4304c2114b48bb2778de565b4a0274ebbbbd71f6d7f5c57e116bd1656ea2c32",
+          "byteLength": 328
+        }
+      }
+    },
+    "2.3.8": {
+      "version": "2.3.8",
+      "gitHead": "b3b1287aad81def2e2ae707274b74531b61ddbaf",
+      "url": "https://registry.npmjs.org/react-remove-scroll-bar/-/react-remove-scroll-bar-2.3.8.tgz",
+      "integrity": "sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q==",
+      "tarball": {
+        "sha256": "ccc872d7a2dc007cbf9d755f30d56b8d80eabdbe22c44c95a709129bfdc46f01",
+        "byteLength": 4937
+      },
+      "legalFiles": [],
+      "entries": {
+        "package/dist/es2015/component.js": {
+          "sha256": "3baec61523006aedf14321423427b0c50aa17bfe48faf344bebff9d883149f29",
+          "byteLength": 3395
+        },
+        "package/dist/es2019/component.js": {
+          "sha256": "ac214bb2783fdf743a0c949fef47784741db109dcc6f4426f46e77386dee1c8f",
+          "byteLength": 2811
+        },
+        "package/dist/es5/component.js": {
+          "sha256": "d95ae68cda75b262f01b7c3eba3d530c6a24579778cbb3e320b2449348dabb13",
+          "byteLength": 3807
+        },
+        "package/dist/es2015/constants.js": {
+          "sha256": "1c73582ef730bbca1d536a6995c7eea438dcd0632fee2856337627e44b5872e2",
+          "byteLength": 375
+        },
+        "package/dist/es2019/constants.js": {
+          "sha256": "f597b4036280caca4cc58d3476ffc02dc5c16564090229e6685e98b80a8e2a33",
+          "byteLength": 383
+        },
+        "package/dist/es5/constants.js": {
+          "sha256": "20bf238e562be0830b10b1813d36fa321e81cd07fd99b27724833132304b73bc",
+          "byteLength": 571
+        },
+        "package/dist/es2015/index.js": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es2019/index.js": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es5/index.js": {
+          "sha256": "0e1ab245d6b12ef80409b988b0f29b498c562b6cff6e7365714cb0c351914a12",
+          "byteLength": 1186
+        },
+        "package/dist/es2015/utils.js": {
+          "sha256": "2c4105ab772a5cbf4b3d1e54f49e94d03fde867d20767b46bb3e5c27f4d82f00",
+          "byteLength": 998
+        },
+        "package/dist/es2019/utils.js": {
+          "sha256": "dafd773a756cca848d359153df92315235becb2ed8e10b1146458be4bfd38826",
+          "byteLength": 949
+        },
+        "package/dist/es5/utils.js": {
+          "sha256": "ee6c64e8690475db96ec1a1b2ede342ffdc45ccf739bd28dd6f86c8c9a5917c3",
+          "byteLength": 1156
+        },
+        "package/constants/package.json": {
+          "sha256": "9b557c166960d4a096abc83259b8787a4072516f666856f8cf51656e38ed904b",
+          "byteLength": 234
+        },
+        "package/package.json": {
+          "sha256": "e372f857ce05f266137c65293436b5380fec42ac311e6acb9378ed78b98d75d0",
+          "byteLength": 2221
+        },
+        "package/README.md": {
+          "sha256": "486442209236ffa3893312e508694699a6b8834d30a2f9c083c1f3379983e4f9",
+          "byteLength": 1716
+        },
+        "package/dist/es2015/component.d.ts": {
+          "sha256": "8b9441c9166045f81e5000001f95521319692124baea142b228efdc370883736",
+          "byteLength": 415
+        },
+        "package/dist/es2019/component.d.ts": {
+          "sha256": "8b9441c9166045f81e5000001f95521319692124baea142b228efdc370883736",
+          "byteLength": 415
+        },
+        "package/dist/es5/component.d.ts": {
+          "sha256": "8b9441c9166045f81e5000001f95521319692124baea142b228efdc370883736",
+          "byteLength": 415
+        },
+        "package/dist/es2015/constants.d.ts": {
+          "sha256": "cd9dd3a7b0b95c3068f3b43b82da6dc6bee018f56d975b248d4bb6c484e61ed1",
+          "byteLength": 415
+        },
+        "package/dist/es2019/constants.d.ts": {
+          "sha256": "cd9dd3a7b0b95c3068f3b43b82da6dc6bee018f56d975b248d4bb6c484e61ed1",
+          "byteLength": 415
+        },
+        "package/dist/es5/constants.d.ts": {
+          "sha256": "cd9dd3a7b0b95c3068f3b43b82da6dc6bee018f56d975b248d4bb6c484e61ed1",
+          "byteLength": 415
+        },
+        "package/dist/es2015/index.d.ts": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es2019/index.d.ts": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es5/index.d.ts": {
+          "sha256": "130bc4c810a84aeae180ba8fe1e7fd96f706d5d3a0cf6728419ff2c74708185f",
+          "byteLength": 332
+        },
+        "package/dist/es2015/utils.d.ts": {
+          "sha256": "c4304c2114b48bb2778de565b4a0274ebbbbd71f6d7f5c57e116bd1656ea2c32",
+          "byteLength": 328
+        },
+        "package/dist/es2019/utils.d.ts": {
+          "sha256": "c4304c2114b48bb2778de565b4a0274ebbbbd71f6d7f5c57e116bd1656ea2c32",
+          "byteLength": 328
+        },
+        "package/dist/es5/utils.d.ts": {
+          "sha256": "c4304c2114b48bb2778de565b4a0274ebbbbd71f6d7f5c57e116bd1656ea2c32",
+          "byteLength": 328
+        }
+      }
+    }
+  },
+  "incomingRange": "^2.3.7",
+  "parent": "react-remove-scroll@2.7.2",
+  "licenseCommit": "8ca9ba5ea52de03308fe8ced94f7b159a44d28ff",
+  "licenseMaterial": {
+    "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84",
+    "byteLength": 1093
+  },
+  "sourceTreeAtBothCommits": "a860502e80cf620578d6517606da4ff12e8937d4",
+  "copyright": "Copyright (c) 2025 Anton Korzunov <thekashey@gmail.com>",
+  "dependencyConstraints": {
+    "2.3.7": {
+      "react-style-singleton": "^2.2.1",
+      "tslib": "^2.0.0"
+    },
+    "2.3.8": {
+      "react-style-singleton": "^2.2.2",
+      "tslib": "^2.0.0"
+    }
+  },
+  "peerConstraints": {
+    "2.3.7": {
+      "@types/react": "*",
+      "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+    },
+    "2.3.8": {
+      "@types/react": "*",
+      "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+    }
+  }
+}

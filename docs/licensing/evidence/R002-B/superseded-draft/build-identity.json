@@ -1,0 +1,239 @@
+{
+  "schema": "vsa-r002-b-production-evidence/v1",
+  "sourceCommit": "7eda9fdbe0cd414c16a755f0b5da390c0fd37a57",
+  "sourceTree": "cfec44a94ee5a2053a361b7a3087373562378ec5",
+  "base": "f6d7b3068b893ce11637ea84598b26a5975e6838",
+  "exitCode": 0,
+  "command": "node --require ./scripts/licensing/capture-parcel-build-graph.cjs ./node_modules/plasmo/bin/index.mjs build",
+  "environment": {
+    "NODE_ENV": "production",
+    "PARCEL_WORKERS": "2",
+    "target": "chrome-mv3"
+  },
+  "bun": "1.2.5",
+  "node": "v24.19.0",
+  "packageJson": {
+    "sha256": "693901a3d5b7a4f63bff8bbfb5dd6cee267096153c6a7d94a801ddc80ad53d90",
+    "byteLength": 2893
+  },
+  "lock": {
+    "sha256": "d2de1563f8d763ca98dc748ba07eeba87796f6a09f904985df347b53ce18a9fe",
+    "byteLength": 186757
+  },
+  "ledgerSha256": "a26a1ed43d3368e4a231340232903e377e08e5ce7df814259228e5ea675158b9",
+  "captureSha256": "7a2ac9e070bb70e0422b406c2261e82d5b6db5193cade205391d7ebfaf01cb25",
+  "gitInputs": {
+    "package.json": {
+      "sha256": "693901a3d5b7a4f63bff8bbfb5dd6cee267096153c6a7d94a801ddc80ad53d90",
+      "byteLength": 2893,
+      "gitBlobSha256": "b761ed95c3dbe63ef1e8ca757b5aa5ac4c35fa7246b0fd9340af26f825d4adee"
+    },
+    "bun.lock": {
+      "sha256": "d2de1563f8d763ca98dc748ba07eeba87796f6a09f904985df347b53ce18a9fe",
+      "byteLength": 186757,
+      "gitBlobSha256": "d2de1563f8d763ca98dc748ba07eeba87796f6a09f904985df347b53ce18a9fe"
+    },
+    "assets/icon.png": {
+      "sha256": "34df1cb851c1cae8c07c2e29b55e540e7e7e06a24a275fdd74227819edcff02f",
+      "byteLength": 2563,
+      "gitBlobSha256": "34df1cb851c1cae8c07c2e29b55e540e7e7e06a24a275fdd74227819edcff02f"
+    },
+    "assets/icon-source.svg": {
+      "sha256": "8869e8ee957a152eca324baf58d475c332ce476534f8488e6a31a18dffa084bf",
+      "byteLength": 930,
+      "gitBlobSha256": "8869e8ee957a152eca324baf58d475c332ce476534f8488e6a31a18dffa084bf"
+    }
+  },
+  "evidenceFiles": {
+    "production-build.txt": {
+      "sha256": "790eb02b767d8ff50366530524f6a1b4d5470ada1030080aa6d25f0edd37964e",
+      "byteLength": 648
+    },
+    "parcel-graph.json": {
+      "sha256": "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
+      "byteLength": 406490
+    },
+    "manifest.json": {
+      "sha256": "179601c4b18495c476475d3c686c1abe0faa1b3295ad5149499f9c5adac8ae47",
+      "byteLength": 1464
+    }
+  },
+  "artifact": {
+    "bilibili-video.5fd6a346.js": {
+      "sha256": "289a147296250187d90fbef9ab6312389d988152b266703c33eb49ffc9c6b470",
+      "byteLength": 587598
+    },
+    "icon128.plasmo.3c1ed2d2.png": {
+      "sha256": "9cbf870df96a59321938482fe3817bb627c1d7d9d5c910d1fd8a5fc47bca8dd9",
+      "byteLength": 2584
+    },
+    "icon16.plasmo.6c567d50.png": {
+      "sha256": "44f4fe98f0f47e4838bf2ca84334d09a34a97350f0e9aea3eeaa1cf1126b2e27",
+      "byteLength": 850
+    },
+    "icon32.plasmo.76b92899.png": {
+      "sha256": "34eec1491e58f9ffbece52b5e65b4a1eb0e5fe2b46705ac0d15ad9f09179af3c",
+      "byteLength": 1688
+    },
+    "icon48.plasmo.aced7582.png": {
+      "sha256": "69e6ebaba04c1237c86ace491fd1f496367fed4e39280ac398a5cd697fbf7faa",
+      "byteLength": 2513
+    },
+    "icon64.plasmo.8bb5e6e0.png": {
+      "sha256": "b4f9c8f9710902f62b2b51c10b304db38c0cf91e3b171f28b5c83babc0434927",
+      "byteLength": 2944
+    },
+    "manifest.json": {
+      "sha256": "179601c4b18495c476475d3c686c1abe0faa1b3295ad5149499f9c5adac8ae47",
+      "byteLength": 1464
+    },
+    "options.95eda3f3.js": {
+      "sha256": "ad1792a82a134f12f84d133fddc4abad05bf94becaa2d2c21b79f1be8dc82af0",
+      "byteLength": 1665197
+    },
+    "options.cbd95b00.css": {
+      "sha256": "52933e361fa67128d9ca7d31bb15dd409c0b2b5403061969c5d27d425bdea79d",
+      "byteLength": 42195
+    },
+    "options.html": {
+      "sha256": "62864cff9ea477bb003def39fa409f94037c601d8c6272dcba8725a555843c5c",
+      "byteLength": 314
+    },
+    "sidepanel.b7741352.js": {
+      "sha256": "ed8eb86a409e5770abfc35f8be0870a1ffb6ba710567bcc9f77d3d8bdc7661c3",
+      "byteLength": 1904886
+    },
+    "sidepanel.html": {
+      "sha256": "7a2872df69cb24f88e0beac0e0ff5a4a2167c5ea1bb55070d4a4a0cf6fd4fb6b",
+      "byteLength": 316
+    },
+    "static/background/index.js": {
+      "sha256": "e012862ef311f569748934dd2c822f44c34f8ed0788872478ec8911f6b195d6f",
+      "byteLength": 593571
+    },
+    "youtube-watch.3b0aae31.js": {
+      "sha256": "c5e831a6eb203a3c934152fa2536006e5902effd038ba5e7939d9009cf47cad4",
+      "byteLength": 587251
+    }
+  },
+  "outputChecks": {
+    "icon": {
+      "generated": {
+        "16": {
+          "source": ".plasmo/gen-assets/icon16.plasmo.png",
+          "output": "icon16.plasmo.6c567d50.png",
+          "width": 16,
+          "height": 16,
+          "rgbaSha256": "ba91823b75e7aa88e3d828dbd54f199dfd4c92ecc01895c24a675a2f81095f10"
+        },
+        "32": {
+          "source": ".plasmo/gen-assets/icon32.plasmo.png",
+          "output": "icon32.plasmo.76b92899.png",
+          "width": 32,
+          "height": 32,
+          "rgbaSha256": "1dc523cacfc0b2ccd8ce9cba781da6ee5c4a7f76d34ae3de397e7d9c8aba7b56"
+        },
+        "48": {
+          "source": ".plasmo/gen-assets/icon48.plasmo.png",
+          "output": "icon48.plasmo.aced7582.png",
+          "width": 48,
+          "height": 48,
+          "rgbaSha256": "14c21f4d34a635a3321739dfe5101b2c9afaa1302b2b074973d5358e85a8369f"
+        },
+        "64": {
+          "source": ".plasmo/gen-assets/icon64.plasmo.png",
+          "output": "icon64.plasmo.8bb5e6e0.png",
+          "width": 64,
+          "height": 64,
+          "rgbaSha256": "e7c9dda6974e69fa03b5e7e4599d828bb7d4fa0455178e1196740a96dbdb8ba8"
+        },
+        "128": {
+          "source": ".plasmo/gen-assets/icon128.plasmo.png",
+          "output": "icon128.plasmo.3c1ed2d2.png",
+          "width": 128,
+          "height": 128,
+          "rgbaSha256": "1ec5615ac718b8fce6aeb35c04094252555e7189aa33779cdc98cf641c3bc0f5"
+        }
+      },
+      "source": {
+        "sha256": "34df1cb851c1cae8c07c2e29b55e540e7e7e06a24a275fdd74227819edcff02f",
+        "byteLength": 2563
+      },
+      "editableSvg": {
+        "sha256": "8869e8ee957a152eca324baf58d475c332ce476534f8488e6a31a18dffa084bf",
+        "byteLength": 930
+      }
+    }
+  },
+  "toolchain": {
+    "plasmo": {
+      "version": "0.90.5",
+      "sha256": "27bbea04cfb4f317864492201f6fb7f9688ed8bde0e36d2e6c2b610a4cffa4f4",
+      "byteLength": 1896
+    },
+    "@parcel/core": {
+      "version": "2.9.3",
+      "sha256": "cf107858b89b38c06892ea89caba1165ab1b31462b20dbf0e1cf5b08b212ae68",
+      "byteLength": 1526
+    },
+    "@plasmohq/parcel-core": {
+      "version": "0.1.11",
+      "sha256": "2fbc6afa0b17e371141ea8fb91929ac1069057aa4824fba5aa4d41317428f92c",
+      "byteLength": 1233
+    },
+    "sharp": {
+      "version": "0.33.5",
+      "sha256": "75e24f70d7732d18f503c731856febabd43c7083d3edd162a745f0c387c49d4f",
+      "byteLength": 7607
+    }
+  },
+  "inputEvidence": {
+    "source-rights.json": {
+      "sha256": "83c3b782b46d52732b2569c343806ce1bc4578c4ff1c31c79aabdfa29a8bb4bc",
+      "byteLength": 91244
+    },
+    "scroll-bar-publications.json": {
+      "sha256": "77551d085d5f94334c05759414a53c9d0675023cf7a4b9e362385a6c8c2ebc92",
+      "byteLength": 11132
+    },
+    "shadcn-review.md": {
+      "sha256": "e8d22fe907b77c4d65c4660117dbdb9052da02bb0653f1efb79db8e808fdcefd",
+      "byteLength": 8425
+    },
+    "raw/scroll-2.3.7.tgz": {
+      "sha256": "5ee31e784254a1a0c80b2a14a569c3dc254af4c75d709a04f79ff409e856df91",
+      "byteLength": 4938
+    },
+    "raw/scroll-2.3.8.tgz": {
+      "sha256": "ccc872d7a2dc007cbf9d755f30d56b8d80eabdbe22c44c95a709129bfdc46f01",
+      "byteLength": 4937
+    },
+    "raw/upstream-compare.json": {
+      "sha256": "1321287a66a9f72fdd469552ac98a5fb219e430ebad519c990f8e631e0e46f6b",
+      "byteLength": 18135
+    },
+    "raw/upstream-pr76.json": {
+      "sha256": "7e1b39f8e6b6a90d9e2cc2affbbb958ae44a40dd3a9845682d385e0760ffb568",
+      "byteLength": 18165
+    },
+    "raw/scroll-2.3.7.json": {
+      "sha256": "791a5a87d0ac5aaedde298c3fdae19ac6cab88969beeaf77a0c466e03b631fbc",
+      "byteLength": 2908
+    },
+    "raw/scroll-2.3.8.json": {
+      "sha256": "826c618ece09367334160c1ab3a272fd54f8f12e3b0a45f75b0f2660d285855a",
+      "byteLength": 2908
+    }
+  },
+  "byteIdenticalNonIconOutputs": [
+    "bilibili-video.5fd6a346.js",
+    "manifest.json",
+    "options.95eda3f3.js",
+    "options.cbd95b00.css",
+    "options.html",
+    "sidepanel.b7741352.js",
+    "sidepanel.html",
+    "static/background/index.js",
+    "youtube-watch.3b0aae31.js"
+  ]
+}

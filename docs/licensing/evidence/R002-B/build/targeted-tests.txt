@@ -1,0 +1,74 @@
+Command: bun test scripts/license-ledger-validation.test.ts scripts/distribution-notices-validation.test.ts scripts/generate-extension-icons.test.ts scripts/licensing/r002-b-candidate.test.ts src/sidepanel/workspace/database-availability.test.ts
+bun test v1.2.5 (013fdddc)
+
+scripts\distribution-notices-validation.test.ts:
+(pass) fixed scope validates as blocked and preserves all closure and supplemental rows [1531.00ms]
+(pass) separates graph observation, conservative coverage, and source attribution [1297.00ms]
+(pass) rejects forged evidence [1203.00ms]
+(pass) rejects another build [1188.00ms]
+(pass) rejects wrong source [1093.00ms]
+(pass) rejects UNKNOWN relabeled excluded [1110.00ms]
+(pass) rejects required component omitted [1125.00ms]
+(pass) rejects outside-closure finding omitted [1109.00ms]
+(pass) unresolved component prevents candidate output before any file is written [2297.00ms]
+(pass) preview preserves notice bytes and directory identities and rejects missing or modified output [4188.00ms]
+(pass) rejects a capture or artifact without the pinned production output bytes [1093.00ms]
+
+scripts\generate-extension-icons.test.ts:
+(pass) project extension icon artwork > generates the production icon and four reproducible size previews from the editable SVG [32.00ms]
+
+scripts\license-ledger-validation.test.ts:
+(pass) third-party license ledger validator > accepts an evidenced npm package while preserving UNKNOWN bundle membership
+(pass) third-party license ledger validator > rejects duplicate package-directory identities even when versions match [16.00ms]
+(pass) third-party license ledger validator > rejects a verified license claim without fixed release provenance
+(pass) third-party license ledger validator > keeps an expanded-optional package outside the required closure
+(pass) third-party license ledger validator > rejects a material whose recorded hash differs from its bytes [15.00ms]
+(pass) third-party license ledger validator > rejects a material path that escapes the legal-material directory
+(pass) third-party license ledger validator > rejects a material path that leaves the directory through a junction [78.00ms]
+(pass) third-party license ledger validator > rejects a package marked as both required and optional-only
+(pass) third-party license ledger validator > rejects an incomplete component list for the fixed 74-directory closure [16.00ms]
+(pass) third-party license ledger validator > rejects npm evidence whose tarball integrity is not present in bun.lock
+(pass) third-party license ledger validator > rejects a mismatch between installed closure flags and the recorded closure status [15.00ms]
+(pass) third-party license ledger validator > rejects unknown license evidence labels instead of letting them bypass verification
+(pass) third-party license ledger validator > rejects a confirmed bundle state without direct membership evidence
+(pass) formal ledger acceptance regressions > requires verified tarball text to name a legal file in that exact tarball [156.00ms]
+(pass) formal ledger acceptance regressions > rejects a license material borrowed from a different package and version [141.00ms]
+(pass) formal ledger acceptance regressions > rejects a NOTICE material that does not belong to the exact npm release [156.00ms]
+(pass) formal ledger acceptance regressions > does not verify upstream license text from evidence kind alone [141.00ms]
+(pass) formal ledger acceptance regressions > rejects an unrelated license appended to a valid upstream mapping [171.00ms]
+(pass) formal ledger acceptance regressions > requires every source-component license reference to match its fixed license source [157.00ms]
+(pass) formal ledger acceptance regressions > rejects a borrowed NOTICE even for an unresolved npm release [140.00ms]
+(pass) formal ledger acceptance regressions > requires an upstream license path, blob, digest, and material mapping [141.00ms]
+(pass) formal ledger acceptance regressions > rejects a versioned upstream mapping without the exact manifest and source-map evidence [156.00ms]
+(pass) formal ledger acceptance regressions > requires fixed path, commit, blob, digest, and material identity for source components [141.00ms]
+(pass) formal ledger acceptance regressions > rejects an upstream Git blob that does not match the preserved license bytes [140.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry Git head that differs from the exact npm publication metadata [141.00ms]
+(pass) formal ledger acceptance regressions > rejects a deleted component even when ledger counts are changed to match [140.00ms]
+(pass) formal ledger acceptance regressions > rejects changing a required package to optional-only while preserving total counts [141.00ms]
+(pass) formal ledger acceptance regressions > keeps actual bundle membership UNKNOWN despite a non-empty claim string [172.00ms]
+(pass) formal ledger acceptance regressions > rejects a SHA-512 SRI that decodes to fewer than 64 bytes [156.00ms]
+(pass) formal ledger acceptance regressions > matches every recorded npm integrity against the actual bun.lock record [141.00ms]
+(pass) formal ledger acceptance regressions > rejects a registry URL that names a different package version [140.00ms]
+(pass) formal ledger acceptance regressions > retains the deduplicated fixed MIT text for every Radix component [344.00ms]
+
+scripts\licensing\r002-b-candidate.test.ts:
+(pass) R002-B dependency delta > allows only the reviewed compatible substitution
+(pass) R002-B dependency delta > fails closed on an unrelated dependency or permission change
+(pass) R002-B dependency delta > rejects a wrong publication binding
+(pass) R002-B dependency delta > preserves the shadcn MIT text while separating partial provenance from notice completeness [2328.00ms]
+
+src\sidepanel\workspace\database-availability.test.ts:
+(pass) Side Panel database availability > publishes available only after the read-only probe succeeds
+(pass) Side Panel database availability > distinguishes database failure from an empty history result
+(pass) Side Panel database availability > shares concurrent manual retries and retries only once
+(pass) Side Panel database availability > remains unavailable after a failed retry
+(pass) Side Panel database availability > lets a runtime database failure revoke readiness
+(pass) Side Panel database availability > does not let a stale readiness result override a runtime failure
+(pass) Side Panel database availability > does not let an operation failure from before a successful retry revoke readiness
+(pass) Side Panel database availability > still accepts a database failure reported by the current generation after recovery
+
+ 56 pass
+ 0 fail
+ 125 expect() calls
+Ran 56 tests across 5 files. [23.19s]
+Exit code: 0

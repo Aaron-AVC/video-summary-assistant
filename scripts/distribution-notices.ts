@@ -58,10 +58,14 @@ type LedgerComponent = {
   installedManifestSha256?: string, installedClosureMembership: string, packageDirectoryIdentity: string | null,
   license: { declared: string, evidenceStatus: string, copyrightStatements: string[], licenseMaterialIds: string[], noticeMaterialIds: string[], relatedMaterialIds: string[], unresolvedIssue: string | null },
   sourceEvidence: unknown[]
+  provenanceStatus?: string
+  provenanceNote?: string
+  sourceClassification?: string
+  sourceScope?: string
 }
 type Ledger = { components: LedgerComponent[], licenseMaterials: { materialId: string, path: string, kind: string, sha256: string, byteLength: number, sourceArtifacts: unknown[] }[] }
 // A complete graph does not account for all generated or transformed bytes.
-type Membership = "CONFIRMED_INCLUDED" | "UNKNOWN"
+type Membership = "CONFIRMED_INCLUDED" | "CONFIRMED_EXCLUDED" | "UNKNOWN"
 type Evidence = { type: string, output: string, sources: string[] }
 type Row = { id: string, name: string, version: string, membership: Membership, coverage: string, evidence: Evidence[] }
 type SourceOrigin = { path: string, classification: string, upstreamPath: string | null, upstreamBlob: string | null }
@@ -75,27 +79,31 @@ function sameFile(record: Identity | null | undefined, bytes: Buffer) {
 function sameIdentity(left: Identity | null, right: Identity) {
   return left?.sha256 === right.sha256 && left.byteLength === right.byteLength
 }
-function sourceIdentity(build: Build) {
+function sourceIdentity(build: Build, historical = false) {
   const git = (...args: string[]) => execFileSync("git", args, { cwd: ROOT })
   requireCheck(git("show", "-s", "--format=%T", SOURCE_COMMIT).toString().trim() === SOURCE_TREE, "Fixed source tree mismatch")
   for (const [file, identity] of Object.entries(build.gitInputs)) {
-    const bytes = readUnder(ROOT, file)
     const blob = git("show", `${SOURCE_COMMIT}:${file}`)
-    requireCheck(sha(blob) === identity.gitBlobSha256 && (sameFile(identity, bytes) || bytes.equals(blob)), `Source input identity differs: ${file}`)
+    requireCheck(sha(blob) === identity.gitBlobSha256, `Fixed source input Git blob differs: ${file}`)
+    if (!historical) {
+      const bytes = readUnder(ROOT, file)
+      requireCheck(sameFile(identity, bytes) || bytes.equals(blob), `Source input identity differs: ${file}`)
+    }
   }
+  if (historical) return
   const paths = git("diff", "--name-only", "-z", SOURCE_COMMIT, "--").toString().split("\0").filter(Boolean)
   const untracked = git("ls-files", "--others", "--exclude-standard", "-z").toString().split("\0").filter(Boolean)
   const allowed = /^(?:\.gitattributes$|THIRD_PARTY_NOTICES\.md$|docs\/licensing\/evidence\/R002-PR23\/|docs\/superpowers\/(?:plans|specs)\/2026-11-25-vsa-r002-pr23\.md$|licenses\/third-party\/pr23-materials\/|scripts\/(?:licensing\/capture-parcel-build-graph\.cjs|distribution-notices(?:-validation\.test)?\.ts)$)/
   requireCheck([...paths, ...untracked].every(path => allowed.test(path)), "Product source differs from the fixed build baseline")
 }
 
-function load() {
+function load(historical = false) {
   const base = join(ROOT, EVIDENCE)
   const buildBytes = readUnder(base, "build-identity.json")
   requireCheck(sha(buildBytes) === BUILD_SHA, "Build identity differs from the reviewed capture")
   const build = json<Build>(buildBytes)
   requireCheck(build.schema === "vsa-fixed-production-evidence/v1" && build.sourceCommit === SOURCE_COMMIT && build.sourceTree === SOURCE_TREE && build.exitCode === 0, "Invalid fixed production identity")
-  sourceIdentity(build)
+  sourceIdentity(build, historical)
   requireCheck(sha(readUnder(ROOT, CAPTURE)) === build.captureSha256, "Capture script identity differs")
   const evidence = (path: string) => {
     const bytes = readUnder(base, path)
@@ -107,7 +115,7 @@ function load() {
   const graph = json<Graph>(evidence("parcel-graph.json"))
   requireCheck(graph.schema === "vsa-parcel-run-graph/v1" && sameIdentity(graph.packageJson, build.packageJson) && sameIdentity(graph.lock, build.lock), "Graph belongs to a different build")
   const ledgerValue = json<unknown>(readUnder(ROOT, LEDGER))
-  const errors = validateLicenseLedger(ROOT, ledgerValue)
+  const errors = validateLicenseLedger(ROOT, ledgerValue, historical)
   requireCheck(errors.length === 0, `Source ledger failed:\n${errors.join("\n")}`)
   const ledger = ledgerValue as Ledger
   const extras = json<Supplemental[]>(evidence("supplemental-components.json"))
@@ -120,10 +128,15 @@ function load() {
     if (path === YOUTUBE_ADAPTER) return [{path, classification: "relocated_expression", upstreamPath: null, upstreamBlob: null}]
     return []
   })
-  return { build, graph, ledger, extras, origins, sourceInventorySha256: sha(inventory) }
+  return { build, graph, ledger, extras, origins, sourceInventorySha256: sha(inventory),
+    lockBytes: historical ? fixedBlob("bun.lock") : undefined }
 }
 
-function deriveScope({build, graph, ledger, extras, origins, sourceInventorySha256}: ReturnType<typeof load>) {
+type Inputs = ReturnType<typeof load> & {
+  buildSha256?: string, lockBytes?: Buffer, projectAssetId?: string
+}
+
+function deriveScope({build, graph, ledger, extras, origins, sourceInventorySha256, buildSha256 = BUILD_SHA, lockBytes, projectAssetId}: Inputs) {
   const artifacts = new Set(Object.keys(build.artifact))
   const packages = new Map(graph.packages.map(p => [p.identity, p]))
   requireCheck(packages.size === graph.packages.length, "Duplicate graph package identity")
@@ -148,8 +161,10 @@ function deriveScope({build, graph, ledger, extras, origins, sourceInventorySha2
   const allLedgerIds = new Set(ledger.components.map(c => c.componentId))
   const supplementalIds = new Set<string>()
   const rows: Row[] = []
+  const outputCoverage = sorted(allAssets.keys())
   const add = (id: string, name: string, version: string, coverage: string, evidence: Evidence[]) => {
-    rows.push({ id, name, version, membership: evidence.length ? "CONFIRMED_INCLUDED" : "UNKNOWN", coverage, evidence: evidence.sort((a,b) => a.output < b.output ? -1 : a.output > b.output ? 1 : 0) })
+    rows.push({ id, name, version, membership: evidence.length ? "CONFIRMED_INCLUDED" : "UNKNOWN",
+      coverage, evidence: evidence.sort((a,b) => a.output < b.output ? -1 : a.output > b.output ? 1 : 0) })
   }
   const localSources = (match: (path: string) => boolean) => [...allAssets].flatMap(([output, sources]) => {
     const hits = sources.filter(match)
@@ -166,15 +181,16 @@ function deriveScope({build, graph, ledger, extras, origins, sourceInventorySha2
     if (c.componentId === "source:shadcn-templates") {
       evidence = localSources(path => /^src\/components\/ui\/(empty|field|input-group)\.tsx$/.test(path))
     }
-    if (c.componentId === "asset:icon.png") {
+    if (c.componentId === "asset:icon.png" || c.componentId === projectAssetId) {
       evidence = Object.values(build.outputChecks.icon.generated).map(({output, source}) => ({type: "SAME_BUILD_DERIVED_ICON", output, sources: ["assets/icon.png", source]}))
     }
     const coverage = c.kind === "npm-package"
       ? c.installedClosureMembership === "REQUIRED" ? "REQUIRED_CLOSURE" : "OPTIONAL_ONLY"
-      : c.componentId === "source:new-project-files" ? "RIGHTS_REVIEW" : "INCORPORATED_SOURCE_OR_ASSET"
+      : c.componentId === "source:new-project-files" ? "RIGHTS_REVIEW"
+      : c.componentId === projectAssetId ? "PROJECT_ASSET" : "INCORPORATED_SOURCE_OR_ASSET"
     add(c.componentId, c.name, c.version, coverage, evidence)
   }
-  const lockLines = readUnder(ROOT, "bun.lock").toString("utf8").split(/\r?\n/)
+  const lockLines = (lockBytes ?? readUnder(ROOT, "bun.lock")).toString("utf8").split(/\r?\n/)
   for (const x of extras) {
     const id = `npm:${x.identity}`
     requireCheck(!allLedgerIds.has(id) && !supplementalIds.has(x.identity), `Duplicate supplemental identity: ${id}`)
@@ -191,9 +207,9 @@ function deriveScope({build, graph, ledger, extras, origins, sourceInventorySha2
   }
   const observedSources = new Set(rows.find(row => row.id === "source:youtube-summarizer")?.evidence.flatMap(ev => ev.sources))
   return { schema: "vsa-distribution-scope/v1", sourceCommit: build.sourceCommit, sourceTree: build.sourceTree,
-    buildSha256: BUILD_SHA, ledgerSha256: build.ledgerSha256, packageSha256: build.packageJson.sha256,
+    buildSha256, ledgerSha256: build.ledgerSha256, packageSha256: build.packageJson.sha256,
     lockSha256: build.lock.sha256, graphSha256: build.evidenceFiles["parcel-graph.json"].sha256,
-    graphOutputCoverage: sorted(allAssets.keys()),
+    graphOutputCoverage: outputCoverage,
     sourceInventory: { path: SOURCE_INVENTORY, gitBlobSha256: sourceInventorySha256,
       observedYouTubeSummarizerOrigins: origins.filter(origin => observedSources.has(origin.path)) },
     noticeCoverage: "REQUIRED_AND_OPTIONAL_CLOSURE_PLUS_OBSERVED_EXTRAS_AND_INCORPORATED_CONTENT",
@@ -222,12 +238,13 @@ function verifyArtifact(dir: string, build: Build) {
   requireCheck(files.size === Object.keys(build.artifact).length && [...files].every(([path, bytes]) => sameFile(build.artifact[path], bytes)), "Production artifact inventory differs from same-build evidence")
 }
 
-function noticeFiles(inputs: ReturnType<typeof load>, scope: ReturnType<typeof deriveScope>, candidate: boolean) {
+function noticeFiles(inputs: Inputs, scope: Omit<ReturnType<typeof deriveScope>, "sourceInventory"> & { sourceInventory: object }, candidate: boolean) {
   const files = new Map<string, Buffer>()
   const byComponent = new Map(inputs.ledger.components.map(c => [c.componentId, c]))
   const byExtra = new Map(inputs.extras.map(c => [`npm:${c.identity}`, c]))
   const ledgerMaterials = new Map(inputs.ledger.licenseMaterials.map(m => [m.materialId, m]))
   const blockers: string[] = []
+  const releaseBlockers: string[] = []
   function add(bytes: Buffer, record: Identity, role: Material["role"], sources: unknown[]): Material {
     requireCheck(sameFile(record, bytes), `Legal material bytes differ: ${record.sha256}`)
     const group = role === "NOTICE" ? "NOTICES" : "LICENSES"
@@ -241,7 +258,7 @@ function noticeFiles(inputs: ReturnType<typeof load>, scope: ReturnType<typeof d
     return add(readUnder(ROOT, record.path), record, role, record.sourceArtifacts)
   }
   const components = scope.components.map(row => {
-    const include = row.coverage !== "RIGHTS_REVIEW"
+    const include = row.coverage !== "RIGHTS_REVIEW" && row.coverage !== "PROJECT_ASSET"
     const c = byComponent.get(row.id)
     const x = byExtra.get(row.id)
     const materials: Material[] = []
@@ -249,7 +266,17 @@ function noticeFiles(inputs: ReturnType<typeof load>, scope: ReturnType<typeof d
     const issue = row.id === "asset:icon.png" && row.membership === "CONFIRMED_INCLUDED" && c?.license.unresolvedIssue
       ? "The bundled icon derives from the fixed upstream image; the original artwork creator and chain of rights remain unverified."
       : c?.license.unresolvedIssue ?? null
-    if (issue && (include || row.coverage === "RIGHTS_REVIEW")) blockers.push(`${row.name}@${row.version}: ${issue}`)
+    const provenanceNote = inputs.buildSha256 && row.id === "source:shadcn-templates"
+      && c?.provenanceStatus === "PARTIAL"
+      && c.license.licenseMaterialIds.includes("sha256:1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f")
+      && c.license.licenseMaterialIds.includes("sha256:a6051897936080c684f88c52dfb2283d106e96d7aa4eccb93dc975a27d9383c4")
+      ? c.provenanceNote ?? issue : null
+    const noticeIssue = provenanceNote ? null : issue
+    if (noticeIssue) {
+      const message = `${row.name}@${row.version}: ${noticeIssue}`
+      if (include || (!inputs.buildSha256 && row.coverage === "RIGHTS_REVIEW")) blockers.push(message)
+      else if (row.coverage === "RIGHTS_REVIEW") releaseBlockers.push(message)
+    }
     if (include && c) {
       // PR-1 preserves these two Lucide files as evidence; they are the icon
       // named "copyright" and its map, not legal text for distribution.
@@ -278,25 +305,39 @@ function noticeFiles(inputs: ReturnType<typeof load>, scope: ReturnType<typeof d
         materials.push(add(readUnder(ROOT, `licenses/third-party/pr23-materials/${record.sha256}.txt`), record, "LICENSE", [{url: x.registryTarballUrl, tarballSha256: x.tarballSha256, path: record.tarballPath}]))
       }
     }
-    requireCheck(!include || materials.some(m => m.role === "LICENSE") || issue, `Included component has no LICENSE or unresolved disposition: ${row.id}`)
+    requireCheck(!include || materials.some(m => m.role === "LICENSE") || noticeIssue, `Included component has no LICENSE or unresolved disposition: ${row.id}`)
     return {...row, includeInNotice: include, declared: c?.license.declared ?? x?.declared,
       licenseStatus: c?.license.evidenceStatus ?? "VERIFIED_TARBALL_TEXT",
-      copyright: c?.license.copyrightStatements ?? x?.copyrightStatements ?? [], materials, unresolved: issue}
+      ...(c?.provenanceStatus ? {provenanceStatus: c.provenanceStatus, provenanceNote} : {}),
+      copyright: c?.license.copyrightStatements ?? x?.copyrightStatements ?? [], materials, unresolved: noticeIssue}
   })
   // The history-only checkout can generate a preview. Candidate mode is
   // reserved for a live artifact and still refuses all unresolved items.
-  if (candidate && blockers.length) throw new Error(`Candidate blocked:\n${blockers.join("\n")}`)
-  const status = blockers.length ? "BLOCKED_AUDIT_PREVIEW" : candidate ? "THIRD_PARTY_NOTICE_CANDIDATE" : "AUDIT_PREVIEW"
+  if (candidate && blockers.length) throw new Error(`Third-party notice candidate blocked:\n${blockers.join("\n")}`)
+  const status = blockers.length ? "BLOCKED_AUDIT_PREVIEW"
+    : inputs.buildSha256 ? "THIRD_PARTY_NOTICES_COMPLETE_RELEASE_HOLD"
+    : candidate ? "THIRD_PARTY_NOTICE_CANDIDATE" : "AUDIT_PREVIEW"
   const put = (path: string, text: string) => files.set(path, Buffer.from(text, "utf8"))
   const {components: _, ...identity} = scope
-  put("THIRD_PARTY/manifest.json", render({...identity, schema: "vsa-third-party-notice-manifest/v1", status, releaseApproved: false, blockers, components}))
+  const disposition = inputs.buildSha256 ? {
+    status, releaseApproved: false, releaseStatus: "HOLD", releaseBlockers,
+    thirdPartyStatus: blockers.length
+      ? "BLOCKED_THIRD_PARTY_ITEMS" : "MATERIALS_VERIFIED_FOR_REVIEWED_SCOPE",
+  } : {status, releaseApproved: false}
+  put("THIRD_PARTY/manifest.json", render({...identity, schema: "vsa-third-party-notice-manifest/v1", ...disposition, blockers, components}))
   put("THIRD_PARTY_NOTICES.md", ["# Third-party notices", "", `**${status} — ${candidate ? "third-party notice candidate only" : "not eligible for distribution"}.**`, "",
-    `Production evidence: \`${BUILD_SHA}\``, "", "Scope: conservative required and optional closure coverage, observed supplemental content, and incorporated source/assets. See the machine manifest for observed membership.", "",
-    "## Open items", "", ...blockers.map(issue => `- ${issue}`), "", "## Included third-party notice entries", "",
+    `Production evidence: \`${scope.buildSha256}\``, "", "Scope: conservative required and optional closure coverage, observed supplemental content, and incorporated source/assets. See the machine manifest for observed membership.", "",
+    ...(releaseBlockers.length ? ["## Release qualifications on hold", "", ...releaseBlockers.map(issue => `- ${issue}`), ""] : []),
+    inputs.buildSha256 ? "## Open third-party notice items in the reviewed scope" : "## Open items", "",
+    ...blockers.map(issue => `- ${issue}`), "",
+    ...(components.some(component => component.provenanceStatus === "PARTIAL")
+      ? ["## Partial provenance retained without narrowing the notice scope", "",
+        ...components.filter(component => component.provenanceStatus === "PARTIAL").map(component => `- ${component.name}: ${component.provenanceNote}`), ""] : []),
+    "## Included third-party notice entries", "",
     ...components.filter(row => row.includeInNotice).flatMap(row => [`### ${row.name} @ ${row.version}`, "", `- Identity: \`${row.id}\``, `- Coverage: ${row.coverage}; observed membership: ${row.membership}`, `- License evidence: ${row.declared} (${row.licenseStatus})`,
       ...row.copyright.map(line => `- ${line}`), ...row.materials.map(m => `- [${m.role}](${m.path}) — SHA-256 \`${m.sha256}\``), ""]), ""].join("\n"))
   put("THIRD_PARTY/SHA256SUMS.txt", sorted(files.keys()).map(path => `${sha(files.get(path)!)}  ${path}\n`).join(""))
-  return { files, status, blockers }
+  return { files, status, blockers, releaseBlockers }
 }
 
 function verifyOutput(dir: string, expected: Map<string, Buffer>) {
@@ -313,9 +354,10 @@ function main(args: string[]) {
   requireCheck(["scope", "generate", "verify"].includes(command), "Usage: bun scripts/distribution-notices.ts scope|generate|verify [output] [--artifact dir] [--scope file] [--candidate]")
   const output = command !== "scope" ? options.shift() : undefined
   requireCheck(command === "scope" || (output && !output.startsWith("--")), "Provide an output directory")
-  let scopeFile: string | undefined, artifact: string | undefined, candidate = false
+  let scopeFile: string | undefined, artifact: string | undefined, candidate = false, historical = false
   for (let i = 0; i < options.length; i++) {
     const option = options[i]
+    if (option === "--historical" && !historical) { historical = true; continue }
     if (option === "--candidate" && !candidate && command !== "scope") { candidate = true; continue }
     const val = options[++i]
     requireCheck(val && !val.startsWith("--"), `Missing value for ${option}`)
@@ -323,7 +365,8 @@ function main(args: string[]) {
     else if (option === "--artifact" && !artifact) artifact = val
     else throw new Error(`Unknown or repeated argument: ${option}`)
   }
-  const inputs = load()
+  requireCheck(!historical || !candidate, "Historical snapshot mode does not generate release candidates")
+  const inputs = load(historical)
   const scope = deriveScope(inputs)
   const supplied = scopeFile ? readFileSync(scopeFile) : readUnder(ROOT, SCOPE)
   requireCheck(render(json<unknown>(supplied)) === render(scope), "Scope differs from derived evidence")
@@ -351,4 +394,5 @@ if (import.meta.main) {
   }
 }
 
-export { load, deriveScope, noticeFiles, verifyOutput }
+export { load, deriveScope, noticeFiles, verifyOutput, verifyArtifact, inventory }
+export type { Build, Graph, Identity, Inputs, Ledger, Supplemental }

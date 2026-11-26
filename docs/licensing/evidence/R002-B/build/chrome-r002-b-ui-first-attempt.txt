@@ -1,0 +1,15 @@
+Command: bun scripts/licensing/verify-r002-b-browser.ts D:/tools/chrome-for-testing/chrome-win64/chrome.exe build/chrome-mv3-prod
+PASS Options Select: two keyboard open/close cycles; scroll lock/unlock and focus restoration
+PASS Chrome decoded manifest icons: [[16,16,16],[32,32,32],[48,48,48],[64,64,64],[128,128,128]]
+23 |   do {
+24 |     const value = await promise()
+25 |     if (value) return value
+26 |     await Bun.sleep(100)
+27 |   } while (Date.now() < deadline)
+28 |   throw new Error(`Timed out: ${label}`)
+             ^
+error: Timed out: Side Panel recovered from injected IndexedDB failure
+      at <anonymous> (C:\Users\kqing\.codex\worktrees\vsa-r002-b-release-blockers\Video Summary Assistant\scripts\licensing\verify-r002-b-browser.ts:28:9)
+
+Bun v1.2.5 (Windows x64)
+Exit code: 1

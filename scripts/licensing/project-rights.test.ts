@@ -32,9 +32,9 @@ describe("PR-5 project-rights evidence", () => {
       "LICENSE",
       "CONTRIBUTING.md",
       "licenses/LICENSE-SCOPE.md",
-      "docs/licensing/evidence/R002-PR5/project-rights-decision-v4.json",
-      "docs/licensing/evidence/R002-PR5/notice-preview-v4/THIRD_PARTY/manifest.json",
-      "docs/licensing/evidence/R002-PR5/notice-preview-v4/THIRD_PARTY/LICENSES/cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14/LICENSE",
+      "docs/licensing/evidence/R002-PR5/project-rights-decision-v5.json",
+      "docs/licensing/evidence/R002-PR5/notice-preview-v5/THIRD_PARTY/manifest.json",
+      "docs/licensing/evidence/R002-PR5/notice-preview-v5/THIRD_PARTY/LICENSES/cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14/LICENSE",
     ]
     const output = execFileSync("git", [
       "check-attr",

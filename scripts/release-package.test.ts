@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test"
-import { mkdtempSync, readdirSync, rmSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { execFileSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -217,6 +217,17 @@ describe("PR4 ZIP archive gate", () => {
     expect(archived).toContain("[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)")
     expect(archived).toContain("https://github.com/Aaron-AVC/video-summary-assistant/blob/main/CONTRIBUTING.md")
     expect(archived).not.toMatch(/\]\(\.\.\//)
+  })
+
+  it("accepts the current code-formatted legal link labels in LICENSE-SCOPE.md", () => {
+    const source = readFileSync(join(process.cwd(), "licenses/LICENSE-SCOPE.md"))
+    const prepareScope = (packageGate as unknown as Record<string, unknown>).prepareArchiveLicenseScope
+    expect(prepareScope).toBeFunction()
+
+    const archived = (prepareScope as (bytes: Buffer) => Buffer)(source).toString("utf8")
+    expect(archived).toContain("[`LICENSE`](LICENSE)")
+    expect(archived).toContain("[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)")
+    expect(archived).not.toMatch(/\]\(\.\.\/[^)]*\)/)
   })
 
   it("round-trips the exact planned members and byte identities", () => {

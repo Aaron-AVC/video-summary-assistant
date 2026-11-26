@@ -19,7 +19,7 @@ const ROOT = resolve(import.meta.dir, "../..")
 const BASE_COMMIT = "de4bdcf811f93dab72bd748e314d59a414e1f251"
 const BASE_TREE = "18f3adfe593c40f84a2303c32542d1a68f83b6a5"
 const PROJECT_LICENSE_SHA256 = "2033de464f1eaee84272cf1283dfafe6f505ebae08a65ac929941352ab0409d5"
-const LICENSE_SCOPE_SHA256 = "e9c545ca4610fb7def4a9fc67e60bc632cc780f1037029445be1a910eb72042b"
+const LICENSE_SCOPE_SHA256 = "29763e3297224e5a93369b0ba983dca63cc0546b7b6b0ac0e6fe914f0f898eb8"
 const CONTRIBUTOR_TERMS_SHA256 = "63aaf70e6e2be3eda8b5cb8706de376f22840320c7e3251ee8b3a6a8849525e6"
 const BUILD_EVIDENCE = "docs/licensing/evidence/R002-B/build/build-identity-v3.json"
 const BUILD_EVIDENCE_SHA256 = "3d8a9d547cc506a5544e0f7a5a519803de549276191021ecfce88039b21c56c2"
@@ -28,12 +28,12 @@ const HISTORICAL_RIGHTS_SHA256 = "aed77e5c89bc36cb226648016f26b1693cfb97bf3f9040
 const HISTORICAL_SCOPE = "docs/licensing/evidence/R002-B/distribution-scope-v3.json"
 const HISTORICAL_LEDGER = "docs/licensing/evidence/R002-B/candidate-ledger.json"
 const OUTPUT_ROOT = "docs/licensing/evidence/R002-PR5"
-const RIGHTS_SUPPLEMENT = `${OUTPUT_ROOT}/project-rights-supplement-v4.json`
-const CONTRIBUTOR_RECORD = `${OUTPUT_ROOT}/contributor-authority-v4.json`
-const CURRENT_SCOPE = `${OUTPUT_ROOT}/current-scope-v4.json`
-const CURRENT_LEDGER = `${OUTPUT_ROOT}/current-ledger-v4.json`
-const NOTICE_ROOT = `${OUTPUT_ROOT}/notice-preview-v4`
-const DECISION = `${OUTPUT_ROOT}/project-rights-decision-v4.json`
+const RIGHTS_SUPPLEMENT = `${OUTPUT_ROOT}/project-rights-supplement-v5.json`
+const CONTRIBUTOR_RECORD = `${OUTPUT_ROOT}/contributor-authority-v5.json`
+const CURRENT_SCOPE = `${OUTPUT_ROOT}/current-scope-v5.json`
+const CURRENT_LEDGER = `${OUTPUT_ROOT}/current-ledger-v5.json`
+const NOTICE_ROOT = `${OUTPUT_ROOT}/notice-preview-v5`
+const DECISION = `${OUTPUT_ROOT}/project-rights-decision-v5.json`
 const STATUS = "THIRD_PARTY_NOTICES_COMPLETE"
 const CANDIDATE_STATUS = "PR6_REVIEW_REQUIRED"
 const NOTICE_STATUS = "MATERIALS_VERIFIED_FOR_REVIEWED_SCOPE"
@@ -417,7 +417,7 @@ function createDecision(
     .map(([path, bytes]) => ({ path, ...identity(bytes) }))
   return {
     schema: "vsa-project-rights-decision/v1",
-    decisionId: "VSA-R002-PR5-2026-11-27-v3",
+    decisionId: "VSA-R002-PR5-2026-11-27-v5",
     status: "QUALIFIED_FOR_LOCAL_CANDIDATE",
     decisionSource: {
       kind: "RIGHTSHOLDER_DECLARATION_AND_REVIEWED_PROJECT_RECORD",

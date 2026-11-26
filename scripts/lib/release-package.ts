@@ -140,9 +140,9 @@ function createPackageIdentityForMode(
       productFileCount: input.productFiles.size,
     },
     distribution: {
-      scopeFile: "docs/licensing/evidence/R002-PR5/current-scope-v4.json",
+      scopeFile: "docs/licensing/evidence/R002-PR5/current-scope-v5.json",
       scopeSha256: input.scopeSha256 ?? null,
-      ledgerFile: "docs/licensing/evidence/R002-PR5/current-ledger-v4.json",
+      ledgerFile: "docs/licensing/evidence/R002-PR5/current-ledger-v5.json",
       ledgerSha256: input.ledgerSha256 ?? null,
       noticeFiles: sortedIdentities(input.noticeFiles),
       noticeFileCount: input.noticeFiles.size,
@@ -384,7 +384,8 @@ export function prepareArchiveLicenseScope(source: Uint8Array): Buffer {
     .replaceAll("](../THIRD_PARTY_NOTICES.md)", "](THIRD_PARTY_NOTICES.md)")
   check(!/\]\(\.\.\/[^)]*\)/.test(text),
     "Packaged LICENSE-SCOPE.md contains a repository-relative link unavailable in the archive")
-  check(text.includes("[LICENSE](LICENSE)") && text.includes("[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)"),
+  check(/\[[^\]]+\]\(LICENSE\)/.test(text)
+    && /\[[^\]]+\]\(THIRD_PARTY_NOTICES\.md\)/.test(text),
     "Packaged LICENSE-SCOPE.md does not link to the archive's root legal files")
   return Buffer.from(text, "utf8")
 }
@@ -427,8 +428,8 @@ function getCurrentPlan(artifactDir: string, mode: "INTERNAL" | "RELEASE_CANDIDA
   const rights = loadVerifiedProjectRightsState()
   check(rights.qualification.status === "QUALIFIED_FOR_LOCAL_CANDIDATE",
     "Current project-rights decision does not qualify this repository")
-  const currentScopePath = join(ROOT, "docs/licensing/evidence/R002-PR5/current-scope-v4.json")
-  const currentLedgerPath = join(ROOT, "docs/licensing/evidence/R002-PR5/current-ledger-v4.json")
+  const currentScopePath = join(ROOT, "docs/licensing/evidence/R002-PR5/current-scope-v5.json")
+  const currentLedgerPath = join(ROOT, "docs/licensing/evidence/R002-PR5/current-ledger-v5.json")
   check(stable(JSON.parse(readFileSync(currentScopePath, "utf8"))) === stable(rights.scope),
     "Recorded PR-5 distribution scope differs from the verified current scope")
   check(stable(JSON.parse(readFileSync(currentLedgerPath, "utf8"))) === stable(rights.ledger),
@@ -555,8 +556,8 @@ function makeIdentity(
     zipBytes,
     archiveFiles: plan.archiveFiles,
     version: plan.version,
-    scopeSha256: hashFile(join(ROOT, "docs/licensing/evidence/R002-PR5/current-scope-v4.json")),
-    ledgerSha256: hashFile(join(ROOT, "docs/licensing/evidence/R002-PR5/current-ledger-v4.json")),
+    scopeSha256: hashFile(join(ROOT, "docs/licensing/evidence/R002-PR5/current-scope-v5.json")),
+    ledgerSha256: hashFile(join(ROOT, "docs/licensing/evidence/R002-PR5/current-ledger-v5.json")),
   }
   return createPackageIdentityForMode(input, mode, plan.qualification)
 }

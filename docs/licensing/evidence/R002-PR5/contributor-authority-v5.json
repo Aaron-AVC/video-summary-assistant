@@ -1,0 +1,47 @@
+{
+  "source": "git history reachable from the fixed PR-5 main commit",
+  "baseCommit": "de4bdcf811f93dab72bd748e314d59a414e1f251",
+  "baseTree": "18f3adfe593c40f84a2303c32542d1a68f83b6a5",
+  "distinctGitAuthorLabelCount": 4,
+  "rightsHolderOrToolAuthorCommitCounts": [
+    116,
+    70,
+    8
+  ],
+  "integrationAuthorLabel": {
+    "label": "RH-02 Integration",
+    "commit": "afc8fc01fbf12d1a154941a4fce2aa411f2f3e28",
+    "commitCount": 1,
+    "identityFinding": "The Git author label alone does not establish a distinct human rights holder.",
+    "changedPaths": [
+      "src/features/analysis/lib/provider-response-body.test.ts",
+      "src/features/analysis/lib/provider-response-body.ts",
+      "src/features/history/lib/history-repository.test.ts",
+      "src/features/history/lib/history-repository.ts",
+      "src/lib/schemas/persistence-bounds.test.ts",
+      "src/sidepanel/ask/ask-controller.test.ts",
+      "src/sidepanel/ask/ask-controller.ts"
+    ]
+  },
+  "distinctGitCommitterLabelCount": 5,
+  "additionalNonAuthorCommitterLabelCount": 1,
+  "additionalCommitterLabelsOnNonMergeCommits": 0,
+  "committerAssessment": "The additional committer label occurs only on merge commits and is not treated as a project rights holder.",
+  "coAuthorTrailerCount": 0,
+  "rightsHolderDeclaration": {
+    "source": "User-confirmed VSA-R002-PR5 task authorization",
+    "additionalJointOrContractContributors": "NONE_DECLARED",
+    "projectRightsHolderPublicAttribution": "Aaron-AVC",
+    "scope": "Only project-owned or otherwise authorized portions; third-party rights remain separate.",
+    "digitalSignature": "NOT_REPRESENTED"
+  },
+  "assessment": "The owner declaration covers project contributions; Git author and committer labels are evidence, not independent proof of legal ownership.",
+  "futureContributions": {
+    "termsPath": "CONTRIBUTING.md",
+    "termsVersion": "1.0",
+    "affirmativePullRequestConfirmationRequired": true,
+    "ordinaryIssuesAndDiscussionAutomaticallyLicensed": false
+  },
+  "unresolvedExternalRightsHolders": 0,
+  "reviewNote": "If later evidence identifies an external author or contractual claim, pause qualification for the affected material and reassess."
+}

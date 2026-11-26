@@ -16,6 +16,26 @@ const BUILD_SOURCE = "7eda9fdbe0cd414c16a755f0b5da390c0fd37a57"
 const BUILD_SHA = "3d8a9d547cc506a5544e0f7a5a519803de549276191021ecfce88039b21c56c2"
 const MATERIAL = "licenses/third-party/r002-b-materials/react-remove-scroll-bar-MIT.txt"
 const PROJECT_ASSET = "asset:project-icon-r002-b"
+
+// Plasmo 0.90.5 finds entries under src or falls back to the project root.
+// The fixed Tailwind config also scans root contents/**/*.tsx.
+const PLASMO_PAGES = ["popup", "options", "devtools", "newtab", "sidepanel"]
+const BUILD_DIRECTORIES = ["src", "assets", "public", "background", "contents", "tabs", "sandboxes", ...PLASMO_PAGES]
+const PLASMO_ENTRIES = ["background", "content", "sandbox", ...PLASMO_PAGES]
+const BUILD_FILES = [
+  "package.json", "bun.lock", "plasmo.d.ts", "jsconfig.json", "browserslist", ".browserslistrc", "babel.config.json",
+]
+const DOT_CONFIGS = [".env", ".parcelrc", ".postcssrc", ".babelrc"]
+const NAMED_CONFIGS = ["plasmo", "tailwind", "postcss", "babel", "vite", "webpack", "rollup"]
+const IGNORED_INPUT_PATHS = [
+  ...BUILD_DIRECTORIES.flatMap(name => [name, `${name}/**`]),
+  ...BUILD_FILES,
+  ...DOT_CONFIGS.flatMap(name => [name, `${name}.*`]),
+  ...NAMED_CONFIGS.map(name => `${name}.config.*`),
+  ...PLASMO_ENTRIES.map(name => `${name}.*`),
+  "tsconfig.json", "tsconfig.*.json",
+].map(path => `:(top,icase,glob)${path}`)
+
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 const stable = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`
@@ -30,6 +50,47 @@ const stable = (value: unknown): string => {
 type Tuple = readonly [string, string, { dependencies?: Record<string, string>, peerDependencies?: Record<string, string> }, string]
 type Lock = { overrides?: Record<string, string>, packages: Record<string, Tuple> }
 type Manifest = { overrides?: Record<string, string>, [key: string]: unknown }
+
+export function assertPackagingManifestEquivalent(before: Manifest, after: Manifest): void {
+  const scripts = before.scripts as Record<string, string> | undefined
+  assert(scripts?.package === "plasmo package", "Fixed package script identity differs")
+  const expected = structuredClone(before) as Manifest
+  expected.scripts = {
+    ...scripts,
+    package: "bun scripts/release-package.ts release",
+    "package:internal": "bun scripts/release-package.ts internal",
+    "verify:package": "bun scripts/release-package.ts verify",
+  }
+  assert(stable(expected) === stable(after), "Unreviewed package.json change")
+}
+
+function isCandidateBuildInput(path: string): boolean {
+  const [root, child] = path.toLowerCase().split("/", 2)
+  if (BUILD_DIRECTORIES.includes(root)) return true
+  if (child !== undefined) return false
+  if (BUILD_FILES.includes(root) || /^tsconfig(?:\..+)?\.json$/.test(root)) return true
+  if (DOT_CONFIGS.some(name => root === name || root.startsWith(`${name}.`))) return true
+
+  const entry = /^([a-z]+)(?:\.(?:chrome|production))?\.(?:[jt]sx?|html)$/.exec(root)
+  const config = /^([a-z]+)\.config\.[cm]?[jt]sx?$/.exec(root)
+  return (entry !== null && PLASMO_ENTRIES.includes(entry[1]))
+    || (config !== null && NAMED_CONFIGS.includes(config[1]))
+}
+
+export function assertCandidateBuildInputsUnchanged(paths: {
+  changed: readonly string[]
+  untracked: readonly string[]
+  ignored: readonly string[]
+}): void {
+  // The tracked package.json is checked separately against the approved scripts.
+  const changedProduct = [
+    ...paths.changed.filter(path => path !== "package.json"),
+    ...paths.untracked,
+    ...paths.ignored,
+  ].filter(isCandidateBuildInput)
+  assert(changedProduct.length === 0,
+    `Candidate product files differ from captured source: ${changedProduct.join(", ")}`)
+}
 
 export function validateDependencyDelta(
   beforeManifest: Manifest,
@@ -124,14 +185,23 @@ export function loadCandidate() {
   for (const [path, record] of Object.entries(build.gitInputs)) {
     const committed = inputGit(path)
     const live = read(path)
-    assert(sha256(committed) === record.gitBlobSha256 && (matches(live, record) || live.equals(committed)
-      || (path.endsWith(".json") || path.endsWith(".lock") || path.endsWith(".svg")) && normalizedText(live) === normalizedText(committed)),
-      `Candidate source input differs: ${path}`)
+    assert(sha256(committed) === record.gitBlobSha256, `Fixed build input Git blob differs: ${path}`)
+    if (path === "package.json") {
+      assertPackagingManifestEquivalent(parse<Manifest>(committed), parse<Manifest>(live))
+      continue
+    }
+    const unchanged = matches(live, record) || live.equals(committed)
+      || ((path.endsWith(".json") || path.endsWith(".lock") || path.endsWith(".svg"))
+        && normalizedText(live) === normalizedText(committed))
+    assert(unchanged, `Candidate source input differs: ${path}`)
   }
-  const product = /^(?:src[\/]|assets[\/]|(?:background|options|sidepanel|popup)\.tsx?$|(?:package\.json|bun\.lock|tailwind\.config\.ts|\.postcssrc\.json|tsconfig\.json)$|\.env(?:\.|$))/
-  const changed = git("diff", "--name-only", "-z", BUILD_SOURCE, "--").toString().split("\0")
+  // A move out of a product directory must still report the removed source path.
+  const changed = git("diff", "--no-renames", "--name-only", "-z", BUILD_SOURCE, "--").toString().split("\0")
   const untracked = git("ls-files", "--others", "--exclude-standard", "-z").toString().split("\0")
-  assert(![...changed, ...untracked].some(path => product.test(path)), "Candidate product files differ from captured source")
+  const ignoredBuildInputs = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--",
+    ...IGNORED_INPUT_PATHS,
+  ).toString().split("\0")
+  assertCandidateBuildInputsUnchanged({ changed, untracked, ignored: ignoredBuildInputs })
   for (const [path, record] of Object.entries(build.evidenceFiles)) {
     assert(matches(read(`${EVIDENCE}/build/${path}`), record), `Same-build evidence differs: ${path}`)
   }
@@ -235,7 +305,15 @@ export function loadCandidate() {
     sourceInventory: { path: `${EVIDENCE}/source-rights-v3.json`, sha256: inputs.sourceInventorySha256,
       observedYouTubeSummarizerOrigins: derived.sourceInventory.observedYouTubeSummarizerOrigins },
   }
-  return { inputs, scope, delta }
+  const candidateLedger = {schema: "vsa-r002-b-ledger/v1", buildSha256: BUILD_SHA, base: BASE,
+    changedNpmIdentities: delta.map(name => `node_modules/${name}/package.json`), inheritedLedgerSha256: inputs.build.ledgerSha256,
+    blockerDisposition: {
+      "B-01": "RESOLVED_FOR_CANDIDATE",
+      "B-02": "RESOLVED_REPLACED",
+      "B-03": "PARTIAL_PROVENANCE_NOTICE_SATISFIED",
+      "B-04": "PARTIAL_PROJECT_RIGHTS_HOLD",
+    }, ...inputs.ledger, supplementalComponents: inputs.extras}
+  return { inputs, scope, delta, ledger: candidateLedger }
 }
 
 function cli() {
@@ -252,18 +330,10 @@ function cli() {
     } else if (flag === "--candidate" && !candidate && ["generate", "verify"].includes(command)) candidate = true
     else throw new Error(`Unexpected argument: ${flag}`)
   }
-  const { inputs, scope, delta } = loadCandidate()
+  const { inputs, scope, ledger } = loadCandidate()
   if (artifact) verifyArtifact(artifact, inputs.build)
   assert(!candidate || artifact, "Candidate notice generation and verification require a verified artifact")
   const plan = noticeFiles(inputs, scope, candidate)
-  const ledger = {schema: "vsa-r002-b-ledger/v1", buildSha256: BUILD_SHA, base: BASE,
-    changedNpmIdentities: delta.map(name => `node_modules/${name}/package.json`), inheritedLedgerSha256: inputs.build.ledgerSha256,
-    blockerDisposition: {
-      "B-01": "RESOLVED_FOR_CANDIDATE",
-      "B-02": "RESOLVED_REPLACED",
-      "B-03": "PARTIAL_PROVENANCE_NOTICE_SATISFIED",
-      "B-04": "PARTIAL_PROJECT_RIGHTS_HOLD",
-    }, ...inputs.ledger, supplementalComponents: inputs.extras}
   const snapshots = {"candidate-ledger.json": ledger, "distribution-scope-v3.json": scope}
   for (const [file, value] of Object.entries(snapshots)) {
     const path = `${EVIDENCE}/${file}`

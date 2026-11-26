@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { noticeFiles } from "../distribution-notices"
 import { validateDependencyDelta } from "./r002-b-candidate"
 import { loadCandidate } from "./r002-b-candidate"
@@ -72,5 +74,18 @@ describe("R002-B dependency delta", () => {
       row.includeInNotice && row.materials.some(material => material.role === "LICENSE"),
     )).toBe(true)
     expect(plan.blockers).toEqual([])
+  })
+
+  it("exposes the derived candidate ledger needed to verify the recorded snapshot", () => {
+    const candidate = loadCandidate() as ReturnType<typeof loadCandidate> & { ledger?: unknown }
+    const recorded = JSON.parse(readFileSync(join(import.meta.dir,
+      "../../docs/licensing/evidence/R002-B/candidate-ledger.json"), "utf8"))
+    expect(candidate.ledger).toMatchObject({
+      schema: recorded.schema,
+      buildSha256: recorded.buildSha256,
+      base: recorded.base,
+      changedNpmIdentities: recorded.changedNpmIdentities,
+      blockerDisposition: recorded.blockerDisposition,
+    })
   })
 })

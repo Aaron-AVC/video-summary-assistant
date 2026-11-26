@@ -2,8 +2,10 @@
 
 `third-party-license-ledger.json` is the maintained provenance ledger for the
 fixed source revision named inside the file. It is a provenance record, not a
-release approval, final distribution SBOM, or decision about the project's
-own license. The project root `LICENSE` is deliberately outside this task.
+release approval or a final distribution SBOM. The root `LICENSE` governs only
+project-owned or authorized material within the scope in
+[`../../licenses/LICENSE-SCOPE.md`](../../licenses/LICENSE-SCOPE.md); it does
+not replace third-party licenses.
 
 The ledger preserves the accepted required dependency closure of 70 package
 directory identities (65 unique name-version pairs) and expanded optional
@@ -63,3 +65,8 @@ use their exact original bytes.
 fixed-commit source path inventory used to build this ledger. npm tarball
 archives and external code are not included. R1 regression and engineering
 logs are delivered separately in the review package.
+
+The immutable R002-B records remain historical snapshots. PR-5 keeps its
+project-rights supplement, contributor authority record, current scope and
+current notice output under `evidence/R002-PR5/`; those versioned records do
+not rewrite the R002-B evidence.

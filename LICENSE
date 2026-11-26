@@ -1,0 +1,194 @@
+
+Video Summary Assistant Community License
+
+Version 1.0
+
+Copyright (c) 2026 Aaron-AVC
+
+1. Scope and Definitions
+
+For purposes of this License:
+
+"Licensor" means the copyright holder or authorized rights holder identified as Aaron-AVC.
+
+"Covered Material" means the portions of Video Summary Assistant, including its source code, object code, documentation, and assets, that the Licensor owns or is otherwise authorized to license under these terms and has made available under this License.
+
+"Modified Version" means a work that incorporates or adapts Covered Material in a manner requiring permission under applicable copyright law.
+
+"Distribution" means providing or making available copies of Covered Material or a Modified Version to another person or entity, whether in source code, compiled, packaged, or other form.
+
+"Existing Functionality" means functionality already provided by the version of Covered Material that you obtained, including substantially equivalent functionality retained, adapted, rebranded, relocated, or repackaged in a Modified Version.
+
+Existing Functionality does not include genuinely independent additional functionality developed by you or separately supplied external services and resources.
+
+"Mandatory Promotional Participation" means requiring a person to follow a promotional account, join a marketing group, share advertising or referral material, recruit other users, or undertake comparable promotional activity as a condition of obtaining, activating, unlocking, or using Existing Functionality.
+
+Third-party material governed by separate license terms is excluded from Covered Material to the extent of the rights granted under those separate terms.
+
+2. Grant of Rights
+
+Subject to the conditions of this License, the Licensor grants you a worldwide, royalty-free, non-exclusive, non-sublicensable license, irrevocable while you comply with its terms, to:
+
+a. Use Covered Material for personal, educational, research, professional, organizational, and commercial purposes.
+
+b. Copy, install, execute, study, evaluate, and modify Covered Material.
+
+c. Create and use Modified Versions.
+
+d. Integrate Covered Material into your own workflows, systems, and applications, subject to the conditions below.
+
+e. Distribute Covered Material and Modified Versions without charge, subject to Sections 3, 4, and 5.
+
+These permissions apply equally to individuals, businesses, nonprofit organizations, educational institutions, and other entities.
+
+This License does not require you to disclose the source code of private modifications or independently created additions.
+
+The non-sublicensable nature of this grant does not prevent redistribution permitted under this License or the direct licensing of recipients under Section 5.
+
+3. Restrictions on Paid Distribution and Restricted Access
+
+Unless separately authorized in writing by the Licensor, you may not:
+
+a. Sell, rent, lease, or otherwise distribute copies of Covered Material or a Modified Version in exchange for payment or other mandatory economic consideration.
+
+b. Require a purchase, paid subscription, paid membership, mandatory donation, or other paid entitlement as a condition of obtaining a copy of Covered Material or a Modified Version, or of accessing, activating, unlocking, or continuing to use its Existing Functionality.
+
+c. Impose artificial usage limits, disable features, or otherwise restrict Existing Functionality for the purpose of charging users to restore, unlock, or extend access to that functionality.
+
+d. Require Mandatory Promotional Participation as a condition of obtaining, activating, unlocking, or using Covered Material or its Existing Functionality.
+
+e. Rebrand, repackage, compile, relocate, or otherwise modify Covered Material for the purpose of engaging in or facilitating conduct prohibited by this Section.
+
+f. Include Covered Material or a Modified Version as a paid component of a commercial software package or bundle.
+
+Including Covered Material alongside separately priced goods or services is permitted when an equivalent copy of the Covered Material being distributed, together with its Existing Functionality, is available independently without charge, without a required purchase, and without mandatory enrollment in a paid service.
+
+A Modified Version may contain independently developed additional functionality that is offered for a fee, provided that the copy containing Covered Material is available without charge and the Existing Functionality is not conditioned on payment or otherwise restricted in violation of this Section.
+
+This License does not require you to implement every feature of the original software, retain discontinued features, provide future updates, or supply external resources at your own expense. However, removing, replacing, relocating, or disabling Existing Functionality must not be used as a means of charging users to obtain substantially equivalent Existing Functionality supplied as part of, or in connection with, a Modified Version.
+
+Charges for independently developed additional functionality, separately supplied services and resources, or authentication reasonably necessary to provide such functionality or services are permitted under Section 4.
+
+You may not structure transactions or impose indirect conditions primarily to circumvent the restrictions of this Section.
+
+These restrictions apply only where your conduct requires permission with respect to Covered Material. They do not independently restrict the distribution or sale of material to which you hold separate rights when such conduct does not require permission under this License.
+
+4. Permitted Commercial Activities
+
+For clarity, Section 3 does not prohibit:
+
+a. Using Covered Material or a Modified Version in commercial operations or paid employment.
+
+b. Selling products, reports, analyses, content, or other independently lawful outputs created through the use of Covered Material.
+
+c. Charging for installation, configuration, maintenance, training, technical support, consulting, or custom development services, provided the charge is genuinely for those services and is not a disguised charge for obtaining Covered Material or accessing its Existing Functionality.
+
+d. Charging for separately supplied services and resources, including computing resources, artificial intelligence APIs, data services, storage, or hosted functionality, provided such charges are genuinely for those services or resources rather than for permission to obtain Covered Material or unlock Existing Functionality.
+
+e. Charging for genuinely independent additional functionality, including additional functionality integrated into a Modified Version, provided that the Existing Functionality remains available without charges or restrictions prohibited by Section 3.
+
+f. Accepting voluntary donations or sponsorships that are not required for obtaining a copy or accessing Existing Functionality.
+
+g. Using or deploying Covered Material internally within an organization for its ordinary operations.
+
+h. Developing, using, or distributing competing products, provided that any use or distribution requiring permission with respect to Covered Material complies with this License.
+
+i. Using reasonable authentication, security controls, technical capacity limits, or service quotas necessary for lawful operation or for supplying genuine external services, provided they are not imposed to circumvent Section 3.
+
+No provision requires a third party to provide its own paid external services, independent additional functionality, computing resources, or professional labor free of charge.
+
+The Licensor does not claim any right under this License to your business revenue, profits, independently created material, or outputs generated through your use of the software merely because you used Covered Material.
+
+5. Redistribution Conditions
+
+When distributing Covered Material or a Modified Version, you must:
+
+a. Include a complete copy of this License.
+
+b. Preserve applicable copyright, license, attribution, and third-party notices relating to the material distributed.
+
+c. Clearly identify material modifications in a reasonably accessible notice when distributing a Modified Version.
+
+d. Ensure that recipients receive notice of their direct rights under this License with respect to the Covered Material.
+
+Each recipient of Covered Material distributed in accordance with this License receives the applicable rights directly from the Licensor, subject to these terms. No separate sublicense from the distributor is required or granted.
+
+You may apply separate license terms to your independently created additions, provided those terms do not remove or restrict the rights that recipients have under this License in the Covered Material.
+
+This License does not require publication or delivery of source code solely because you distribute a compiled or packaged Modified Version.
+
+6. Third-Party and Mixed-License Material
+
+Video Summary Assistant incorporates material governed by separate third-party licenses.
+
+Such material remains subject to its applicable original license terms.
+
+Nothing in this License withdraws, limits, or replaces permissions independently granted by a third-party rights holder, including permissions to use, modify, distribute, sublicense, or sell material under the MIT License or other applicable licenses.
+
+Where a file contains both Covered Material and third-party material, this License applies only to the Covered Material within that file.
+
+The applicable third-party notices, original license texts, and license scope documentation accompany the project.
+
+If this License conflicts with a separate license governing third-party material, that separate license controls with respect to the material and rights it governs.
+
+7. Names, Branding, and Attribution
+
+This License does not grant permission to represent yourself as the Licensor or to imply endorsement, sponsorship, or official affiliation.
+
+You may accurately identify Video Summary Assistant as the source of Covered Material or as the basis of a Modified Version.
+
+Rights in names, logos, and other branding elements, to the extent they exist under applicable law, remain with their respective rights holders.
+
+This does not prevent ordinary lawful use of the software, truthful identification of its origin, or preservation of required attribution.
+
+8. Separate Commercial Authorization
+
+The Licensor may offer material that it owns or is otherwise authorized to license under separate terms, including terms permitting paid distribution or other conduct restricted by this License.
+
+Requests may be submitted through the official project repository:
+
+https://github.com/Aaron-AVC/video-summary-assistant/issues
+
+Submitting a request does not itself constitute authorization.
+
+Any additional authorization applies only to rights that the Licensor is entitled to grant.
+
+9. Termination and Reinstatement
+
+Your rights under this License terminate automatically if you violate its conditions.
+
+If the violation is your first violation of this License, is not deliberate, and is fully remedied within 30 days after you receive written notice of the violation from the Licensor, your rights under this License are automatically reinstated. A violation that has already been fully remedied before receipt of such notice satisfies the remediation requirement.
+
+Automatic reinstatement does not apply to deliberate violations of Section 3 or repeated material violations of this License. In those circumstances, reinstatement requires the Licensor's express written authorization.
+
+Reinstatement does not waive claims or remedies arising from conduct that occurred before reinstatement, unless the Licensor separately agrees in writing.
+
+Obtaining another copy of Covered Material does not, by itself, reinstate rights that have been terminated and have not been restored under this Section.
+
+The termination of your rights does not terminate the rights of recipients who received Covered Material from you and remain in compliance with this License.
+
+Separate third-party licenses and rights independently granted under them remain unaffected.
+
+10. Disclaimer of Warranty
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COVERED MATERIAL IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+11. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR SHALL NOT BE LIABLE FOR ANY LOSS, DAMAGE, CLAIM, OR OTHER LIABILITY ARISING FROM THE COVERED MATERIAL OR ITS USE, INCLUDING INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES.
+
+Nothing in this License excludes or limits liability where such exclusion or limitation is prohibited by applicable law.
+
+12. General Provisions
+
+This License grants only those rights that the Licensor owns or is authorized to grant.
+
+It does not restrict rights available to you independently of this License under applicable law or separate permissions.
+
+If any provision is held unenforceable, the remaining provisions continue to apply to the extent permitted by law.
+
+The Licensor may offer future versions of the software under different terms. Such changes do not retroactively withdraw the permissions validly granted under this License for previously received material.
+
+To the extent permitted by applicable law, the English version of this License controls in the event of any conflict or ambiguity arising from a translation.
+
+End of License.

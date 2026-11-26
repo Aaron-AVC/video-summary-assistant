@@ -39,10 +39,19 @@ bun install --frozen-lockfile
 bun test
 bun run typecheck
 bun run build
+bun run package:internal
+bun run verify:package
 bun run package
 ```
 
 安装解压版：执行 `bun run build`，在 Chrome/Chromium 的 `chrome://extensions` 或 Edge 的 `edge://extensions` 开启开发者模式，选择「加载已解压的扩展程序」，指向 `build/chrome-mv3-prod`，再打开支持的视频与 Side Panel。正式的浏览器 Smoke 应使用**隔离的临时浏览器配置**。
+
+## 许可与贡献
+
+项目自有或经授权的内容采用可获取源码的
+[Video Summary Assistant Community License 1.0](LICENSE)，允许个人与商业使用，但对收费分发和限制现有功能访问设有明确条件。第三方内容继续适用各自许可。本定制许可不是 OSI 认可的开源许可。详见[混合许可范围](licenses/LICENSE-SCOPE.md)、[中文许可说明](docs/licensing/license-guide.zh-CN.md)和[贡献者条款](CONTRIBUTING.md)。
+
+`bun run package` 仅生成本地发行候选；它仍待 PR-6 最终审查及明确的发布授权。打包命令不会上传或发布产品。
 
 ## 已知限制
 

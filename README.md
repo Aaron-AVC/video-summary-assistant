@@ -117,10 +117,21 @@ bun run verify:package
 ```
 
 The production build is emitted under `build/chrome-mv3-prod`. The internal
-package command creates a local `INTERNAL/HOLD` archive for compliance and
-engineering review. The ordinary `bun run package` command is blocked while
-project-rights approval is on hold. Neither command uploads or publishes.
+package command creates a local internal-validation archive. `bun run package`
+creates a local release candidate only after the project-rights and third-party
+checks pass; the candidate still requires final PR-6 review and explicit
+publication authorization. Neither command uploads or publishes.
 See [release packaging and the compliance gate](docs/release-packaging.md).
+
+## License and contributions
+
+Project-owned or authorized portions are source-available under the
+[Video Summary Assistant Community License, Version 1.0](LICENSE), which
+permits personal and commercial use subject to its distribution and access
+conditions. Third-party material keeps its own license. This custom license is
+not an OSI-approved open-source license; see the
+[mixed-license scope](licenses/LICENSE-SCOPE.md) and
+[contributor terms](CONTRIBUTING.md).
 
 ## Load the unpacked extension
 

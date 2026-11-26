@@ -64,7 +64,7 @@ use their exact original bytes.
 
 The current PR-5 rights, distribution scope, candidate ledger, and notice
 snapshot are a separate versioned record. The active local-candidate snapshot
-is v5; its Git attributes preserve the exact bytes used by the decision hashes.
+is v6; its Git attributes preserve the exact bytes used by the decision hashes.
 Verify the active PR-5 record with:
 
 ```sh

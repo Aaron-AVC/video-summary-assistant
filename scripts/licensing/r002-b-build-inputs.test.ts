@@ -43,6 +43,9 @@ describe("F-01 candidate build inputs in Git", () => {
   beforeAll(() => {
     checkout = mkdtempSync(join(temp, "vsa-r002-pr4-r1-"))
     execFileSync("git", ["clone", "--quiet", "--shared", "--no-checkout", "--", project, checkout])
+    git("config", "--local", "core.autocrlf", "false")
+    // The historical checkout predates the PR-5 attribute for the captured CRLF ledger.
+    appendFileSync(join(checkout, ".git/info/attributes"), "\n/docs/licensing/third-party-license-ledger.json text eol=crlf\n")
     git("checkout", "--quiet", "--detach", fixedMain)
     git("config", "--local", "diff.renames", "true")
     copyFileSync(join(project, candidateScript), join(checkout, candidateScript))

@@ -32,9 +32,10 @@ describe("PR-5 project-rights evidence", () => {
       "LICENSE",
       "CONTRIBUTING.md",
       "licenses/LICENSE-SCOPE.md",
-      "docs/licensing/evidence/R002-PR5/project-rights-decision-v5.json",
-      "docs/licensing/evidence/R002-PR5/notice-preview-v5/THIRD_PARTY/manifest.json",
-      "docs/licensing/evidence/R002-PR5/notice-preview-v5/THIRD_PARTY/LICENSES/cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14/LICENSE",
+      "docs/licensing/evidence/R002-PR5/VERSION-STATUS.md",
+      "docs/licensing/evidence/R002-PR5/project-rights-decision-v6.json",
+      "docs/licensing/evidence/R002-PR5/notice-preview-v6/THIRD_PARTY/manifest.json",
+      "docs/licensing/evidence/R002-PR5/notice-preview-v6/THIRD_PARTY/LICENSES/cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14/LICENSE",
     ]
     const output = execFileSync("git", [
       "check-attr",
@@ -48,6 +49,18 @@ describe("PR-5 project-rights evidence", () => {
       `${path}: text: unset`,
       `${path}: whitespace: cr-at-eol,-blank-at-eof`,
     ]))
+  })
+
+  it("preserves the raw bytes of every PR-4 and PR-5 supplement source across checkouts", () => {
+    const paths = [...new Set([...projectRightsConstants.pr4Paths, ...projectRightsConstants.pr5SourcePaths])]
+    const output = execFileSync("git", [
+      "check-attr",
+      "text",
+      "--",
+      ...paths,
+    ], { cwd: process.cwd(), encoding: "utf8" }).trimEnd()
+
+    expect(output.split(/\r?\n/)).toEqual(paths.map(path => `${path}: text: unset`))
   })
 
   it("classifies every current PR-5 source change while excluding generated audit outputs", () => {

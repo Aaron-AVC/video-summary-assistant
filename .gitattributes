@@ -13,9 +13,31 @@
 /docs/licensing/evidence/R002-B/old/** -text whitespace=cr-at-eol,-blank-at-eof
 /docs/licensing/evidence/R002-B/superseded-draft/** -text whitespace=cr-at-eol,-blank-at-eof
 /docs/licensing/evidence/R002-B/icon-previews/*.png binary
+/docs/licensing/third-party-license-ledger.json text eol=crlf
 /licenses/third-party/r002-b-materials/** -text whitespace=cr-at-eol
 /LICENSE -text whitespace=cr-at-eol,-blank-at-eof
 /CONTRIBUTING.md -text whitespace=cr-at-eol,-blank-at-eof
 /licenses/LICENSE-SCOPE.md -text whitespace=cr-at-eol,-blank-at-eof
 /docs/licensing/evidence/R002-PR5/*.json -text whitespace=cr-at-eol,-blank-at-eof
 /docs/licensing/evidence/R002-PR5/notice-preview-*/** -text whitespace=cr-at-eol,-blank-at-eof
+/.gitattributes -text
+/.github/pull_request_template.md -text
+/README.md -text
+/README.zh-CN.md -text
+/docs/README.md -text
+/docs/licensing/README.md -text
+/docs/licensing/license-guide.zh-CN.md -text
+/docs/release-packaging.md -text
+/docs/superpowers/plans/2026-11-26-vsa-r002-pr4-plan.md -text
+/docs/superpowers/specs/2026-11-26-vsa-r002-pr4-design.md -text
+/package.json -text
+/scripts/lib/release-package.ts -text
+/scripts/licensing/r002-b-build-inputs.test.ts -text
+/scripts/licensing/r002-b-candidate.test.ts -text
+/scripts/licensing/project-rights.test.ts -text
+/scripts/licensing/project-rights.ts -text
+/scripts/licensing/r002-b-candidate.ts -text
+/scripts/licensing/r002-pr5-record.ts -text
+/scripts/release-package.test.ts -text
+/scripts/release-package.ts -text
+/docs/licensing/evidence/R002-PR5/VERSION-STATUS.md -text whitespace=cr-at-eol,-blank-at-eof

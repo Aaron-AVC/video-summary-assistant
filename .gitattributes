@@ -35,6 +35,7 @@
 /scripts/licensing/r002-b-build-inputs.test.ts -text
 /scripts/licensing/r002-b-candidate.test.ts -text
 /scripts/licensing/project-rights.test.ts -text
+/scripts/licensing/project-rights-coverage.test.ts -text
 /scripts/licensing/project-rights.ts -text
 /scripts/licensing/r002-b-candidate.ts -text
 /scripts/licensing/r002-pr5-record.ts -text

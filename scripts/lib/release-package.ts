@@ -20,6 +20,7 @@ import {
 import { loadCandidate } from "../licensing/r002-b-candidate"
 import {
   loadVerifiedProjectRightsState,
+  projectRightsConstants,
 } from "../licensing/project-rights"
 import type { ProjectRightsQualification } from "../licensing/project-rights"
 
@@ -140,9 +141,9 @@ function createPackageIdentityForMode(
       productFileCount: input.productFiles.size,
     },
     distribution: {
-      scopeFile: "docs/licensing/evidence/R002-PR5/current-scope-v6.json",
+      scopeFile: projectRightsConstants.currentScope,
       scopeSha256: input.scopeSha256 ?? null,
-      ledgerFile: "docs/licensing/evidence/R002-PR5/current-ledger-v6.json",
+      ledgerFile: projectRightsConstants.currentLedger,
       ledgerSha256: input.ledgerSha256 ?? null,
       noticeFiles: sortedIdentities(input.noticeFiles),
       noticeFileCount: input.noticeFiles.size,
@@ -428,8 +429,8 @@ function getCurrentPlan(artifactDir: string, mode: "INTERNAL" | "RELEASE_CANDIDA
   const rights = loadVerifiedProjectRightsState()
   check(rights.qualification.status === "QUALIFIED_FOR_LOCAL_CANDIDATE",
     "Current project-rights decision does not qualify this repository")
-  const currentScopePath = join(ROOT, "docs/licensing/evidence/R002-PR5/current-scope-v6.json")
-  const currentLedgerPath = join(ROOT, "docs/licensing/evidence/R002-PR5/current-ledger-v6.json")
+  const currentScopePath = join(ROOT, projectRightsConstants.currentScope)
+  const currentLedgerPath = join(ROOT, projectRightsConstants.currentLedger)
   check(stable(JSON.parse(readFileSync(currentScopePath, "utf8"))) === stable(rights.scope),
     "Recorded PR-5 distribution scope differs from the verified current scope")
   check(stable(JSON.parse(readFileSync(currentLedgerPath, "utf8"))) === stable(rights.ledger),
@@ -556,8 +557,8 @@ function makeIdentity(
     zipBytes,
     archiveFiles: plan.archiveFiles,
     version: plan.version,
-    scopeSha256: hashFile(join(ROOT, "docs/licensing/evidence/R002-PR5/current-scope-v6.json")),
-    ledgerSha256: hashFile(join(ROOT, "docs/licensing/evidence/R002-PR5/current-ledger-v6.json")),
+    scopeSha256: hashFile(join(ROOT, projectRightsConstants.currentScope)),
+    ledgerSha256: hashFile(join(ROOT, projectRightsConstants.currentLedger)),
   }
   return createPackageIdentityForMode(input, mode, plan.qualification)
 }

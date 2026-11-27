@@ -18,6 +18,7 @@ import { loadCandidate } from "./r002-b-candidate"
 const ROOT = resolve(import.meta.dir, "../..")
 const BASE_COMMIT = "de4bdcf811f93dab72bd748e314d59a414e1f251"
 const BASE_TREE = "18f3adfe593c40f84a2303c32542d1a68f83b6a5"
+const REVIEWED_CANDIDATE = "48ec9c5348d1fdc28796c91334e2d98c41617ac4"
 const PROJECT_LICENSE_SHA256 = "2033de464f1eaee84272cf1283dfafe6f505ebae08a65ac929941352ab0409d5"
 const LICENSE_SCOPE_SHA256 = "13427184d1ff51e46674e6e2fe382afb10cfc6852833ea1b28e682995788d06e"
 const CONTRIBUTOR_TERMS_SHA256 = "63aaf70e6e2be3eda8b5cb8706de376f22840320c7e3251ee8b3a6a8849525e6"
@@ -28,12 +29,34 @@ const HISTORICAL_RIGHTS_SHA256 = "aed77e5c89bc36cb226648016f26b1693cfb97bf3f9040
 const HISTORICAL_SCOPE = "docs/licensing/evidence/R002-B/distribution-scope-v3.json"
 const HISTORICAL_LEDGER = "docs/licensing/evidence/R002-B/candidate-ledger.json"
 const OUTPUT_ROOT = "docs/licensing/evidence/R002-PR5"
-const RIGHTS_SUPPLEMENT = `${OUTPUT_ROOT}/project-rights-supplement-v6.json`
-const CONTRIBUTOR_RECORD = `${OUTPUT_ROOT}/contributor-authority-v6.json`
-const CURRENT_SCOPE = `${OUTPUT_ROOT}/current-scope-v6.json`
-const CURRENT_LEDGER = `${OUTPUT_ROOT}/current-ledger-v6.json`
-const NOTICE_ROOT = `${OUTPUT_ROOT}/notice-preview-v6`
-const DECISION = `${OUTPUT_ROOT}/project-rights-decision-v6.json`
+const RIGHTS_SUPPLEMENT = `${OUTPUT_ROOT}/project-rights-supplement-v11.json`
+const CONTRIBUTOR_RECORD = `${OUTPUT_ROOT}/contributor-authority-v11.json`
+const CURRENT_SCOPE = `${OUTPUT_ROOT}/current-scope-v11.json`
+const CURRENT_LEDGER = `${OUTPUT_ROOT}/current-ledger-v11.json`
+const NOTICE_ROOT = `${OUTPUT_ROOT}/notice-preview-v11`
+const DECISION = `${OUTPUT_ROOT}/project-rights-decision-v11.json`
+const SUPERSEDED_SNAPSHOTS = [
+  {
+    version: 7,
+    decisionPath: `${OUTPUT_ROOT}/project-rights-decision-v7.json`,
+    decisionSha256: "8f6b7bbe91e03fa74767e562f698bae3df5632412407612411399623ba63d55f",
+  },
+  {
+    version: 8,
+    decisionPath: `${OUTPUT_ROOT}/project-rights-decision-v8.json`,
+    decisionSha256: "22302407917fe6c72aea485d236478ae3c49c69902281c07cfa381fb8be94128",
+  },
+  {
+    version: 9,
+    decisionPath: `${OUTPUT_ROOT}/project-rights-decision-v9.json`,
+    decisionSha256: "698aca3ed9a278ca6a6c9e182936ff63081b755995666c2706457298e9df9156",
+  },
+  {
+    version: 10,
+    decisionPath: `${OUTPUT_ROOT}/project-rights-decision-v10.json`,
+    decisionSha256: "f300d9767b5752c83e7d4bdfe62c24fe93d711785f45f9a4bf5c542fe83b40ea",
+  },
+]
 const STATUS = "THIRD_PARTY_NOTICES_COMPLETE"
 const CANDIDATE_STATUS = "PR6_REVIEW_REQUIRED"
 const NOTICE_STATUS = "MATERIALS_VERIFIED_FOR_REVIEWED_SCOPE"
@@ -75,12 +98,14 @@ const PR5_SOURCE_PATHS = [
   "docs/README.md",
   "docs/licensing/README.md",
   "docs/licensing/license-guide.zh-CN.md",
+  "docs/licensing/evidence/R002-PR5/VERSION-STATUS.md",
   "docs/release-packaging.md",
   "licenses/LICENSE-SCOPE.md",
   "package.json",
   "scripts/lib/release-package.ts",
   "scripts/licensing/r002-b-build-inputs.test.ts",
   "scripts/licensing/project-rights.test.ts",
+  "scripts/licensing/project-rights-coverage.test.ts",
   "scripts/licensing/project-rights.ts",
   "scripts/licensing/r002-b-candidate.ts",
   "scripts/licensing/r002-pr5-record.ts",
@@ -137,6 +162,185 @@ function git(...args: string[]): string {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd()
 }
 
+function gitPathList(...args: string[]): string[] {
+  const output = execFileSync("git", args, { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] })
+  return output.toString("utf8").split("\0").filter(Boolean)
+}
+
+function isVersionedPr5OutputPath(path: string): boolean {
+  return /^docs\/licensing\/evidence\/R002-PR5\/(?:project-rights-(?:supplement|decision)-v[1-9]\.json|contributor-authority-v[1-9]\.json|current-(?:scope|ledger)-v[1-9]\.json|notice-preview-v[1-9]\/(?:THIRD_PARTY_NOTICES\.md|THIRD_PARTY\/(?:manifest\.json|SHA256SUMS\.txt|LICENSES\/[a-f0-9]{64}\/LICENSE|NOTICES\/[a-f0-9]{64}\/NOTICE)))$/.test(path)
+}
+
+const REVIEWED_GENERATED_OUTPUT_PATHS = new Set(
+  gitPathList("diff", "--no-renames", "--name-only", "-z", BASE_COMMIT, REVIEWED_CANDIDATE, "--")
+    .filter(isVersionedPr5OutputPath),
+)
+
+function supersededOutputIdentities(
+  version: number,
+  decisionPath: string,
+  expectedDecisionSha256: string,
+): Map<string, Identity> {
+  const decisionBytes = read(decisionPath)
+  requireCheck(sha256(decisionBytes) === expectedDecisionSha256,
+    `Frozen PR-5 v${version} decision differs from its superseded snapshot`)
+  const decision = JSON.parse(decisionBytes.toString("utf8"))
+  const identities = new Map<string, Identity>([
+    [decisionPath, identity(decisionBytes)],
+    [decision.sourceRights.pr4Pr5Supplement.path, {
+      sha256: decision.sourceRights.pr4Pr5Supplement.sha256,
+      byteLength: read(decision.sourceRights.pr4Pr5Supplement.path).byteLength,
+    }],
+    [decision.contributionAuthority.recordPath, {
+      sha256: decision.contributionAuthority.recordSha256,
+      byteLength: read(decision.contributionAuthority.recordPath).byteLength,
+    }],
+    [decision.thirdPartyDistribution.currentScope.path, {
+      sha256: decision.thirdPartyDistribution.currentScope.sha256,
+      byteLength: read(decision.thirdPartyDistribution.currentScope.path).byteLength,
+    }],
+    [decision.thirdPartyDistribution.currentLedger.path, {
+      sha256: decision.thirdPartyDistribution.currentLedger.sha256,
+      byteLength: read(decision.thirdPartyDistribution.currentLedger.path).byteLength,
+    }],
+  ])
+  const noticeRoot = `${OUTPUT_ROOT}/notice-preview-v${version}`
+  for (const item of decision.thirdPartyDistribution.noticePreview.payloadIdentities as Array<{
+    path: string
+    sha256: string
+    byteLength: number
+  }>) {
+    identities.set(`${noticeRoot}/${item.path}`, { sha256: item.sha256, byteLength: item.byteLength })
+  }
+  requireCheck(identities.size === 36, `Expected 36 frozen v${version} outputs, found ${identities.size}`)
+
+  const actualNotices = new Set<string>()
+  const visit = (directory: string, prefix: string) => {
+    for (const entry of readdirSync(join(ROOT, directory), { withFileTypes: true })) {
+      const path = `${prefix}${entry.name}`
+      requireCheck(!entry.isSymbolicLink(), `Frozen v${version} snapshot contains a symbolic link: ${path}`)
+      if (entry.isDirectory()) visit(`${directory}/${entry.name}`, `${path}/`)
+      else actualNotices.add(`${noticeRoot}/${path}`)
+    }
+  }
+  visit(noticeRoot, "")
+  const expectedNotices = [...identities.keys()].filter(path => path.startsWith(`${noticeRoot}/`))
+  requireCheck(stable([...actualNotices].sort()) === stable(expectedNotices.sort()),
+    `Frozen PR-5 v${version} snapshot has missing or unexpected files`)
+  for (const [path, expected] of identities) {
+    const bytes = read(path)
+    requireCheck(bytes.byteLength === expected.byteLength && sha256(bytes) === expected.sha256,
+      `Frozen PR-5 v${version} snapshot changed: ${path}`)
+  }
+  return identities
+}
+
+function gitPathListAt(repository: string, ...args: string[]): string[] {
+  const output = execFileSync("git", args, { cwd: repository, stdio: ["ignore", "pipe", "pipe"] })
+  return output.toString("utf8").split("\0").filter(Boolean)
+}
+
+export function currentContributionChangePaths(repository = ROOT, baseline = BASE_COMMIT): string[] {
+  const tracked = gitPathListAt(repository, "diff", "--no-renames", "--name-only", "-z", baseline, "--")
+  const indexed = gitPathListAt(repository, "diff", "--cached", "--no-renames", "--name-only", "-z", baseline, "--")
+  const untracked = gitPathListAt(repository, "ls-files", "--others", "--exclude-standard", "-z")
+  const commits = execFileSync("git", ["log", "--format=%H", `${baseline}..HEAD`], {
+    cwd: repository,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).split(/\r?\n/).filter(Boolean)
+  const committed = commits.flatMap(commit =>
+    gitPathListAt(repository, "diff-tree", "--root", "--no-commit-id", "--name-only", "-z", "-r", "-m", "--no-renames", commit, "--"),
+  )
+  return [...new Set([...tracked, ...indexed, ...untracked, ...committed])].sort()
+}
+
+function sourceChangePaths(): string[] {
+  return currentContributionChangePaths()
+}
+
+function pathsChangedSinceReviewedCandidate(): Set<string> {
+  const worktree = gitPathList("diff", "--no-renames", "--name-only", "-z", REVIEWED_CANDIDATE, "--")
+  const index = gitPathList("diff", "--cached", "--no-renames", "--name-only", "-z", REVIEWED_CANDIDATE, "--")
+  return new Set([...worktree, ...index])
+}
+
+function assertCurrentContributionCoverage(
+  generatedPaths: Set<string>,
+  supersededOutputs: Map<string, Identity>,
+): void {
+  const classifiedPaths = new Set([...PR4_PATHS, ...PR5_SOURCE_PATHS])
+  const changedSinceReviewed = pathsChangedSinceReviewedCandidate()
+  const unclassified = sourceChangePaths().filter(path => {
+    if (classifiedPaths.has(path) || generatedPaths.has(path)) return false
+    if (supersededOutputs.has(path)) return false
+    if (!REVIEWED_GENERATED_OUTPUT_PATHS.has(path)) return true
+    requireCheck(!changedSinceReviewed.has(path), `Frozen PR-5 historical evidence changed: ${path}`)
+    return false
+  })
+  requireCheck(unclassified.length === 0,
+    `Unclassified contribution path: ${unclassified[0] ?? "unknown path"}`)
+}
+
+function currentContributionIdentityReview() {
+  const reviewedHumanAuthors = new Set(git("log", `${BASE_COMMIT}..${REVIEWED_CANDIDATE}`, "--format=%an%x09%ae")
+    .split(/\r?\n/).filter(Boolean))
+  requireCheck(reviewedHumanAuthors.size > 0, "Reviewed PR-5 candidate has no attributable authors")
+  const [toolLabel, toolEmail] = git("show", "-s", "--format=%an%x09%ae", INTEGRATION_COMMIT).split("\t")
+  requireCheck(toolLabel === "RH-02 Integration" && Boolean(toolEmail),
+    "Confirmed ChatGPT tool author identity changed")
+  const authorizedToolAuthors = new Set([`${toolLabel}\t${toolEmail}`])
+  const authorizedAuthors = new Set([...reviewedHumanAuthors, ...authorizedToolAuthors])
+
+  const mergeCommitters = new Set(git("log", BASE_COMMIT, "--format=%an%x09%ae%x09%cn%x09%ce%x09%P")
+    .split(/\r?\n/).filter(Boolean).flatMap(line => {
+      const [authorName, authorEmail, committerName, committerEmail, parents = ""] = line.split("\t")
+      const parentCount = parents.trim().split(/\s+/).filter(Boolean).length
+      return parentCount > 1 && `${authorName}\t${authorEmail}` !== `${committerName}\t${committerEmail}`
+        ? [`${committerName}\t${committerEmail}`]
+        : []
+    }))
+  const commits = git("log", `${BASE_COMMIT}..HEAD`, "--format=%H%x09%an%x09%ae%x09%cn%x09%ce%x09%P")
+    .split(/\r?\n/).filter(Boolean)
+  const authorRows = new Set<string>()
+  const coAuthorRows = new Set<string>()
+  const unconfirmed: string[] = []
+
+  for (const commit of commits) {
+    const [hash, authorName, authorEmail, committerName, committerEmail, parents = ""] = commit.split("\t")
+    const author = `${authorName}\t${authorEmail}`
+    const committer = `${committerName}\t${committerEmail}`
+    if (!authorizedAuthors.has(author)) unconfirmed.push(authorName ?? "unknown author")
+    authorRows.add(author)
+    if (committer !== author) {
+      const isMerge = parents.trim().split(/\s+/).filter(Boolean).length > 1
+      if (!isMerge || !mergeCommitters.has(committer)) unconfirmed.push(committerName ?? "unknown committer")
+    }
+
+    if (hash) {
+      const message = git("show", "-s", "--format=%B", hash)
+      for (const match of message.matchAll(/^Co-authored-by:\s*(.*?)\s*<([^>]+)>\s*$/gim)) {
+        const identity = `${match[1]}\t${match[2]}`
+        if (!authorizedAuthors.has(identity)) unconfirmed.push(match[1]!)
+        coAuthorRows.add(identity)
+      }
+    }
+  }
+
+  const privateIdentity = (row: string) => {
+    const [name, email] = row.split("\t")
+    return { name, emailSha256: sha256(Buffer.from(email ?? "", "utf8")) }
+  }
+  return {
+    reviewedBaseline: REVIEWED_CANDIDATE,
+    authorizedAuthorIdentities: [...reviewedHumanAuthors].sort().map(privateIdentity),
+    authorizedToolIdentities: [...authorizedToolAuthors].sort().map(privateIdentity),
+    observedAuthorIdentities: [...authorRows].sort().map(privateIdentity),
+    coAuthorIdentities: [...coAuthorRows].sort().map(privateIdentity),
+    unconfirmedIdentityLabels: [...new Set(unconfirmed)].sort(),
+  }
+}
+
 function historyRecord() {
   const historyRows = git("log", BASE_COMMIT, "--format=%an%x09%cn%x09%P")
     .split(/\r?\n/).filter(Boolean).map(line => {
@@ -166,6 +370,7 @@ function historyRecord() {
   requireCheck(committerNames.size === 5 && additionalCommitterLabels.length === 1
     && additionalCommitterLabelsOnNonMergeCommits.length === 0,
   "Git contains a committer identity outside the author set on a non-merge commit")
+  const candidateContributionReview = currentContributionIdentityReview()
 
   return {
     source: "git history reachable from the fixed PR-5 main commit",
@@ -177,7 +382,8 @@ function historyRecord() {
       label: "RH-02 Integration",
       commit: INTEGRATION_COMMIT,
       commitCount: authorCounts[3],
-      identityFinding: "The Git author label alone does not establish a distinct human rights holder.",
+      confirmedIdentity: "ChatGPT AI assistant tool",
+      identityFinding: "The user confirmed this Git author label represents the ChatGPT AI assistant tool, not a separate human rights holder.",
       changedPaths: integrationPaths,
     },
     distinctGitCommitterLabelCount: committerNames.size,
@@ -185,6 +391,18 @@ function historyRecord() {
     additionalCommitterLabelsOnNonMergeCommits: additionalCommitterLabelsOnNonMergeCommits.length,
     committerAssessment: "The additional committer label occurs only on merge commits and is not treated as a project rights holder.",
     coAuthorTrailerCount: coAuthorCount,
+    candidateContributionReview,
+    developmentParticipantDeclaration: {
+      source: "Direct user confirmation in the PR-5 R1 review response",
+      statement: {
+        original: "本项目有且仅有我本人以及chatgpt进行开发",
+        normalizedEnglish: "The project was developed only by the user and ChatGPT.",
+      },
+      participants: [
+        { label: "Aaron-AVC", role: "HUMAN_PROJECT_RIGHTS_HOLDER" },
+        { label: "ChatGPT", role: "AI_ASSISTANT_TOOL", separateRightsHolder: false },
+      ],
+    },
     rightsHolderDeclaration: {
       source: "User-confirmed VSA-R002-PR5 task authorization",
       additionalJointOrContractContributors: "NONE_DECLARED",
@@ -418,7 +636,7 @@ function createDecision(
     .map(([path, bytes]) => ({ path, ...identity(bytes) }))
   return {
     schema: "vsa-project-rights-decision/v1",
-    decisionId: "VSA-R002-PR5-2026-11-27-v6",
+    decisionId: "VSA-R002-PR5-2026-11-27-v11",
     status: "QUALIFIED_FOR_LOCAL_CANDIDATE",
     decisionSource: {
       kind: "RIGHTSHOLDER_DECLARATION_AND_REVIEWED_PROJECT_RECORD",
@@ -429,7 +647,7 @@ function createDecision(
     },
     rightsHolder: {
       publicAttribution: "Aaron-AVC",
-      authorityStatement: "The rights holder confirmed authority over project-owned contributions and no additional joint, employer, client, or separately disposed project rights requiring another grant.",
+      authorityStatement: "The user confirmed they and ChatGPT were the only development participants; ChatGPT is recorded as an AI assistant tool, not a separate human rights holder. The rights holder confirmed authority over project-owned contributions and no additional joint, employer, client, or separately disposed project rights requiring another grant.",
       scopeLimit: "Only portions the rights holder owns or is authorized to license; separate third-party rights remain unaffected.",
       commercialAuthorizationContact: "Project GitHub Issues; a request is not itself authorization.",
     },
@@ -508,6 +726,14 @@ function createDecision(
 }
 
 function deriveOutputs() {
+  const supersededOutputs = new Map<string, Identity>()
+  for (const snapshot of SUPERSEDED_SNAPSHOTS) {
+    for (const [path, fileIdentity] of supersededOutputIdentities(
+      snapshot.version,
+      snapshot.decisionPath,
+      snapshot.decisionSha256,
+    )) supersededOutputs.set(path, fileIdentity)
+  }
   requireCheck(sha256(read(BUILD_EVIDENCE)) === BUILD_EVIDENCE_SHA256,
     "Fixed production build evidence hash differs")
   requireCheck(sha256(read(HISTORICAL_RIGHTS)) === HISTORICAL_RIGHTS_SHA256,
@@ -544,6 +770,11 @@ function deriveOutputs() {
     [DECISION, decisionBytes],
   ])
   for (const [path, bytes] of current.noticeOutput) outputs.set(`${NOTICE_ROOT}/${path}`, bytes)
+  assertCurrentContributionCoverage(new Set(outputs.keys()), supersededOutputs)
+  const candidateReview = JSON.parse(contributorBytes.toString("utf8"))
+    .candidateContributionReview as { unconfirmedIdentityLabels: string[] }
+  requireCheck(candidateReview.unconfirmedIdentityLabels.length === 0,
+    `Unconfirmed contribution identity: ${candidateReview.unconfirmedIdentityLabels[0]}`)
   return { outputs, current, decision: JSON.parse(decisionBytes.toString("utf8")) as Record<string, any> }
 }
 
@@ -637,6 +868,7 @@ export function recordProjectRightsEvidence(): ReturnType<typeof deriveProjectRi
 export const projectRightsConstants = {
   baseCommit: BASE_COMMIT,
   baseTree: BASE_TREE,
+  reviewedCandidate: REVIEWED_CANDIDATE,
   pr4BaseCommit: PR4_BASE_COMMIT,
   pr4Paths: PR4_PATHS,
   pr5SourcePaths: PR5_SOURCE_PATHS,

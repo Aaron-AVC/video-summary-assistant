@@ -1,13 +1,25 @@
 # PR-5 evidence version status
 
-`project-rights-decision-v6.json` is the active local candidate decision. Its
-matching v6 rights supplement, contributor record, current scope, current
-ledger, and `notice-preview-v6/` files are the only PR-5 evidence consumed by
-the packaging code. V6 records the source-byte identities after the archive
-scope-link regression fix and pins every path in the PR-5 source-rights
-supplement against Windows line-ending conversion. The archive preserves the
-original code-formatted Markdown link labels while rewriting their targets to
-files available at the archive root.
+`project-rights-decision-v11.json` is the active local candidate decision. Its
+matching v11 rights supplement, contributor record, current scope, current
+ledger, and `notice-preview-v11/` files are the only PR-5 evidence consumed by
+the packaging code. V11 preserves the byte-exact source checks from v6 and the
+contribution-path and author coverage introduced in v7. It records the user's
+confirmation that the only development participants were the rights holder
+and ChatGPT, with ChatGPT identified as an AI assistant tool rather than a
+separate human rights holder. The confirmed tool Git author identity is
+accepted for contribution attribution alongside the reviewed human author.
+
+V11 binds the reviewed PR-4/PR-5 source inputs, checks additions, modifications,
+deletions, and both sides of renames against explicit classifications, and
+accepts only frozen historical generated snapshots or the exact output paths
+derived by the current evidence generator. The superseded v7 through v10
+snapshots are validated against their pinned decisions and all dependent output
+identities.
+
+V8 and earlier remain preserved snapshots and are not rewritten. The archive
+preserves the original code-formatted Markdown link labels while rewriting
+their targets to files available at the archive root.
 
 The v1 through v5 snapshots are retained as superseded intermediate records.
 V1 predates normalization of the final newline in the fixed LICENSE and

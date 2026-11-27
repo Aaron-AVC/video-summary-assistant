@@ -1,0 +1,83 @@
+{
+  "source": "git history reachable from the fixed PR-5 main commit",
+  "baseCommit": "de4bdcf811f93dab72bd748e314d59a414e1f251",
+  "baseTree": "18f3adfe593c40f84a2303c32542d1a68f83b6a5",
+  "distinctGitAuthorLabelCount": 4,
+  "rightsHolderOrToolAuthorCommitCounts": [
+    116,
+    70,
+    8
+  ],
+  "integrationAuthorLabel": {
+    "label": "RH-02 Integration",
+    "commit": "afc8fc01fbf12d1a154941a4fce2aa411f2f3e28",
+    "commitCount": 1,
+    "confirmedIdentity": "ChatGPT AI assistant tool",
+    "identityFinding": "The user confirmed this Git author label represents the ChatGPT AI assistant tool, not a separate human rights holder.",
+    "changedPaths": [
+      "src/features/analysis/lib/provider-response-body.test.ts",
+      "src/features/analysis/lib/provider-response-body.ts",
+      "src/features/history/lib/history-repository.test.ts",
+      "src/features/history/lib/history-repository.ts",
+      "src/lib/schemas/persistence-bounds.test.ts",
+      "src/sidepanel/ask/ask-controller.test.ts",
+      "src/sidepanel/ask/ask-controller.ts"
+    ]
+  },
+  "distinctGitCommitterLabelCount": 5,
+  "additionalNonAuthorCommitterLabelCount": 1,
+  "additionalCommitterLabelsOnNonMergeCommits": 0,
+  "committerAssessment": "The additional committer label occurs only on merge commits and is not treated as a project rights holder.",
+  "coAuthorTrailerCount": 0,
+  "candidateContributionReview": {
+    "reviewedBaseline": "48ec9c5348d1fdc28796c91334e2d98c41617ac4",
+    "authorizedAuthorIdentities": [
+      {
+        "name": "Aaron-AVC",
+        "emailSha256": "3c205d8fc749f72977b9331e3179773c315bb1f4860c366de2abe9ec9337730b"
+      }
+    ],
+    "observedAuthorIdentities": [
+      {
+        "name": "Aaron-AVC",
+        "emailSha256": "3c205d8fc749f72977b9331e3179773c315bb1f4860c366de2abe9ec9337730b"
+      }
+    ],
+    "coAuthorIdentities": [],
+    "unconfirmedIdentityLabels": []
+  },
+  "developmentParticipantDeclaration": {
+    "source": "Direct user confirmation in the PR-5 R1 review response",
+    "statement": {
+      "original": "本项目有且仅有我本人以及chatgpt进行开发",
+      "normalizedEnglish": "The project was developed only by the user and ChatGPT."
+    },
+    "participants": [
+      {
+        "label": "Aaron-AVC",
+        "role": "HUMAN_PROJECT_RIGHTS_HOLDER"
+      },
+      {
+        "label": "ChatGPT",
+        "role": "AI_ASSISTANT_TOOL",
+        "separateRightsHolder": false
+      }
+    ]
+  },
+  "rightsHolderDeclaration": {
+    "source": "User-confirmed VSA-R002-PR5 task authorization",
+    "additionalJointOrContractContributors": "NONE_DECLARED",
+    "projectRightsHolderPublicAttribution": "Aaron-AVC",
+    "scope": "Only project-owned or otherwise authorized portions; third-party rights remain separate.",
+    "digitalSignature": "NOT_REPRESENTED"
+  },
+  "assessment": "The owner declaration covers project contributions; Git author and committer labels are evidence, not independent proof of legal ownership.",
+  "futureContributions": {
+    "termsPath": "CONTRIBUTING.md",
+    "termsVersion": "1.0",
+    "affirmativePullRequestConfirmationRequired": true,
+    "ordinaryIssuesAndDiscussionAutomaticallyLicensed": false
+  },
+  "unresolvedExternalRightsHolders": 0,
+  "reviewNote": "If later evidence identifies an external author or contractual claim, pause qualification for the affected material and reassess."
+}

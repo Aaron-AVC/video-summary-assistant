@@ -167,6 +167,60 @@ describe("PR-5 project-rights evidence", () => {
     expect(JSON.stringify(contributors)).not.toMatch(/[A-Za-z]:[\\/]|(?:gh[pousr]_)[A-Za-z0-9]{30,}/)
   })
 
+  it("records the user-confirmed ChatGPT development identity without treating the tool as a rights holder", () => {
+    const { outputs } = deriveProjectRightsQualification()
+    const contributors = JSON.parse(
+      outputs.get(projectRightsConstants.contributorRecord)!.toString("utf8"),
+    )
+
+    expect(contributors.developmentParticipantDeclaration).toEqual({
+      source: "Direct user confirmation in the PR-5 R1 review response",
+      statement: {
+        original: "本项目有且仅有我本人以及chatgpt进行开发",
+        normalizedEnglish: "The project was developed only by the user and ChatGPT.",
+      },
+      participants: [
+        { label: "Aaron-AVC", role: "HUMAN_PROJECT_RIGHTS_HOLDER" },
+        { label: "ChatGPT", role: "AI_ASSISTANT_TOOL", separateRightsHolder: false },
+      ],
+    })
+    expect(contributors.integrationAuthorLabel).toMatchObject({
+      label: "RH-02 Integration",
+      confirmedIdentity: "ChatGPT AI assistant tool",
+    })
+    expect(contributors.integrationAuthorLabel.identityFinding)
+      .toContain("user confirmed")
+    expect(contributors.candidateContributionReview.authorizedToolIdentities)
+      .toHaveLength(1)
+    expect(contributors.candidateContributionReview.authorizedToolIdentities[0])
+      .toMatchObject({ name: "RH-02 Integration" })
+    expect(contributors.candidateContributionReview.authorizedToolIdentities[0].emailSha256)
+      .toMatch(/^[a-f0-9]{64}$/)
+    expect(contributors.rightsHolderDeclaration).toMatchObject({
+      additionalJointOrContractContributors: "NONE_DECLARED",
+      projectRightsHolderPublicAttribution: "Aaron-AVC",
+    })
+  })
+
+  it("preserves and verifies the superseded v7 through v10 snapshots before deriving v11", () => {
+    expect(projectRightsConstants.decision).toBe(
+      "docs/licensing/evidence/R002-PR5/project-rights-decision-v11.json",
+    )
+    expect(() => deriveProjectRightsQualification()).not.toThrow()
+
+    for (const version of [7, 8, 9, 10]) {
+      const path = join(process.cwd(), `docs/licensing/evidence/R002-PR5/project-rights-decision-v${version}.json`)
+      const original = readFileSync(path)
+      try {
+        writeFileSync(path, Buffer.concat([original, Buffer.from("\nTAMPERED\n")]))
+        expect(() => deriveProjectRightsQualification())
+          .toThrow(`Frozen PR-5 v${version} decision differs from its superseded snapshot`)
+      } finally {
+        writeFileSync(path, original)
+      }
+    }
+  })
+
   it("verifies the recorded decision and rejects missing or altered rights inputs", () => {
     const verified = loadVerifiedProjectRightsState()
     expect(verifyProjectRightsQualification()).toEqual(verified.qualification)
@@ -196,5 +250,5 @@ describe("PR-5 project-rights evidence", () => {
         writeFileSync(fullPath, original)
       }
     }
-  })
+  }, 75_000)
 })

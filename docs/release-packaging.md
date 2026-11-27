@@ -73,7 +73,7 @@ configuration, source, assets, and ignored build-input configuration remain
 bound to the fixed candidate. A changed production input requires new build
 and distribution evidence.
 
-The current PR-5 v6 records live under
+The current PR-5 v11 records live under
 [`licensing/evidence/R002-PR5`](licensing/evidence/R002-PR5/). They are
 versioned separately from and do not overwrite the fixed R002-B history or the
 superseded PR-5 v1-v3 snapshots.

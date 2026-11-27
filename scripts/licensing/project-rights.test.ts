@@ -191,24 +191,29 @@ describe("PR-5 project-rights evidence", () => {
     expect(contributors.integrationAuthorLabel.identityFinding)
       .toContain("user confirmed")
     expect(contributors.candidateContributionReview.authorizedToolIdentities)
-      .toHaveLength(1)
-    expect(contributors.candidateContributionReview.authorizedToolIdentities[0])
-      .toMatchObject({ name: "RH-02 Integration" })
-    expect(contributors.candidateContributionReview.authorizedToolIdentities[0].emailSha256)
-      .toMatch(/^[a-f0-9]{64}$/)
+      .toHaveLength(2)
+    expect(contributors.candidateContributionReview.authorizedToolIdentities)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: "RH-02 Integration" }),
+      ]))
+    expect(contributors.candidateContributionReview.authorizedToolIdentities
+      .every((identity: { emailSha256: string }) => /^[a-f0-9]{64}$/.test(identity.emailSha256)))
+      .toBe(true)
+    expect(contributors.candidateContributionReview.unconfirmedIdentityLabels)
+      .toEqual([])
     expect(contributors.rightsHolderDeclaration).toMatchObject({
       additionalJointOrContractContributors: "NONE_DECLARED",
       projectRightsHolderPublicAttribution: "Aaron-AVC",
     })
   })
 
-  it("preserves and verifies the superseded v7 through v10 snapshots before deriving v11", () => {
+  it("preserves and verifies the superseded v7 through v11 snapshots before deriving v12", () => {
     expect(projectRightsConstants.decision).toBe(
-      "docs/licensing/evidence/R002-PR5/project-rights-decision-v11.json",
+      "docs/licensing/evidence/R002-PR5/project-rights-decision-v12.json",
     )
     expect(() => deriveProjectRightsQualification()).not.toThrow()
 
-    for (const version of [7, 8, 9, 10]) {
+    for (const version of [7, 8, 9, 10, 11]) {
       const path = join(process.cwd(), `docs/licensing/evidence/R002-PR5/project-rights-decision-v${version}.json`)
       const original = readFileSync(path)
       try {

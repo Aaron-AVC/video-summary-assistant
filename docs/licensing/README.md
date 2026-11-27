@@ -64,7 +64,7 @@ use their exact original bytes.
 
 The current PR-5 rights, distribution scope, candidate ledger, and notice
 snapshot are a separate versioned record. The active local-candidate snapshot
-is v11; it preserves v6 through v10 as immutable snapshots and records the user's
+is v12; it preserves v6 through v11 as immutable snapshots and records the user's
 confirmation that development involved only the rights holder and ChatGPT.
 ChatGPT is identified as an AI assistant tool, not a separate human rights
 holder. Qualification checks cover current contribution paths, author

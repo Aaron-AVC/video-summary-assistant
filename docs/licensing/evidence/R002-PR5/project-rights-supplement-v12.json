@@ -1,0 +1,272 @@
+{
+  "schema": "vsa-project-rights-supplement/v1",
+  "fixedMain": {
+    "commit": "de4bdcf811f93dab72bd748e314d59a414e1f251",
+    "tree": "18f3adfe593c40f84a2303c32542d1a68f83b6a5"
+  },
+  "inheritedInventory": {
+    "path": "docs/licensing/evidence/R002-B/source-rights-v3.json",
+    "sha256": "aed77e5c89bc36cb226648016f26b1693cfb97bf3f90408e8acf24757f15ad53",
+    "pathCount": 172,
+    "status": "HISTORICAL_INPUT_PRESERVED"
+  },
+  "scopeLimit": "This supplement covers the listed PR-4 and PR-5 evidence delta; it is not a complete inventory of every repository file.",
+  "classificationMethod": "File-level source, function, license and development-history categories are kept distinct; a new path or AI-assisted process alone does not prove exclusive authorship.",
+  "aiAssistance": {
+    "tool": "OpenAI Codex desktop session",
+    "externalAssetsUsedForThisChange": false,
+    "generatedExpressionOwnership": "No exclusive copyright claim is made solely because a tool generated or assisted with text or code."
+  },
+  "entries": [
+    {
+      "path": ".gitattributes",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_CONFIGURATION",
+      "sha256": "9243025710ec78cce250132eceb4ee63cbf0f334a91fc4ba58da229ae5ec9bc3",
+      "byteLength": 2536,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_CONTRIBUTION_PROCESS",
+      "sha256": "bef60917b4e196cb47185e21bf279acf7a90d12e8faf088cd26b3a2bda32f660",
+      "byteLength": 570,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "RIGHTSHOLDER_SUPPLIED_FIXED_TERMS",
+      "sha256": "63aaf70e6e2be3eda8b5cb8706de376f22840320c7e3251ee8b3a6a8849525e6",
+      "byteLength": 2821,
+      "rightsBasis": "Fixed text supplied in the rights-holder-authorized PR-5 task.",
+      "aiAssistance": "The fixed terms were supplied by the rights holder.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "docs/licensing/evidence/R002-PR5/VERSION-STATUS.md",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_AUDIT_OR_ENGINEERING_RECORD",
+      "sha256": "7d785bf2ecf3af2c7ad39e11d75cdc2ebb3e6960b5fdb3753d11209302f180e7",
+      "byteLength": 2419,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "docs/licensing/license-guide.zh-CN.md",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_DOCUMENTATION_AI_ASSISTED",
+      "sha256": "27c1fa7a9606b89cdf182d046386bb92967c73f297f6ae2cfd36cb2eac9b26aa",
+      "byteLength": 3347,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "docs/licensing/README.md",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_DOCUMENTATION_AI_ASSISTED",
+      "sha256": "cfdc5a504c1c5f62f8cd29ce9c82308f6cf3cddd929f003d03367a6f4688e2d5",
+      "byteLength": 5027,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "docs/README.md",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_DOCUMENTATION_AI_ASSISTED",
+      "sha256": "6b0faa105668ce247ccd12c059e8c29d2f40790d2e14480d4c7c2e13c84626b5",
+      "byteLength": 3259,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "docs/release-packaging.md",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_DOCUMENTATION_AI_ASSISTED",
+      "sha256": "170b913dbfed009af80375289fd4604fcd62c03d18d0129aeda79093e52580a3",
+      "byteLength": 5228,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-11-26-vsa-r002-pr4-plan.md",
+      "reviewWindow": "PR-4 merged changes",
+      "classification": "PROJECT_AUDIT_OR_ENGINEERING_RECORD",
+      "sha256": "0aece9855eb168176480f318926ab665fce1010ec9baa2434f62143c3214a480",
+      "byteLength": 2408,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "docs/superpowers/specs/2026-11-26-vsa-r002-pr4-design.md",
+      "reviewWindow": "PR-4 merged changes",
+      "classification": "PROJECT_AUDIT_OR_ENGINEERING_RECORD",
+      "sha256": "617fb4817825d098e901f0cb2cd3d2fbe18ae7c68cd08837860c5fb202479c59",
+      "byteLength": 8237,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "LICENSE",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "RIGHTSHOLDER_SUPPLIED_FIXED_TERMS",
+      "sha256": "2033de464f1eaee84272cf1283dfafe6f505ebae08a65ac929941352ab0409d5",
+      "byteLength": 13623,
+      "rightsBasis": "Fixed text supplied in the rights-holder-authorized PR-5 task.",
+      "aiAssistance": "The fixed terms were supplied by the rights holder.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "licenses/LICENSE-SCOPE.md",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_DOCUMENTATION_AI_ASSISTED",
+      "sha256": "13427184d1ff51e46674e6e2fe382afb10cfc6852833ea1b28e682995788d06e",
+      "byteLength": 3264,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "package.json",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_CONFIGURATION",
+      "sha256": "bd14f57ba10e02a2d9f0684d65a17e91b2717f98180167bbb87b8128a5878ce8",
+      "byteLength": 2985,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "README.md",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_DOCUMENTATION_AI_ASSISTED",
+      "sha256": "16b3a37198257c04df8abe801239c1d0e37399cdfa3bdf1b444327b3f873079d",
+      "byteLength": 10081,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "README.zh-CN.md",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_DOCUMENTATION_AI_ASSISTED",
+      "sha256": "412c86d6099ff3508adc10fb2b8674c195fa2550ee03589b8a1e38c479592c42",
+      "byteLength": 5968,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/lib/release-package.ts",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_PACKAGING_OR_QUALIFICATION_CODE_AI_ASSISTED",
+      "sha256": "6797db4e7325378ca586ddc25f473943909192e08be59f5bc68632948d1c59fc",
+      "byteLength": 30282,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/licensing/project-rights-coverage.test.ts",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_TEST_CODE_AI_ASSISTED",
+      "sha256": "98b298e4d538a6ce65eae3b3b6650e3efdee5cb6fe0d90331f5c3d49b6d4d0fc",
+      "byteLength": 17534,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/licensing/project-rights.test.ts",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_TEST_CODE_AI_ASSISTED",
+      "sha256": "52549eb43cdb32e676abbbe97bfd91c578703af728cac317b5fc4222a77880c5",
+      "byteLength": 11298,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/licensing/project-rights.ts",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_PACKAGING_OR_QUALIFICATION_CODE_AI_ASSISTED",
+      "sha256": "b964c42d1871df04d57638af4b9195b88772322e5f4cd004bc8bfa00c2b05975",
+      "byteLength": 42204,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/licensing/r002-b-build-inputs.test.ts",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_TEST_CODE_AI_ASSISTED",
+      "sha256": "879586a9b6f9e2f5397605ff6939f899d58b0a3e7e66edb560f2000d3717ad56",
+      "byteLength": 5175,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/licensing/r002-b-candidate.test.ts",
+      "reviewWindow": "PR-4 merged changes",
+      "classification": "PROJECT_TEST_CODE_AI_ASSISTED",
+      "sha256": "c2ffee5dc6d61259d6c993abced90b01c01e6335e03097b391ecfda1abcecf8b",
+      "byteLength": 5840,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/licensing/r002-b-candidate.ts",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_PACKAGING_OR_QUALIFICATION_CODE_AI_ASSISTED",
+      "sha256": "17d649db6daf272ee759674ea8133de03100b1fde5e3f654d64e1c602ffa1b6d",
+      "byteLength": 21869,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/licensing/r002-pr5-record.ts",
+      "reviewWindow": "PR-5 candidate changes",
+      "classification": "PROJECT_PACKAGING_OR_QUALIFICATION_CODE_AI_ASSISTED",
+      "sha256": "0ed6be04464e1ebb73c54290bc452c37ff43142a6b4991a25ca09bdcf64f1bc7",
+      "byteLength": 1461,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/release-package.test.ts",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_TEST_CODE_AI_ASSISTED",
+      "sha256": "b087257e29e909e85e7c3f81f03d854c1ca084759743e59ec3cbb9ae04e2730d",
+      "byteLength": 18024,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    },
+    {
+      "path": "scripts/release-package.ts",
+      "reviewWindow": "PR-4 merged changes; PR-5 candidate changes",
+      "classification": "PROJECT_PACKAGING_OR_QUALIFICATION_CODE_AI_ASSISTED",
+      "sha256": "18757d86a0e4f91056fd1baf2351285ea00004a87199b388bd0d87f11e5748ae",
+      "byteLength": 1772,
+      "rightsBasis": "Rights-holder declaration and the path-specific historical or current record; not an independent authorship finding.",
+      "aiAssistance": "AI-assisted project work under the rights holder's direction.",
+      "exclusivityClaim": "No exclusive copyright claim is inferred from AI assistance or a path being new."
+    }
+  ]
+}

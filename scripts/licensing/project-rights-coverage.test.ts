@@ -136,6 +136,19 @@ describe("PR-5 contribution qualification coverage", () => {
     expect(productionFiles).toHaveLength(14)
 
     overlayCurrentWorktree()
+    for (const name of [
+      "contributor-authority-v12.json",
+      "current-ledger-v12.json",
+      "current-scope-v12.json",
+      "project-rights-decision-v12.json",
+      "project-rights-supplement-v12.json",
+    ]) {
+      rmSync(join(checkout, "docs/licensing/evidence/R002-PR5", name), { force: true })
+    }
+    rmSync(join(checkout, "docs/licensing/evidence/R002-PR5/notice-preview-v12"), {
+      recursive: true,
+      force: true,
+    })
     const author = execFileSync("git", ["show", "-s", "--format=%an%x09%ae", reviewedCandidate], {
       cwd: checkout,
       encoding: "utf8",
@@ -144,7 +157,7 @@ describe("PR-5 contribution qualification coverage", () => {
     commitAs(author[0]!, author[1]!, "test fixture: load current PR-5 qualification implementation")
 
     const record = runBun(["scripts/licensing/r002-pr5-record.ts", "record"])
-    preserveRun("record-current-v11", record)
+    preserveRun("record-current-v12", record)
     expect(record.exitCode).toBe(0)
     git("add", "--all")
     commitAs(author[0]!, author[1]!, "test fixture: record current PR-5 qualification evidence", true)

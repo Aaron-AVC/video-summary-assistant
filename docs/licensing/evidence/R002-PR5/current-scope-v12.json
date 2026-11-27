@@ -1,0 +1,3215 @@
+{
+  "schema": "vsa-r002-pr5-distribution-scope/v1",
+  "sourceCommit": "7eda9fdbe0cd414c16a755f0b5da390c0fd37a57",
+  "sourceTree": "cfec44a94ee5a2053a361b7a3087373562378ec5",
+  "buildSha256": "3d8a9d547cc506a5544e0f7a5a519803de549276191021ecfce88039b21c56c2",
+  "ledgerSha256": "a26a1ed43d3368e4a231340232903e377e08e5ce7df814259228e5ea675158b9",
+  "packageSha256": "693901a3d5b7a4f63bff8bbfb5dd6cee267096153c6a7d94a801ddc80ad53d90",
+  "lockSha256": "d2de1563f8d763ca98dc748ba07eeba87796f6a09f904985df347b53ce18a9fe",
+  "graphSha256": "695b1efac111ce0ffd009d5ed8635ac713ec63d17ddae3dbca3fb0c5f3dc995e",
+  "graphOutputCoverage": [
+    "bilibili-video.5fd6a346.js",
+    "icon128.plasmo.3c1ed2d2.png",
+    "icon16.plasmo.6c567d50.png",
+    "icon32.plasmo.76b92899.png",
+    "icon48.plasmo.aced7582.png",
+    "icon64.plasmo.8bb5e6e0.png",
+    "manifest.json",
+    "options.95eda3f3.js",
+    "options.cbd95b00.css",
+    "options.html",
+    "sidepanel.b7741352.js",
+    "sidepanel.html",
+    "static/background/index.js",
+    "youtube-watch.3b0aae31.js"
+  ],
+  "sourceInventory": {
+    "path": "docs/licensing/evidence/source-inventory-8ee1c311.tsv",
+    "gitBlobSha256": "aed77e5c89bc36cb226648016f26b1693cfb97bf3f90408e8acf24757f15ad53",
+    "observedYouTubeSummarizerOrigins": [
+      {
+        "path": "src/background/index.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/background/index.ts",
+        "upstreamBlob": "e760f2005192c93c48601e6ad8b551a62c266330"
+      },
+      {
+        "path": "src/components/ui/alert.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/alert.tsx",
+        "upstreamBlob": "41fa7e0561a3fdb5f986c1213a35e563de740e96"
+      },
+      {
+        "path": "src/components/ui/badge.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/badge.tsx",
+        "upstreamBlob": "f000e3ef5176395b067dfc3f3e1256a80c450015"
+      },
+      {
+        "path": "src/components/ui/button.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/button.tsx",
+        "upstreamBlob": "36496a28727a3643b4212a14225d4f6cbd50bda5"
+      },
+      {
+        "path": "src/components/ui/card.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/card.tsx",
+        "upstreamBlob": "f62edea578d50058bef5e6bcc178b88d145564e9"
+      },
+      {
+        "path": "src/components/ui/empty.tsx",
+        "classification": "THIRD_PARTY_MIXED",
+        "upstreamPath": "src/components/ui/empty.tsx",
+        "upstreamBlob": "71667632e77bf4265ab740e906f785fee806eec2"
+      },
+      {
+        "path": "src/components/ui/field.tsx",
+        "classification": "THIRD_PARTY_MIXED",
+        "upstreamPath": "src/components/ui/field.tsx",
+        "upstreamBlob": "c7bb0520a5e4b5f5835b194431452ad0e7f2e934"
+      },
+      {
+        "path": "src/components/ui/input-group.tsx",
+        "classification": "THIRD_PARTY_MIXED",
+        "upstreamPath": "src/components/ui/input-group.tsx",
+        "upstreamBlob": "0777399292fd5bafc8317a7136e05c9cdaa58f24"
+      },
+      {
+        "path": "src/components/ui/input.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/input.tsx",
+        "upstreamBlob": "68551b9276b4164a8263aa58d385db30f81a4453"
+      },
+      {
+        "path": "src/components/ui/label.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/label.tsx",
+        "upstreamBlob": "683faa793819982d64e21cb2939666fd6d4a7b13"
+      },
+      {
+        "path": "src/components/ui/scroll-area.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/scroll-area.tsx",
+        "upstreamBlob": "0b4a48d87fabda1c6e9612172abb56a78e26c14f"
+      },
+      {
+        "path": "src/components/ui/select.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/select.tsx",
+        "upstreamBlob": "d826bdbabdcbff04513e57d521fe15480353a740"
+      },
+      {
+        "path": "src/components/ui/separator.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/separator.tsx",
+        "upstreamBlob": "12d81c4a853472948b6dd2e85eff99b5d12fe60b"
+      },
+      {
+        "path": "src/components/ui/skeleton.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/skeleton.tsx",
+        "upstreamBlob": "01b8b6d4f716ff7c26065bc9e46aebd932729fc1"
+      },
+      {
+        "path": "src/components/ui/sonner.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/sonner.tsx",
+        "upstreamBlob": "fad1ef944800e001e72d680bd246680ca991eb48"
+      },
+      {
+        "path": "src/components/ui/switch.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/switch.tsx",
+        "upstreamBlob": "bc69cf2dbfc512347350c5cea6cb8e4a3d7f667d"
+      },
+      {
+        "path": "src/components/ui/tabs.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/tabs.tsx",
+        "upstreamBlob": "f57fffdb5a07cd21b12f8c014513475a6980a469"
+      },
+      {
+        "path": "src/components/ui/textarea.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/textarea.tsx",
+        "upstreamBlob": "4d858bb6b02662c749d3cb334129a9a1977b0c51"
+      },
+      {
+        "path": "src/components/ui/toggle-group.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/toggle-group.tsx",
+        "upstreamBlob": "afe5da62559ca05a0eb5c9415a1e20bd47b37af9"
+      },
+      {
+        "path": "src/components/ui/toggle.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/toggle.tsx",
+        "upstreamBlob": "c19bea37315b245ce0c3588deafb27adc8397f0f"
+      },
+      {
+        "path": "src/components/ui/tooltip.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/components/ui/tooltip.tsx",
+        "upstreamBlob": "60d9678cf04ac32b16d059f96c787e7d8dd9fa09"
+      },
+      {
+        "path": "src/contents/youtube-watch.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/contents/youtube-watch.ts",
+        "upstreamBlob": "5b47073aafe1f7d9c5e1bb0ff02ba268fee9c6b7"
+      },
+      {
+        "path": "src/features/analysis/components/analysis-toolbar.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/components/analysis-toolbar.tsx",
+        "upstreamBlob": "09484bb306cbcc9cd21091c99c1122a555483eab"
+      },
+      {
+        "path": "src/features/analysis/components/ask-ai-panel.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/components/ask-ai-panel.tsx",
+        "upstreamBlob": "d79141a95f7f909e4d87ef08899c5a9310efef1b"
+      },
+      {
+        "path": "src/features/analysis/components/current-video-card.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/components/current-video-card.tsx",
+        "upstreamBlob": "39997ddfc67be6fc64dbe81b2ac709e089827506"
+      },
+      {
+        "path": "src/features/analysis/components/key-points-list.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/components/key-points-list.tsx",
+        "upstreamBlob": "703959b6eb6b1a29792ce979f3f6ad9b200654ad"
+      },
+      {
+        "path": "src/features/analysis/components/segment-timeline.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/components/segment-timeline.tsx",
+        "upstreamBlob": "f89d44da8aa5a8d8042acf80cea675d054ed9b46"
+      },
+      {
+        "path": "src/features/analysis/components/summary-card.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/components/summary-card.tsx",
+        "upstreamBlob": "c88b021ecd4833eca86a16dc49802f43b95c1b87"
+      },
+      {
+        "path": "src/features/analysis/lib/analysis-schema.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/lib/analysis-schema.ts",
+        "upstreamBlob": "b3471f1b59c472377b0c747cf9b76d5fb1419996"
+      },
+      {
+        "path": "src/features/analysis/lib/ask-video.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/lib/ask-video.ts",
+        "upstreamBlob": "5ee7082977e0bce5d03f7724612e21207b73e3c0"
+      },
+      {
+        "path": "src/features/analysis/lib/chunk-transcript.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/lib/chunk-transcript.ts",
+        "upstreamBlob": "ac17841518b509aac29b96325ca59f7ac4e1fcbc"
+      },
+      {
+        "path": "src/features/analysis/lib/openai-compatible-client.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/lib/openai-compatible-client.ts",
+        "upstreamBlob": "5cab143b799f11f1708ed8f865d95c7ac8bab58d"
+      },
+      {
+        "path": "src/features/analysis/lib/prompts.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/lib/prompts.ts",
+        "upstreamBlob": "c628dbdcd06e245fcadcd3d6523696e8495ad330"
+      },
+      {
+        "path": "src/features/analysis/lib/run-analysis.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/analysis/lib/run-analysis.ts",
+        "upstreamBlob": "ffbeb7fd7bdd41f369c648e85189f7d81d819fc3"
+      },
+      {
+        "path": "src/features/common/components/empty-state.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/features/common/components/empty-state.tsx",
+        "upstreamBlob": "50d6df981e7b663e48997a65b728d53eb9b425ac"
+      },
+      {
+        "path": "src/features/common/components/settings-ui.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/features/common/components/settings-ui.tsx",
+        "upstreamBlob": "bbfa360f4e3546c62c785a0021cf46157bfac5ee"
+      },
+      {
+        "path": "src/features/history/components/history-panel.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/history/components/history-panel.tsx",
+        "upstreamBlob": "c00771d4391b7da93ddb4eb16001ecb254e8db69"
+      },
+      {
+        "path": "src/features/history/components/recent-analysis-list.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/history/components/recent-analysis-list.tsx",
+        "upstreamBlob": "0b7ea866b86831f909370f09f872772919d2246a"
+      },
+      {
+        "path": "src/features/history/lib/history-repository.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/history/lib/history-repository.ts",
+        "upstreamBlob": "fcba54890c3723713389907c28ec097b0c83a2cd"
+      },
+      {
+        "path": "src/features/history/lib/pending-history-open.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/history/lib/pending-history-open.ts",
+        "upstreamBlob": "6818a3dce7a8becff187466dcda306d4c472afa9"
+      },
+      {
+        "path": "src/features/platform/youtube/youtube-adapter.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/features/platform/youtube/youtube-url.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/features/settings/components/connection-test.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/settings/components/connection-test.tsx",
+        "upstreamBlob": "6589d5ea3c38f0bc428f61d56882ec497148a2fb"
+      },
+      {
+        "path": "src/features/settings/components/data-management.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/settings/components/data-management.tsx",
+        "upstreamBlob": "671a3ab4393c341238d70f8fb5385f382c861b75"
+      },
+      {
+        "path": "src/features/settings/components/diagnostic-log.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/settings/components/diagnostic-log.tsx",
+        "upstreamBlob": "a2afec2a24741edf6465869dcde755fc3e204589"
+      },
+      {
+        "path": "src/features/settings/components/provider-form.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/settings/components/provider-form.tsx",
+        "upstreamBlob": "723d18c1dfebb8c48d30baacdd270af9eae73c2b"
+      },
+      {
+        "path": "src/features/settings/components/theme-settings.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/settings/components/theme-settings.tsx",
+        "upstreamBlob": "b7d13f6881615d07f5a31a178e860fa279d7cbf6"
+      },
+      {
+        "path": "src/features/settings/lib/provider-schema.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/settings/lib/provider-schema.ts",
+        "upstreamBlob": "fcad5b33a3c42d64f19bd4cb46cc3eef6979df76"
+      },
+      {
+        "path": "src/features/settings/lib/settings-storage.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/settings/lib/settings-storage.ts",
+        "upstreamBlob": "54afe021e3910404fbdf287fe5a1b6e04570dcb5"
+      },
+      {
+        "path": "src/features/transcript/lib/download-vtt.ts",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/features/transcript/lib/download-vtt.ts",
+        "upstreamBlob": "e21d8eb9614ef49b03d602cc6fcdfb278c944b8d"
+      },
+      {
+        "path": "src/features/transcript/lib/fetch-transcript-dom.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/transcript/lib/fetch-transcript-dom.ts",
+        "upstreamBlob": "c043544eeea331d427cb61f17a526b0d5844298d"
+      },
+      {
+        "path": "src/features/transcript/lib/fetch-transcript-panel.ts",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/features/transcript/lib/fetch-transcript-panel.ts",
+        "upstreamBlob": "c9d7986a955ac8bd568d57f00e498ec7a2cc8355"
+      },
+      {
+        "path": "src/features/transcript/lib/fetch-vtt.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/transcript/lib/fetch-vtt.ts",
+        "upstreamBlob": "caea6e29f6d4eb17da8aef01d4f505d79939a1f3"
+      },
+      {
+        "path": "src/features/transcript/lib/normalize-cues.ts",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/features/transcript/lib/normalize-cues.ts",
+        "upstreamBlob": "ea482e9790c009f94eb9c482d7ee003f07910bf5"
+      },
+      {
+        "path": "src/features/transcript/lib/parse-vtt.ts",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/features/transcript/lib/parse-vtt.ts",
+        "upstreamBlob": "dd94868c353d2fd418861bd1311f4cd06e1c9a6e"
+      },
+      {
+        "path": "src/features/transcript/lib/transcript-log.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/transcript/lib/transcript-log.ts",
+        "upstreamBlob": "79e7b91a494b120c8236707c1b5e8c7d2911dd74"
+      },
+      {
+        "path": "src/features/transcript/lib/transcript-schema.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/transcript/lib/transcript-schema.ts",
+        "upstreamBlob": "93e50938479beaa480598ecd14809152f2d7a2e0"
+      },
+      {
+        "path": "src/features/youtube/lib/extract-video-id.ts",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/features/youtube/lib/extract-video-id.ts",
+        "upstreamBlob": "39631537bb10f2da3316e3cf80777f80f4fd659e"
+      },
+      {
+        "path": "src/features/youtube/lib/read-page-metadata.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/features/youtube/lib/read-page-metadata.ts",
+        "upstreamBlob": "3ebd7253b28e6bdf602b46186d295a2a57369916"
+      },
+      {
+        "path": "src/lib/db/errors.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/db/errors.ts",
+        "upstreamBlob": "d8421e653f64430e727810a957289fe09e6e1b98"
+      },
+      {
+        "path": "src/lib/db/index.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/db/index.ts",
+        "upstreamBlob": "16b74a7f07eddd9a9184233e065adc5eaac71145"
+      },
+      {
+        "path": "src/lib/db/migrations.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/db/migrations.ts",
+        "upstreamBlob": "ccb4c616f9e86f698a4e0fb7c3f7249cba8ce5cc"
+      },
+      {
+        "path": "src/lib/db/schema.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/db/schema.ts",
+        "upstreamBlob": "593b6f1887f961481acbbd6ee2aa7114e0b129e5"
+      },
+      {
+        "path": "src/lib/providers/extension-providers.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/providers/extension-providers.tsx",
+        "upstreamBlob": "c4a2db6ded2143d282dbf9f99cf22698d55a5305"
+      },
+      {
+        "path": "src/lib/runtime/current-video.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/runtime/current-video.ts",
+        "upstreamBlob": "eee9de3dbf53229d7d173318b2c47191a66b3274"
+      },
+      {
+        "path": "src/lib/runtime/messages.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/runtime/messages.ts",
+        "upstreamBlob": "812a7f4107b263529b1b7df6e5e59cbaa75d4e31"
+      },
+      {
+        "path": "src/lib/schemas/persistence.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/lib/schemas/persistence.ts",
+        "upstreamBlob": "74c2ba1a537063edbcc56ef85ae4b522b794d493"
+      },
+      {
+        "path": "src/lib/theme/theme-provider.tsx",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/lib/theme/theme-provider.tsx",
+        "upstreamBlob": "ee3d91f08513e4ba99e46cfc94e642714fcdf780"
+      },
+      {
+        "path": "src/lib/theme/theme-storage.ts",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/lib/theme/theme-storage.ts",
+        "upstreamBlob": "0092c366939dd97e6caaa682769d9ddda48a029c"
+      },
+      {
+        "path": "src/lib/utils.ts",
+        "classification": "UPSTREAM_MIT_ORIGINAL",
+        "upstreamPath": "src/lib/utils.ts",
+        "upstreamBlob": "d084ccade0d8b5bd77fd5174993bcef7b57644c9"
+      },
+      {
+        "path": "src/options/index.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/options/index.tsx",
+        "upstreamBlob": "aac0821736271c1b7cb2fdda7d2ee995372ea69d"
+      },
+      {
+        "path": "src/sidepanel/analysis/analysis-controller.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/ask/ask-controller.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/components/ask-tab.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/components/overview-tab.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/components/settings-tab.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/components/sidepanel-shell.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/components/transcript-tab.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/history/history-controller.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/index.tsx",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/sidepanel/index.tsx",
+        "upstreamBlob": "5c63da2004a9c1e8597e2c70aa32384b79a6fc42"
+      },
+      {
+        "path": "src/sidepanel/lib/load-current-transcript.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/lib/sidepanel-pure-helpers.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/lib/sidepanel-ux.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/navigation/timestamp-navigation.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/transcript/transcript-acquisition.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/transcript/transcript-controller.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/transcript/transcript-finalization.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/workspace/workspace-controller.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/sidepanel/workspace/workspace-state.ts",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": null,
+        "upstreamBlob": null
+      },
+      {
+        "path": "src/styles/globals.css",
+        "classification": "UPSTREAM_MIT_MIXED",
+        "upstreamPath": "src/styles/globals.css",
+        "upstreamBlob": "f6b9e7a8daddaa270c383c7339df0f25fbccf148"
+      }
+    ]
+  },
+  "noticeCoverage": "REQUIRED_AND_OPTIONAL_CLOSURE_PLUS_OBSERVED_EXTRAS_AND_INCORPORATED_CONTENT",
+  "unknownMembership": "No positive same-build attribution for this row; graph absence is not an exclusion.",
+  "components": [
+    {
+      "id": "npm:node_modules/@floating-ui/core/package.json",
+      "name": "@floating-ui/core",
+      "version": "1.7.5",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@floating-ui/core/dist/floating-ui.core.esm.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@floating-ui/core/dist/floating-ui.core.esm.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@floating-ui/dom/package.json",
+      "name": "@floating-ui/dom",
+      "version": "1.7.6",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@floating-ui/dom/dist/floating-ui.dom.esm.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@floating-ui/dom/dist/floating-ui.dom.esm.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@floating-ui/react-dom/package.json",
+      "name": "@floating-ui/react-dom",
+      "version": "2.1.8",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@floating-ui/react-dom/dist/floating-ui.react-dom.esm.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@floating-ui/react-dom/dist/floating-ui.react-dom.esm.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@floating-ui/utils/package.json",
+      "name": "@floating-ui/utils",
+      "version": "0.2.11",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@floating-ui/utils/dist/floating-ui.utils.esm.js",
+            "node_modules/@floating-ui/utils/dom/floating-ui.utils.dom.esm.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@floating-ui/utils/dist/floating-ui.utils.esm.js",
+            "node_modules/@floating-ui/utils/dom/floating-ui.utils.dom.esm.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/number/package.json",
+      "name": "@radix-ui/number",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/number/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/number/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/primitive/package.json",
+      "name": "@radix-ui/primitive",
+      "version": "1.1.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/primitive/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/primitive/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-arrow/package.json",
+      "name": "@radix-ui/react-arrow",
+      "version": "1.1.7",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-arrow/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-arrow/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-collapsible/package.json",
+      "name": "@radix-ui/react-collapsible",
+      "version": "1.1.12",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-collection/node_modules/@radix-ui/react-slot/package.json",
+      "name": "@radix-ui/react-slot",
+      "version": "1.2.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-collection/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-collection/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-collection/package.json",
+      "name": "@radix-ui/react-collection",
+      "version": "1.1.7",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-collection/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-collection/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-compose-refs/package.json",
+      "name": "@radix-ui/react-compose-refs",
+      "version": "1.1.2",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-compose-refs/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-compose-refs/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-context/package.json",
+      "name": "@radix-ui/react-context",
+      "version": "1.1.2",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-context/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-context/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-dialog/node_modules/@radix-ui/react-slot/package.json",
+      "name": "@radix-ui/react-slot",
+      "version": "1.2.3",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-dialog/package.json",
+      "name": "@radix-ui/react-dialog",
+      "version": "1.1.15",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-direction/package.json",
+      "name": "@radix-ui/react-direction",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-direction/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-direction/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-dismissable-layer/package.json",
+      "name": "@radix-ui/react-dismissable-layer",
+      "version": "1.1.11",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-focus-guards/package.json",
+      "name": "@radix-ui/react-focus-guards",
+      "version": "1.1.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-focus-guards/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-focus-guards/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-focus-scope/package.json",
+      "name": "@radix-ui/react-focus-scope",
+      "version": "1.1.7",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-focus-scope/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-focus-scope/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-id/package.json",
+      "name": "@radix-ui/react-id",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-id/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-id/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-label/node_modules/@radix-ui/react-primitive/package.json",
+      "name": "@radix-ui/react-primitive",
+      "version": "2.1.4",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-label/node_modules/@radix-ui/react-primitive/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-label/node_modules/@radix-ui/react-primitive/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-label/package.json",
+      "name": "@radix-ui/react-label",
+      "version": "2.1.8",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-label/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-label/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-popper/package.json",
+      "name": "@radix-ui/react-popper",
+      "version": "1.2.8",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-popper/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-popper/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-portal/package.json",
+      "name": "@radix-ui/react-portal",
+      "version": "1.1.9",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-portal/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-portal/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-presence/package.json",
+      "name": "@radix-ui/react-presence",
+      "version": "1.1.5",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-presence/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-presence/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-primitive/node_modules/@radix-ui/react-slot/package.json",
+      "name": "@radix-ui/react-slot",
+      "version": "1.2.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-primitive/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-primitive/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-primitive/package.json",
+      "name": "@radix-ui/react-primitive",
+      "version": "2.1.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-primitive/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-primitive/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-roving-focus/package.json",
+      "name": "@radix-ui/react-roving-focus",
+      "version": "1.1.11",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-roving-focus/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-roving-focus/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-scroll-area/package.json",
+      "name": "@radix-ui/react-scroll-area",
+      "version": "1.2.10",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-scroll-area/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-scroll-area/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-select/node_modules/@radix-ui/react-slot/package.json",
+      "name": "@radix-ui/react-slot",
+      "version": "1.2.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-select/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-select/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-select/package.json",
+      "name": "@radix-ui/react-select",
+      "version": "2.2.6",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-select/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-select/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-separator/node_modules/@radix-ui/react-primitive/package.json",
+      "name": "@radix-ui/react-primitive",
+      "version": "2.1.4",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-separator/node_modules/@radix-ui/react-primitive/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-separator/node_modules/@radix-ui/react-primitive/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-separator/package.json",
+      "name": "@radix-ui/react-separator",
+      "version": "1.1.8",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-separator/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-separator/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-slot/package.json",
+      "name": "@radix-ui/react-slot",
+      "version": "1.2.4",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-switch/package.json",
+      "name": "@radix-ui/react-switch",
+      "version": "1.2.6",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-switch/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-switch/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-tabs/package.json",
+      "name": "@radix-ui/react-tabs",
+      "version": "1.1.13",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-tabs/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-tabs/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-toggle-group/package.json",
+      "name": "@radix-ui/react-toggle-group",
+      "version": "1.1.11",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-toggle-group/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-toggle-group/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-toggle/package.json",
+      "name": "@radix-ui/react-toggle",
+      "version": "1.1.10",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-toggle/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-toggle/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-tooltip/node_modules/@radix-ui/react-slot/package.json",
+      "name": "@radix-ui/react-slot",
+      "version": "1.2.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-tooltip/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-tooltip/node_modules/@radix-ui/react-slot/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-tooltip/package.json",
+      "name": "@radix-ui/react-tooltip",
+      "version": "1.2.8",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-tooltip/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-tooltip/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-callback-ref/package.json",
+      "name": "@radix-ui/react-use-callback-ref",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-callback-ref/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-callback-ref/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-controllable-state/package.json",
+      "name": "@radix-ui/react-use-controllable-state",
+      "version": "1.2.2",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-effect-event/package.json",
+      "name": "@radix-ui/react-use-effect-event",
+      "version": "0.0.2",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-effect-event/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-effect-event/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-escape-keydown/package.json",
+      "name": "@radix-ui/react-use-escape-keydown",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-escape-keydown/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-escape-keydown/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-layout-effect/package.json",
+      "name": "@radix-ui/react-use-layout-effect",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-layout-effect/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-layout-effect/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-previous/package.json",
+      "name": "@radix-ui/react-use-previous",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-previous/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-previous/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-rect/package.json",
+      "name": "@radix-ui/react-use-rect",
+      "version": "1.1.1",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-use-size/package.json",
+      "name": "@radix-ui/react-use-size",
+      "version": "1.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-size/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-use-size/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/react-visually-hidden/package.json",
+      "name": "@radix-ui/react-visually-hidden",
+      "version": "1.2.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@radix-ui/react-visually-hidden/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@radix-ui/react-visually-hidden/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@radix-ui/rect/package.json",
+      "name": "@radix-ui/rect",
+      "version": "1.1.1",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@types/prop-types/package.json",
+      "name": "@types/prop-types",
+      "version": "15.7.15",
+      "membership": "UNKNOWN",
+      "coverage": "OPTIONAL_ONLY",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@types/react-dom/package.json",
+      "name": "@types/react-dom",
+      "version": "18.3.7",
+      "membership": "UNKNOWN",
+      "coverage": "OPTIONAL_ONLY",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@types/react/package.json",
+      "name": "@types/react",
+      "version": "18.3.28",
+      "membership": "UNKNOWN",
+      "coverage": "OPTIONAL_ONLY",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/aria-hidden/package.json",
+      "name": "aria-hidden",
+      "version": "1.2.6",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/aria-hidden/dist/es2015/index.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/aria-hidden/dist/es2015/index.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/class-variance-authority/package.json",
+      "name": "class-variance-authority",
+      "version": "0.7.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/class-variance-authority/dist/index.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/class-variance-authority/dist/index.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/clsx/package.json",
+      "name": "clsx",
+      "version": "2.1.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/clsx/dist/clsx.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/clsx/dist/clsx.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/csstype/package.json",
+      "name": "csstype",
+      "version": "3.2.3",
+      "membership": "UNKNOWN",
+      "coverage": "OPTIONAL_ONLY",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/detect-node-es/package.json",
+      "name": "detect-node-es",
+      "version": "1.1.0",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/dexie/package.json",
+      "name": "dexie",
+      "version": "4.3.0",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/dexie/dist/dexie.mjs"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/dexie/dist/dexie.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/get-nonce/package.json",
+      "name": "get-nonce",
+      "version": "1.0.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/get-nonce/dist/es2015/index.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/get-nonce/dist/es2015/index.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/js-tokens/package.json",
+      "name": "js-tokens",
+      "version": "4.0.0",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/loose-envify/package.json",
+      "name": "loose-envify",
+      "version": "1.4.0",
+      "membership": "UNKNOWN",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/lucide-react/package.json",
+      "name": "lucide-react",
+      "version": "0.462.0",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/lucide-react/dist/esm/Icon.js",
+            "node_modules/lucide-react/dist/esm/createLucideIcon.js",
+            "node_modules/lucide-react/dist/esm/defaultAttributes.js",
+            "node_modules/lucide-react/dist/esm/icons/bookmark.js",
+            "node_modules/lucide-react/dist/esm/icons/check.js",
+            "node_modules/lucide-react/dist/esm/icons/chevron-down.js",
+            "node_modules/lucide-react/dist/esm/icons/chevron-up.js",
+            "node_modules/lucide-react/dist/esm/icons/circle-check.js",
+            "node_modules/lucide-react/dist/esm/icons/circle-play.js",
+            "node_modules/lucide-react/dist/esm/icons/circle-plus.js",
+            "node_modules/lucide-react/dist/esm/icons/clipboard-copy.js",
+            "node_modules/lucide-react/dist/esm/icons/clock-3.js",
+            "node_modules/lucide-react/dist/esm/icons/database-zap.js",
+            "node_modules/lucide-react/dist/esm/icons/download.js",
+            "node_modules/lucide-react/dist/esm/icons/ellipsis-vertical.js",
+            "node_modules/lucide-react/dist/esm/icons/file-text.js",
+            "node_modules/lucide-react/dist/esm/icons/film.js",
+            "node_modules/lucide-react/dist/esm/icons/folder-open.js",
+            "node_modules/lucide-react/dist/esm/icons/history.js",
+            "node_modules/lucide-react/dist/esm/icons/info.js",
+            "node_modules/lucide-react/dist/esm/icons/laptop-minimal.js",
+            "node_modules/lucide-react/dist/esm/icons/list-checks.js",
+            "node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+            "node_modules/lucide-react/dist/esm/icons/message-circle-question.js",
+            "node_modules/lucide-react/dist/esm/icons/message-square.js",
+            "node_modules/lucide-react/dist/esm/icons/moon-star.js",
+            "node_modules/lucide-react/dist/esm/icons/notebook-pen.js",
+            "node_modules/lucide-react/dist/esm/icons/octagon-x.js",
+            "node_modules/lucide-react/dist/esm/icons/pencil.js",
+            "node_modules/lucide-react/dist/esm/icons/play.js",
+            "node_modules/lucide-react/dist/esm/icons/plug-zap.js",
+            "node_modules/lucide-react/dist/esm/icons/plus.js",
+            "node_modules/lucide-react/dist/esm/icons/refresh-ccw.js",
+            "node_modules/lucide-react/dist/esm/icons/refresh-cw.js",
+            "node_modules/lucide-react/dist/esm/icons/rotate-ccw.js",
+            "node_modules/lucide-react/dist/esm/icons/save.js",
+            "node_modules/lucide-react/dist/esm/icons/search.js",
+            "node_modules/lucide-react/dist/esm/icons/send.js",
+            "node_modules/lucide-react/dist/esm/icons/settings-2.js",
+            "node_modules/lucide-react/dist/esm/icons/shield-alert.js",
+            "node_modules/lucide-react/dist/esm/icons/shield-check.js",
+            "node_modules/lucide-react/dist/esm/icons/sparkles.js",
+            "node_modules/lucide-react/dist/esm/icons/square.js",
+            "node_modules/lucide-react/dist/esm/icons/star.js",
+            "node_modules/lucide-react/dist/esm/icons/sun-medium.js",
+            "node_modules/lucide-react/dist/esm/icons/trash-2.js",
+            "node_modules/lucide-react/dist/esm/icons/triangle-alert.js",
+            "node_modules/lucide-react/dist/esm/icons/video.js",
+            "node_modules/lucide-react/dist/esm/lucide-react.js",
+            "node_modules/lucide-react/dist/esm/shared/src/utils.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/lucide-react/dist/esm/Icon.js",
+            "node_modules/lucide-react/dist/esm/createLucideIcon.js",
+            "node_modules/lucide-react/dist/esm/defaultAttributes.js",
+            "node_modules/lucide-react/dist/esm/icons/bookmark.js",
+            "node_modules/lucide-react/dist/esm/icons/check.js",
+            "node_modules/lucide-react/dist/esm/icons/chevron-down.js",
+            "node_modules/lucide-react/dist/esm/icons/chevron-up.js",
+            "node_modules/lucide-react/dist/esm/icons/circle-check.js",
+            "node_modules/lucide-react/dist/esm/icons/circle-play.js",
+            "node_modules/lucide-react/dist/esm/icons/circle-plus.js",
+            "node_modules/lucide-react/dist/esm/icons/clipboard-copy.js",
+            "node_modules/lucide-react/dist/esm/icons/clock-3.js",
+            "node_modules/lucide-react/dist/esm/icons/database-zap.js",
+            "node_modules/lucide-react/dist/esm/icons/download.js",
+            "node_modules/lucide-react/dist/esm/icons/ellipsis-vertical.js",
+            "node_modules/lucide-react/dist/esm/icons/file-text.js",
+            "node_modules/lucide-react/dist/esm/icons/film.js",
+            "node_modules/lucide-react/dist/esm/icons/folder-open.js",
+            "node_modules/lucide-react/dist/esm/icons/history.js",
+            "node_modules/lucide-react/dist/esm/icons/info.js",
+            "node_modules/lucide-react/dist/esm/icons/laptop-minimal.js",
+            "node_modules/lucide-react/dist/esm/icons/list-checks.js",
+            "node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+            "node_modules/lucide-react/dist/esm/icons/message-circle-question.js",
+            "node_modules/lucide-react/dist/esm/icons/message-square.js",
+            "node_modules/lucide-react/dist/esm/icons/moon-star.js",
+            "node_modules/lucide-react/dist/esm/icons/notebook-pen.js",
+            "node_modules/lucide-react/dist/esm/icons/octagon-x.js",
+            "node_modules/lucide-react/dist/esm/icons/pencil.js",
+            "node_modules/lucide-react/dist/esm/icons/play.js",
+            "node_modules/lucide-react/dist/esm/icons/plug-zap.js",
+            "node_modules/lucide-react/dist/esm/icons/plus.js",
+            "node_modules/lucide-react/dist/esm/icons/refresh-ccw.js",
+            "node_modules/lucide-react/dist/esm/icons/refresh-cw.js",
+            "node_modules/lucide-react/dist/esm/icons/rotate-ccw.js",
+            "node_modules/lucide-react/dist/esm/icons/save.js",
+            "node_modules/lucide-react/dist/esm/icons/search.js",
+            "node_modules/lucide-react/dist/esm/icons/send.js",
+            "node_modules/lucide-react/dist/esm/icons/settings-2.js",
+            "node_modules/lucide-react/dist/esm/icons/shield-alert.js",
+            "node_modules/lucide-react/dist/esm/icons/shield-check.js",
+            "node_modules/lucide-react/dist/esm/icons/sparkles.js",
+            "node_modules/lucide-react/dist/esm/icons/square.js",
+            "node_modules/lucide-react/dist/esm/icons/star.js",
+            "node_modules/lucide-react/dist/esm/icons/sun-medium.js",
+            "node_modules/lucide-react/dist/esm/icons/trash-2.js",
+            "node_modules/lucide-react/dist/esm/icons/triangle-alert.js",
+            "node_modules/lucide-react/dist/esm/icons/video.js",
+            "node_modules/lucide-react/dist/esm/lucide-react.js",
+            "node_modules/lucide-react/dist/esm/shared/src/utils.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/react-dom/package.json",
+      "name": "react-dom",
+      "version": "18.3.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/react-dom/cjs/react-dom.production.min.js",
+            "node_modules/react-dom/client.js",
+            "node_modules/react-dom/index.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/react-dom/cjs/react-dom.production.min.js",
+            "node_modules/react-dom/client.js",
+            "node_modules/react-dom/index.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/react-remove-scroll-bar/package.json",
+      "name": "react-remove-scroll-bar",
+      "version": "2.3.7",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/react-remove-scroll-bar/dist/es2015/component.js",
+            "node_modules/react-remove-scroll-bar/dist/es2015/constants.js",
+            "node_modules/react-remove-scroll-bar/dist/es2015/index.js",
+            "node_modules/react-remove-scroll-bar/dist/es2015/utils.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/react-remove-scroll-bar/dist/es2015/component.js",
+            "node_modules/react-remove-scroll-bar/dist/es2015/constants.js",
+            "node_modules/react-remove-scroll-bar/dist/es2015/index.js",
+            "node_modules/react-remove-scroll-bar/dist/es2015/utils.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/react-remove-scroll/package.json",
+      "name": "react-remove-scroll",
+      "version": "2.7.2",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/react-remove-scroll/dist/es2015/Combination.js",
+            "node_modules/react-remove-scroll/dist/es2015/SideEffect.js",
+            "node_modules/react-remove-scroll/dist/es2015/UI.js",
+            "node_modules/react-remove-scroll/dist/es2015/aggresiveCapture.js",
+            "node_modules/react-remove-scroll/dist/es2015/handleScroll.js",
+            "node_modules/react-remove-scroll/dist/es2015/index.js",
+            "node_modules/react-remove-scroll/dist/es2015/medium.js",
+            "node_modules/react-remove-scroll/dist/es2015/sidecar.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/react-remove-scroll/dist/es2015/Combination.js",
+            "node_modules/react-remove-scroll/dist/es2015/SideEffect.js",
+            "node_modules/react-remove-scroll/dist/es2015/UI.js",
+            "node_modules/react-remove-scroll/dist/es2015/aggresiveCapture.js",
+            "node_modules/react-remove-scroll/dist/es2015/handleScroll.js",
+            "node_modules/react-remove-scroll/dist/es2015/index.js",
+            "node_modules/react-remove-scroll/dist/es2015/medium.js",
+            "node_modules/react-remove-scroll/dist/es2015/sidecar.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/react-style-singleton/package.json",
+      "name": "react-style-singleton",
+      "version": "2.2.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/react-style-singleton/dist/es2015/component.js",
+            "node_modules/react-style-singleton/dist/es2015/hook.js",
+            "node_modules/react-style-singleton/dist/es2015/index.js",
+            "node_modules/react-style-singleton/dist/es2015/singleton.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/react-style-singleton/dist/es2015/component.js",
+            "node_modules/react-style-singleton/dist/es2015/hook.js",
+            "node_modules/react-style-singleton/dist/es2015/index.js",
+            "node_modules/react-style-singleton/dist/es2015/singleton.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/react/package.json",
+      "name": "react",
+      "version": "18.3.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/react/cjs/react-jsx-runtime.production.min.js",
+            "node_modules/react/cjs/react.production.min.js",
+            "node_modules/react/index.js",
+            "node_modules/react/jsx-runtime.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/react/cjs/react-jsx-runtime.production.min.js",
+            "node_modules/react/cjs/react.production.min.js",
+            "node_modules/react/index.js",
+            "node_modules/react/jsx-runtime.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/scheduler/package.json",
+      "name": "scheduler",
+      "version": "0.23.2",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/scheduler/cjs/scheduler.production.min.js",
+            "node_modules/scheduler/index.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/scheduler/cjs/scheduler.production.min.js",
+            "node_modules/scheduler/index.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/sonner/package.json",
+      "name": "sonner",
+      "version": "2.0.7",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/sonner/dist/index.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/sonner/dist/index.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/tailwind-merge/package.json",
+      "name": "tailwind-merge",
+      "version": "2.6.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/tailwind-merge/dist/bundle-cjs.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/tailwind-merge/dist/bundle-cjs.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/tslib/package.json",
+      "name": "tslib",
+      "version": "2.8.1",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/tslib/tslib.es6.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/tslib/tslib.es6.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/use-callback-ref/package.json",
+      "name": "use-callback-ref",
+      "version": "1.3.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/use-callback-ref/dist/es2015/assignRef.js",
+            "node_modules/use-callback-ref/dist/es2015/index.js",
+            "node_modules/use-callback-ref/dist/es2015/useMergeRef.js",
+            "node_modules/use-callback-ref/dist/es2015/useRef.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/use-callback-ref/dist/es2015/assignRef.js",
+            "node_modules/use-callback-ref/dist/es2015/index.js",
+            "node_modules/use-callback-ref/dist/es2015/useMergeRef.js",
+            "node_modules/use-callback-ref/dist/es2015/useRef.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/use-sidecar/package.json",
+      "name": "use-sidecar",
+      "version": "1.1.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/use-sidecar/dist/es2015/exports.js",
+            "node_modules/use-sidecar/dist/es2015/index.js",
+            "node_modules/use-sidecar/dist/es2015/medium.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/use-sidecar/dist/es2015/exports.js",
+            "node_modules/use-sidecar/dist/es2015/index.js",
+            "node_modules/use-sidecar/dist/es2015/medium.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/zod/package.json",
+      "name": "zod",
+      "version": "4.6.7",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "REQUIRED_CLOSURE",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "bilibili-video.5fd6a346.js",
+          "sources": [
+            "node_modules/zod/index.js",
+            "node_modules/zod/v4/classic/checks.js",
+            "node_modules/zod/v4/classic/coerce.js",
+            "node_modules/zod/v4/classic/compat.js",
+            "node_modules/zod/v4/classic/deep-partial.js",
+            "node_modules/zod/v4/classic/errors.js",
+            "node_modules/zod/v4/classic/external.js",
+            "node_modules/zod/v4/classic/from-json-schema.js",
+            "node_modules/zod/v4/classic/in-out.js",
+            "node_modules/zod/v4/classic/iso.js",
+            "node_modules/zod/v4/classic/parse.js",
+            "node_modules/zod/v4/classic/schemas.js",
+            "node_modules/zod/v4/core/api.js",
+            "node_modules/zod/v4/core/checks.js",
+            "node_modules/zod/v4/core/compile.js",
+            "node_modules/zod/v4/core/core.js",
+            "node_modules/zod/v4/core/doc.js",
+            "node_modules/zod/v4/core/errors.js",
+            "node_modules/zod/v4/core/index.js",
+            "node_modules/zod/v4/core/json-schema-generator.js",
+            "node_modules/zod/v4/core/json-schema-processors.js",
+            "node_modules/zod/v4/core/json-schema.js",
+            "node_modules/zod/v4/core/memoizer.js",
+            "node_modules/zod/v4/core/parse.js",
+            "node_modules/zod/v4/core/regexes.js",
+            "node_modules/zod/v4/core/registries.js",
+            "node_modules/zod/v4/core/schemas.js",
+            "node_modules/zod/v4/core/to-json-schema.js",
+            "node_modules/zod/v4/core/util.js",
+            "node_modules/zod/v4/core/versions.js",
+            "node_modules/zod/v4/core/visit.js",
+            "node_modules/zod/v4/locales/ar.js",
+            "node_modules/zod/v4/locales/az.js",
+            "node_modules/zod/v4/locales/be.js",
+            "node_modules/zod/v4/locales/bg.js",
+            "node_modules/zod/v4/locales/bn.js",
+            "node_modules/zod/v4/locales/ca.js",
+            "node_modules/zod/v4/locales/ckb.js",
+            "node_modules/zod/v4/locales/cs.js",
+            "node_modules/zod/v4/locales/da.js",
+            "node_modules/zod/v4/locales/de.js",
+            "node_modules/zod/v4/locales/el.js",
+            "node_modules/zod/v4/locales/en.js",
+            "node_modules/zod/v4/locales/eo.js",
+            "node_modules/zod/v4/locales/es.js",
+            "node_modules/zod/v4/locales/fa.js",
+            "node_modules/zod/v4/locales/fi.js",
+            "node_modules/zod/v4/locales/fr-CA.js",
+            "node_modules/zod/v4/locales/fr.js",
+            "node_modules/zod/v4/locales/gu.js",
+            "node_modules/zod/v4/locales/he.js",
+            "node_modules/zod/v4/locales/hi.js",
+            "node_modules/zod/v4/locales/hr.js",
+            "node_modules/zod/v4/locales/hu.js",
+            "node_modules/zod/v4/locales/hy.js",
+            "node_modules/zod/v4/locales/id.js",
+            "node_modules/zod/v4/locales/index.js",
+            "node_modules/zod/v4/locales/is.js",
+            "node_modules/zod/v4/locales/it.js",
+            "node_modules/zod/v4/locales/ja.js",
+            "node_modules/zod/v4/locales/ka.js",
+            "node_modules/zod/v4/locales/kh.js",
+            "node_modules/zod/v4/locales/km.js",
+            "node_modules/zod/v4/locales/kn.js",
+            "node_modules/zod/v4/locales/ko.js",
+            "node_modules/zod/v4/locales/lt.js",
+            "node_modules/zod/v4/locales/mk.js",
+            "node_modules/zod/v4/locales/ms.js",
+            "node_modules/zod/v4/locales/ne.js",
+            "node_modules/zod/v4/locales/nl.js",
+            "node_modules/zod/v4/locales/nn.js",
+            "node_modules/zod/v4/locales/no.js",
+            "node_modules/zod/v4/locales/ota.js",
+            "node_modules/zod/v4/locales/pl.js",
+            "node_modules/zod/v4/locales/ps.js",
+            "node_modules/zod/v4/locales/pt-BR.js",
+            "node_modules/zod/v4/locales/pt.js",
+            "node_modules/zod/v4/locales/ro.js",
+            "node_modules/zod/v4/locales/ru.js",
+            "node_modules/zod/v4/locales/sk.js",
+            "node_modules/zod/v4/locales/sl.js",
+            "node_modules/zod/v4/locales/sv.js",
+            "node_modules/zod/v4/locales/ta.js",
+            "node_modules/zod/v4/locales/tg.js",
+            "node_modules/zod/v4/locales/th.js",
+            "node_modules/zod/v4/locales/tk.js",
+            "node_modules/zod/v4/locales/tr.js",
+            "node_modules/zod/v4/locales/ua.js",
+            "node_modules/zod/v4/locales/uk.js",
+            "node_modules/zod/v4/locales/ur.js",
+            "node_modules/zod/v4/locales/uz.js",
+            "node_modules/zod/v4/locales/vi.js",
+            "node_modules/zod/v4/locales/yo.js",
+            "node_modules/zod/v4/locales/zh-CN.js",
+            "node_modules/zod/v4/locales/zh-TW.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/zod/index.js",
+            "node_modules/zod/v4/classic/checks.js",
+            "node_modules/zod/v4/classic/coerce.js",
+            "node_modules/zod/v4/classic/compat.js",
+            "node_modules/zod/v4/classic/deep-partial.js",
+            "node_modules/zod/v4/classic/errors.js",
+            "node_modules/zod/v4/classic/external.js",
+            "node_modules/zod/v4/classic/from-json-schema.js",
+            "node_modules/zod/v4/classic/in-out.js",
+            "node_modules/zod/v4/classic/iso.js",
+            "node_modules/zod/v4/classic/parse.js",
+            "node_modules/zod/v4/classic/schemas.js",
+            "node_modules/zod/v4/core/api.js",
+            "node_modules/zod/v4/core/checks.js",
+            "node_modules/zod/v4/core/compile.js",
+            "node_modules/zod/v4/core/core.js",
+            "node_modules/zod/v4/core/doc.js",
+            "node_modules/zod/v4/core/errors.js",
+            "node_modules/zod/v4/core/index.js",
+            "node_modules/zod/v4/core/json-schema-generator.js",
+            "node_modules/zod/v4/core/json-schema-processors.js",
+            "node_modules/zod/v4/core/json-schema.js",
+            "node_modules/zod/v4/core/memoizer.js",
+            "node_modules/zod/v4/core/parse.js",
+            "node_modules/zod/v4/core/regexes.js",
+            "node_modules/zod/v4/core/registries.js",
+            "node_modules/zod/v4/core/schemas.js",
+            "node_modules/zod/v4/core/to-json-schema.js",
+            "node_modules/zod/v4/core/util.js",
+            "node_modules/zod/v4/core/versions.js",
+            "node_modules/zod/v4/core/visit.js",
+            "node_modules/zod/v4/locales/ar.js",
+            "node_modules/zod/v4/locales/az.js",
+            "node_modules/zod/v4/locales/be.js",
+            "node_modules/zod/v4/locales/bg.js",
+            "node_modules/zod/v4/locales/bn.js",
+            "node_modules/zod/v4/locales/ca.js",
+            "node_modules/zod/v4/locales/ckb.js",
+            "node_modules/zod/v4/locales/cs.js",
+            "node_modules/zod/v4/locales/da.js",
+            "node_modules/zod/v4/locales/de.js",
+            "node_modules/zod/v4/locales/el.js",
+            "node_modules/zod/v4/locales/en.js",
+            "node_modules/zod/v4/locales/eo.js",
+            "node_modules/zod/v4/locales/es.js",
+            "node_modules/zod/v4/locales/fa.js",
+            "node_modules/zod/v4/locales/fi.js",
+            "node_modules/zod/v4/locales/fr-CA.js",
+            "node_modules/zod/v4/locales/fr.js",
+            "node_modules/zod/v4/locales/gu.js",
+            "node_modules/zod/v4/locales/he.js",
+            "node_modules/zod/v4/locales/hi.js",
+            "node_modules/zod/v4/locales/hr.js",
+            "node_modules/zod/v4/locales/hu.js",
+            "node_modules/zod/v4/locales/hy.js",
+            "node_modules/zod/v4/locales/id.js",
+            "node_modules/zod/v4/locales/index.js",
+            "node_modules/zod/v4/locales/is.js",
+            "node_modules/zod/v4/locales/it.js",
+            "node_modules/zod/v4/locales/ja.js",
+            "node_modules/zod/v4/locales/ka.js",
+            "node_modules/zod/v4/locales/kh.js",
+            "node_modules/zod/v4/locales/km.js",
+            "node_modules/zod/v4/locales/kn.js",
+            "node_modules/zod/v4/locales/ko.js",
+            "node_modules/zod/v4/locales/lt.js",
+            "node_modules/zod/v4/locales/mk.js",
+            "node_modules/zod/v4/locales/ms.js",
+            "node_modules/zod/v4/locales/ne.js",
+            "node_modules/zod/v4/locales/nl.js",
+            "node_modules/zod/v4/locales/nn.js",
+            "node_modules/zod/v4/locales/no.js",
+            "node_modules/zod/v4/locales/ota.js",
+            "node_modules/zod/v4/locales/pl.js",
+            "node_modules/zod/v4/locales/ps.js",
+            "node_modules/zod/v4/locales/pt-BR.js",
+            "node_modules/zod/v4/locales/pt.js",
+            "node_modules/zod/v4/locales/ro.js",
+            "node_modules/zod/v4/locales/ru.js",
+            "node_modules/zod/v4/locales/sk.js",
+            "node_modules/zod/v4/locales/sl.js",
+            "node_modules/zod/v4/locales/sv.js",
+            "node_modules/zod/v4/locales/ta.js",
+            "node_modules/zod/v4/locales/tg.js",
+            "node_modules/zod/v4/locales/th.js",
+            "node_modules/zod/v4/locales/tk.js",
+            "node_modules/zod/v4/locales/tr.js",
+            "node_modules/zod/v4/locales/ua.js",
+            "node_modules/zod/v4/locales/uk.js",
+            "node_modules/zod/v4/locales/ur.js",
+            "node_modules/zod/v4/locales/uz.js",
+            "node_modules/zod/v4/locales/vi.js",
+            "node_modules/zod/v4/locales/yo.js",
+            "node_modules/zod/v4/locales/zh-CN.js",
+            "node_modules/zod/v4/locales/zh-TW.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/zod/index.js",
+            "node_modules/zod/v4/classic/checks.js",
+            "node_modules/zod/v4/classic/coerce.js",
+            "node_modules/zod/v4/classic/compat.js",
+            "node_modules/zod/v4/classic/deep-partial.js",
+            "node_modules/zod/v4/classic/errors.js",
+            "node_modules/zod/v4/classic/external.js",
+            "node_modules/zod/v4/classic/from-json-schema.js",
+            "node_modules/zod/v4/classic/in-out.js",
+            "node_modules/zod/v4/classic/iso.js",
+            "node_modules/zod/v4/classic/parse.js",
+            "node_modules/zod/v4/classic/schemas.js",
+            "node_modules/zod/v4/core/api.js",
+            "node_modules/zod/v4/core/checks.js",
+            "node_modules/zod/v4/core/compile.js",
+            "node_modules/zod/v4/core/core.js",
+            "node_modules/zod/v4/core/doc.js",
+            "node_modules/zod/v4/core/errors.js",
+            "node_modules/zod/v4/core/index.js",
+            "node_modules/zod/v4/core/json-schema-generator.js",
+            "node_modules/zod/v4/core/json-schema-processors.js",
+            "node_modules/zod/v4/core/json-schema.js",
+            "node_modules/zod/v4/core/memoizer.js",
+            "node_modules/zod/v4/core/parse.js",
+            "node_modules/zod/v4/core/regexes.js",
+            "node_modules/zod/v4/core/registries.js",
+            "node_modules/zod/v4/core/schemas.js",
+            "node_modules/zod/v4/core/to-json-schema.js",
+            "node_modules/zod/v4/core/util.js",
+            "node_modules/zod/v4/core/versions.js",
+            "node_modules/zod/v4/core/visit.js",
+            "node_modules/zod/v4/locales/ar.js",
+            "node_modules/zod/v4/locales/az.js",
+            "node_modules/zod/v4/locales/be.js",
+            "node_modules/zod/v4/locales/bg.js",
+            "node_modules/zod/v4/locales/bn.js",
+            "node_modules/zod/v4/locales/ca.js",
+            "node_modules/zod/v4/locales/ckb.js",
+            "node_modules/zod/v4/locales/cs.js",
+            "node_modules/zod/v4/locales/da.js",
+            "node_modules/zod/v4/locales/de.js",
+            "node_modules/zod/v4/locales/el.js",
+            "node_modules/zod/v4/locales/en.js",
+            "node_modules/zod/v4/locales/eo.js",
+            "node_modules/zod/v4/locales/es.js",
+            "node_modules/zod/v4/locales/fa.js",
+            "node_modules/zod/v4/locales/fi.js",
+            "node_modules/zod/v4/locales/fr-CA.js",
+            "node_modules/zod/v4/locales/fr.js",
+            "node_modules/zod/v4/locales/gu.js",
+            "node_modules/zod/v4/locales/he.js",
+            "node_modules/zod/v4/locales/hi.js",
+            "node_modules/zod/v4/locales/hr.js",
+            "node_modules/zod/v4/locales/hu.js",
+            "node_modules/zod/v4/locales/hy.js",
+            "node_modules/zod/v4/locales/id.js",
+            "node_modules/zod/v4/locales/index.js",
+            "node_modules/zod/v4/locales/is.js",
+            "node_modules/zod/v4/locales/it.js",
+            "node_modules/zod/v4/locales/ja.js",
+            "node_modules/zod/v4/locales/ka.js",
+            "node_modules/zod/v4/locales/kh.js",
+            "node_modules/zod/v4/locales/km.js",
+            "node_modules/zod/v4/locales/kn.js",
+            "node_modules/zod/v4/locales/ko.js",
+            "node_modules/zod/v4/locales/lt.js",
+            "node_modules/zod/v4/locales/mk.js",
+            "node_modules/zod/v4/locales/ms.js",
+            "node_modules/zod/v4/locales/ne.js",
+            "node_modules/zod/v4/locales/nl.js",
+            "node_modules/zod/v4/locales/nn.js",
+            "node_modules/zod/v4/locales/no.js",
+            "node_modules/zod/v4/locales/ota.js",
+            "node_modules/zod/v4/locales/pl.js",
+            "node_modules/zod/v4/locales/ps.js",
+            "node_modules/zod/v4/locales/pt-BR.js",
+            "node_modules/zod/v4/locales/pt.js",
+            "node_modules/zod/v4/locales/ro.js",
+            "node_modules/zod/v4/locales/ru.js",
+            "node_modules/zod/v4/locales/sk.js",
+            "node_modules/zod/v4/locales/sl.js",
+            "node_modules/zod/v4/locales/sv.js",
+            "node_modules/zod/v4/locales/ta.js",
+            "node_modules/zod/v4/locales/tg.js",
+            "node_modules/zod/v4/locales/th.js",
+            "node_modules/zod/v4/locales/tk.js",
+            "node_modules/zod/v4/locales/tr.js",
+            "node_modules/zod/v4/locales/ua.js",
+            "node_modules/zod/v4/locales/uk.js",
+            "node_modules/zod/v4/locales/ur.js",
+            "node_modules/zod/v4/locales/uz.js",
+            "node_modules/zod/v4/locales/vi.js",
+            "node_modules/zod/v4/locales/yo.js",
+            "node_modules/zod/v4/locales/zh-CN.js",
+            "node_modules/zod/v4/locales/zh-TW.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "static/background/index.js",
+          "sources": [
+            "node_modules/zod/index.js",
+            "node_modules/zod/v4/classic/checks.js",
+            "node_modules/zod/v4/classic/coerce.js",
+            "node_modules/zod/v4/classic/compat.js",
+            "node_modules/zod/v4/classic/deep-partial.js",
+            "node_modules/zod/v4/classic/errors.js",
+            "node_modules/zod/v4/classic/external.js",
+            "node_modules/zod/v4/classic/from-json-schema.js",
+            "node_modules/zod/v4/classic/in-out.js",
+            "node_modules/zod/v4/classic/iso.js",
+            "node_modules/zod/v4/classic/parse.js",
+            "node_modules/zod/v4/classic/schemas.js",
+            "node_modules/zod/v4/core/api.js",
+            "node_modules/zod/v4/core/checks.js",
+            "node_modules/zod/v4/core/compile.js",
+            "node_modules/zod/v4/core/core.js",
+            "node_modules/zod/v4/core/doc.js",
+            "node_modules/zod/v4/core/errors.js",
+            "node_modules/zod/v4/core/index.js",
+            "node_modules/zod/v4/core/json-schema-generator.js",
+            "node_modules/zod/v4/core/json-schema-processors.js",
+            "node_modules/zod/v4/core/json-schema.js",
+            "node_modules/zod/v4/core/memoizer.js",
+            "node_modules/zod/v4/core/parse.js",
+            "node_modules/zod/v4/core/regexes.js",
+            "node_modules/zod/v4/core/registries.js",
+            "node_modules/zod/v4/core/schemas.js",
+            "node_modules/zod/v4/core/to-json-schema.js",
+            "node_modules/zod/v4/core/util.js",
+            "node_modules/zod/v4/core/versions.js",
+            "node_modules/zod/v4/core/visit.js",
+            "node_modules/zod/v4/locales/ar.js",
+            "node_modules/zod/v4/locales/az.js",
+            "node_modules/zod/v4/locales/be.js",
+            "node_modules/zod/v4/locales/bg.js",
+            "node_modules/zod/v4/locales/bn.js",
+            "node_modules/zod/v4/locales/ca.js",
+            "node_modules/zod/v4/locales/ckb.js",
+            "node_modules/zod/v4/locales/cs.js",
+            "node_modules/zod/v4/locales/da.js",
+            "node_modules/zod/v4/locales/de.js",
+            "node_modules/zod/v4/locales/el.js",
+            "node_modules/zod/v4/locales/en.js",
+            "node_modules/zod/v4/locales/eo.js",
+            "node_modules/zod/v4/locales/es.js",
+            "node_modules/zod/v4/locales/fa.js",
+            "node_modules/zod/v4/locales/fi.js",
+            "node_modules/zod/v4/locales/fr-CA.js",
+            "node_modules/zod/v4/locales/fr.js",
+            "node_modules/zod/v4/locales/gu.js",
+            "node_modules/zod/v4/locales/he.js",
+            "node_modules/zod/v4/locales/hi.js",
+            "node_modules/zod/v4/locales/hr.js",
+            "node_modules/zod/v4/locales/hu.js",
+            "node_modules/zod/v4/locales/hy.js",
+            "node_modules/zod/v4/locales/id.js",
+            "node_modules/zod/v4/locales/index.js",
+            "node_modules/zod/v4/locales/is.js",
+            "node_modules/zod/v4/locales/it.js",
+            "node_modules/zod/v4/locales/ja.js",
+            "node_modules/zod/v4/locales/ka.js",
+            "node_modules/zod/v4/locales/kh.js",
+            "node_modules/zod/v4/locales/km.js",
+            "node_modules/zod/v4/locales/kn.js",
+            "node_modules/zod/v4/locales/ko.js",
+            "node_modules/zod/v4/locales/lt.js",
+            "node_modules/zod/v4/locales/mk.js",
+            "node_modules/zod/v4/locales/ms.js",
+            "node_modules/zod/v4/locales/ne.js",
+            "node_modules/zod/v4/locales/nl.js",
+            "node_modules/zod/v4/locales/nn.js",
+            "node_modules/zod/v4/locales/no.js",
+            "node_modules/zod/v4/locales/ota.js",
+            "node_modules/zod/v4/locales/pl.js",
+            "node_modules/zod/v4/locales/ps.js",
+            "node_modules/zod/v4/locales/pt-BR.js",
+            "node_modules/zod/v4/locales/pt.js",
+            "node_modules/zod/v4/locales/ro.js",
+            "node_modules/zod/v4/locales/ru.js",
+            "node_modules/zod/v4/locales/sk.js",
+            "node_modules/zod/v4/locales/sl.js",
+            "node_modules/zod/v4/locales/sv.js",
+            "node_modules/zod/v4/locales/ta.js",
+            "node_modules/zod/v4/locales/tg.js",
+            "node_modules/zod/v4/locales/th.js",
+            "node_modules/zod/v4/locales/tk.js",
+            "node_modules/zod/v4/locales/tr.js",
+            "node_modules/zod/v4/locales/ua.js",
+            "node_modules/zod/v4/locales/uk.js",
+            "node_modules/zod/v4/locales/ur.js",
+            "node_modules/zod/v4/locales/uz.js",
+            "node_modules/zod/v4/locales/vi.js",
+            "node_modules/zod/v4/locales/yo.js",
+            "node_modules/zod/v4/locales/zh-CN.js",
+            "node_modules/zod/v4/locales/zh-TW.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "youtube-watch.3b0aae31.js",
+          "sources": [
+            "node_modules/zod/index.js",
+            "node_modules/zod/v4/classic/checks.js",
+            "node_modules/zod/v4/classic/coerce.js",
+            "node_modules/zod/v4/classic/compat.js",
+            "node_modules/zod/v4/classic/deep-partial.js",
+            "node_modules/zod/v4/classic/errors.js",
+            "node_modules/zod/v4/classic/external.js",
+            "node_modules/zod/v4/classic/from-json-schema.js",
+            "node_modules/zod/v4/classic/in-out.js",
+            "node_modules/zod/v4/classic/iso.js",
+            "node_modules/zod/v4/classic/parse.js",
+            "node_modules/zod/v4/classic/schemas.js",
+            "node_modules/zod/v4/core/api.js",
+            "node_modules/zod/v4/core/checks.js",
+            "node_modules/zod/v4/core/compile.js",
+            "node_modules/zod/v4/core/core.js",
+            "node_modules/zod/v4/core/doc.js",
+            "node_modules/zod/v4/core/errors.js",
+            "node_modules/zod/v4/core/index.js",
+            "node_modules/zod/v4/core/json-schema-generator.js",
+            "node_modules/zod/v4/core/json-schema-processors.js",
+            "node_modules/zod/v4/core/json-schema.js",
+            "node_modules/zod/v4/core/memoizer.js",
+            "node_modules/zod/v4/core/parse.js",
+            "node_modules/zod/v4/core/regexes.js",
+            "node_modules/zod/v4/core/registries.js",
+            "node_modules/zod/v4/core/schemas.js",
+            "node_modules/zod/v4/core/to-json-schema.js",
+            "node_modules/zod/v4/core/util.js",
+            "node_modules/zod/v4/core/versions.js",
+            "node_modules/zod/v4/core/visit.js",
+            "node_modules/zod/v4/locales/ar.js",
+            "node_modules/zod/v4/locales/az.js",
+            "node_modules/zod/v4/locales/be.js",
+            "node_modules/zod/v4/locales/bg.js",
+            "node_modules/zod/v4/locales/bn.js",
+            "node_modules/zod/v4/locales/ca.js",
+            "node_modules/zod/v4/locales/ckb.js",
+            "node_modules/zod/v4/locales/cs.js",
+            "node_modules/zod/v4/locales/da.js",
+            "node_modules/zod/v4/locales/de.js",
+            "node_modules/zod/v4/locales/el.js",
+            "node_modules/zod/v4/locales/en.js",
+            "node_modules/zod/v4/locales/eo.js",
+            "node_modules/zod/v4/locales/es.js",
+            "node_modules/zod/v4/locales/fa.js",
+            "node_modules/zod/v4/locales/fi.js",
+            "node_modules/zod/v4/locales/fr-CA.js",
+            "node_modules/zod/v4/locales/fr.js",
+            "node_modules/zod/v4/locales/gu.js",
+            "node_modules/zod/v4/locales/he.js",
+            "node_modules/zod/v4/locales/hi.js",
+            "node_modules/zod/v4/locales/hr.js",
+            "node_modules/zod/v4/locales/hu.js",
+            "node_modules/zod/v4/locales/hy.js",
+            "node_modules/zod/v4/locales/id.js",
+            "node_modules/zod/v4/locales/index.js",
+            "node_modules/zod/v4/locales/is.js",
+            "node_modules/zod/v4/locales/it.js",
+            "node_modules/zod/v4/locales/ja.js",
+            "node_modules/zod/v4/locales/ka.js",
+            "node_modules/zod/v4/locales/kh.js",
+            "node_modules/zod/v4/locales/km.js",
+            "node_modules/zod/v4/locales/kn.js",
+            "node_modules/zod/v4/locales/ko.js",
+            "node_modules/zod/v4/locales/lt.js",
+            "node_modules/zod/v4/locales/mk.js",
+            "node_modules/zod/v4/locales/ms.js",
+            "node_modules/zod/v4/locales/ne.js",
+            "node_modules/zod/v4/locales/nl.js",
+            "node_modules/zod/v4/locales/nn.js",
+            "node_modules/zod/v4/locales/no.js",
+            "node_modules/zod/v4/locales/ota.js",
+            "node_modules/zod/v4/locales/pl.js",
+            "node_modules/zod/v4/locales/ps.js",
+            "node_modules/zod/v4/locales/pt-BR.js",
+            "node_modules/zod/v4/locales/pt.js",
+            "node_modules/zod/v4/locales/ro.js",
+            "node_modules/zod/v4/locales/ru.js",
+            "node_modules/zod/v4/locales/sk.js",
+            "node_modules/zod/v4/locales/sl.js",
+            "node_modules/zod/v4/locales/sv.js",
+            "node_modules/zod/v4/locales/ta.js",
+            "node_modules/zod/v4/locales/tg.js",
+            "node_modules/zod/v4/locales/th.js",
+            "node_modules/zod/v4/locales/tk.js",
+            "node_modules/zod/v4/locales/tr.js",
+            "node_modules/zod/v4/locales/ua.js",
+            "node_modules/zod/v4/locales/uk.js",
+            "node_modules/zod/v4/locales/ur.js",
+            "node_modules/zod/v4/locales/uz.js",
+            "node_modules/zod/v4/locales/vi.js",
+            "node_modules/zod/v4/locales/yo.js",
+            "node_modules/zod/v4/locales/zh-CN.js",
+            "node_modules/zod/v4/locales/zh-TW.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "source:youtube-summarizer",
+      "name": "YouTube-Summarizer",
+      "version": "48eee570e82cf74d37fcdb546058429cba74357a",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "INCORPORATED_SOURCE_OR_ASSET",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "bilibili-video.5fd6a346.js",
+          "sources": [
+            "src/features/platform/youtube/youtube-adapter.ts",
+            "src/features/platform/youtube/youtube-url.ts",
+            "src/features/transcript/lib/fetch-transcript-dom.ts",
+            "src/features/transcript/lib/fetch-transcript-panel.ts",
+            "src/features/transcript/lib/fetch-vtt.ts",
+            "src/features/transcript/lib/normalize-cues.ts",
+            "src/features/transcript/lib/parse-vtt.ts",
+            "src/features/transcript/lib/transcript-log.ts",
+            "src/features/transcript/lib/transcript-schema.ts",
+            "src/features/youtube/lib/extract-video-id.ts",
+            "src/features/youtube/lib/read-page-metadata.ts",
+            "src/lib/runtime/current-video.ts",
+            "src/lib/runtime/messages.ts"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "src/components/ui/alert.tsx",
+            "src/components/ui/badge.tsx",
+            "src/components/ui/button.tsx",
+            "src/components/ui/card.tsx",
+            "src/components/ui/field.tsx",
+            "src/components/ui/input-group.tsx",
+            "src/components/ui/input.tsx",
+            "src/components/ui/label.tsx",
+            "src/components/ui/scroll-area.tsx",
+            "src/components/ui/select.tsx",
+            "src/components/ui/separator.tsx",
+            "src/components/ui/skeleton.tsx",
+            "src/components/ui/switch.tsx",
+            "src/components/ui/tabs.tsx",
+            "src/components/ui/textarea.tsx",
+            "src/components/ui/toggle-group.tsx",
+            "src/components/ui/toggle.tsx",
+            "src/components/ui/tooltip.tsx",
+            "src/features/analysis/lib/analysis-schema.ts",
+            "src/features/analysis/lib/openai-compatible-client.ts",
+            "src/features/common/components/settings-ui.tsx",
+            "src/features/history/components/history-panel.tsx",
+            "src/features/history/components/recent-analysis-list.tsx",
+            "src/features/history/lib/history-repository.ts",
+            "src/features/history/lib/pending-history-open.ts",
+            "src/features/platform/youtube/youtube-adapter.ts",
+            "src/features/platform/youtube/youtube-url.ts",
+            "src/features/settings/components/connection-test.tsx",
+            "src/features/settings/components/data-management.tsx",
+            "src/features/settings/components/diagnostic-log.tsx",
+            "src/features/settings/components/provider-form.tsx",
+            "src/features/settings/components/theme-settings.tsx",
+            "src/features/settings/lib/provider-schema.ts",
+            "src/features/settings/lib/settings-storage.ts",
+            "src/features/transcript/lib/fetch-transcript-dom.ts",
+            "src/features/transcript/lib/fetch-transcript-panel.ts",
+            "src/features/transcript/lib/fetch-vtt.ts",
+            "src/features/transcript/lib/normalize-cues.ts",
+            "src/features/transcript/lib/parse-vtt.ts",
+            "src/features/transcript/lib/transcript-log.ts",
+            "src/features/transcript/lib/transcript-schema.ts",
+            "src/features/youtube/lib/extract-video-id.ts",
+            "src/features/youtube/lib/read-page-metadata.ts",
+            "src/lib/db/errors.ts",
+            "src/lib/db/index.ts",
+            "src/lib/db/migrations.ts",
+            "src/lib/db/schema.ts",
+            "src/lib/providers/extension-providers.tsx",
+            "src/lib/runtime/current-video.ts",
+            "src/lib/runtime/messages.ts",
+            "src/lib/schemas/persistence.ts",
+            "src/lib/theme/theme-provider.tsx",
+            "src/lib/theme/theme-storage.ts",
+            "src/lib/utils.ts",
+            "src/options/index.tsx"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.cbd95b00.css",
+          "sources": [
+            "src/styles/globals.css"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "src/components/ui/alert.tsx",
+            "src/components/ui/badge.tsx",
+            "src/components/ui/button.tsx",
+            "src/components/ui/card.tsx",
+            "src/components/ui/empty.tsx",
+            "src/components/ui/field.tsx",
+            "src/components/ui/input.tsx",
+            "src/components/ui/label.tsx",
+            "src/components/ui/scroll-area.tsx",
+            "src/components/ui/select.tsx",
+            "src/components/ui/separator.tsx",
+            "src/components/ui/skeleton.tsx",
+            "src/components/ui/sonner.tsx",
+            "src/components/ui/switch.tsx",
+            "src/components/ui/tabs.tsx",
+            "src/components/ui/textarea.tsx",
+            "src/components/ui/toggle-group.tsx",
+            "src/components/ui/toggle.tsx",
+            "src/components/ui/tooltip.tsx",
+            "src/features/analysis/components/analysis-toolbar.tsx",
+            "src/features/analysis/components/ask-ai-panel.tsx",
+            "src/features/analysis/components/current-video-card.tsx",
+            "src/features/analysis/components/key-points-list.tsx",
+            "src/features/analysis/components/segment-timeline.tsx",
+            "src/features/analysis/components/summary-card.tsx",
+            "src/features/analysis/lib/analysis-schema.ts",
+            "src/features/analysis/lib/ask-video.ts",
+            "src/features/analysis/lib/chunk-transcript.ts",
+            "src/features/analysis/lib/openai-compatible-client.ts",
+            "src/features/analysis/lib/prompts.ts",
+            "src/features/analysis/lib/run-analysis.ts",
+            "src/features/common/components/empty-state.tsx",
+            "src/features/common/components/settings-ui.tsx",
+            "src/features/history/components/recent-analysis-list.tsx",
+            "src/features/history/lib/history-repository.ts",
+            "src/features/history/lib/pending-history-open.ts",
+            "src/features/platform/youtube/youtube-adapter.ts",
+            "src/features/platform/youtube/youtube-url.ts",
+            "src/features/settings/components/connection-test.tsx",
+            "src/features/settings/components/provider-form.tsx",
+            "src/features/settings/lib/provider-schema.ts",
+            "src/features/settings/lib/settings-storage.ts",
+            "src/features/transcript/lib/download-vtt.ts",
+            "src/features/transcript/lib/fetch-transcript-dom.ts",
+            "src/features/transcript/lib/fetch-transcript-panel.ts",
+            "src/features/transcript/lib/fetch-vtt.ts",
+            "src/features/transcript/lib/normalize-cues.ts",
+            "src/features/transcript/lib/parse-vtt.ts",
+            "src/features/transcript/lib/transcript-log.ts",
+            "src/features/transcript/lib/transcript-schema.ts",
+            "src/features/youtube/lib/extract-video-id.ts",
+            "src/features/youtube/lib/read-page-metadata.ts",
+            "src/lib/db/errors.ts",
+            "src/lib/db/index.ts",
+            "src/lib/db/migrations.ts",
+            "src/lib/db/schema.ts",
+            "src/lib/providers/extension-providers.tsx",
+            "src/lib/runtime/current-video.ts",
+            "src/lib/runtime/messages.ts",
+            "src/lib/schemas/persistence.ts",
+            "src/lib/theme/theme-provider.tsx",
+            "src/lib/theme/theme-storage.ts",
+            "src/lib/utils.ts",
+            "src/sidepanel/analysis/analysis-controller.ts",
+            "src/sidepanel/ask/ask-controller.ts",
+            "src/sidepanel/components/ask-tab.tsx",
+            "src/sidepanel/components/overview-tab.tsx",
+            "src/sidepanel/components/settings-tab.tsx",
+            "src/sidepanel/components/sidepanel-shell.tsx",
+            "src/sidepanel/components/transcript-tab.tsx",
+            "src/sidepanel/history/history-controller.ts",
+            "src/sidepanel/index.tsx",
+            "src/sidepanel/lib/load-current-transcript.ts",
+            "src/sidepanel/lib/sidepanel-pure-helpers.ts",
+            "src/sidepanel/lib/sidepanel-ux.ts",
+            "src/sidepanel/navigation/timestamp-navigation.ts",
+            "src/sidepanel/transcript/transcript-acquisition.ts",
+            "src/sidepanel/transcript/transcript-controller.ts",
+            "src/sidepanel/transcript/transcript-finalization.ts",
+            "src/sidepanel/workspace/workspace-controller.ts",
+            "src/sidepanel/workspace/workspace-state.ts"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "static/background/index.js",
+          "sources": [
+            "src/background/index.ts",
+            "src/features/platform/youtube/youtube-adapter.ts",
+            "src/features/platform/youtube/youtube-url.ts",
+            "src/features/transcript/lib/fetch-transcript-dom.ts",
+            "src/features/transcript/lib/fetch-transcript-panel.ts",
+            "src/features/transcript/lib/fetch-vtt.ts",
+            "src/features/transcript/lib/normalize-cues.ts",
+            "src/features/transcript/lib/parse-vtt.ts",
+            "src/features/transcript/lib/transcript-log.ts",
+            "src/features/transcript/lib/transcript-schema.ts",
+            "src/features/youtube/lib/extract-video-id.ts",
+            "src/features/youtube/lib/read-page-metadata.ts",
+            "src/lib/runtime/current-video.ts",
+            "src/lib/runtime/messages.ts"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "youtube-watch.3b0aae31.js",
+          "sources": [
+            "src/contents/youtube-watch.ts",
+            "src/features/platform/youtube/youtube-adapter.ts",
+            "src/features/platform/youtube/youtube-url.ts",
+            "src/features/transcript/lib/fetch-transcript-dom.ts",
+            "src/features/transcript/lib/fetch-transcript-panel.ts",
+            "src/features/transcript/lib/fetch-vtt.ts",
+            "src/features/transcript/lib/normalize-cues.ts",
+            "src/features/transcript/lib/parse-vtt.ts",
+            "src/features/transcript/lib/transcript-log.ts",
+            "src/features/transcript/lib/transcript-schema.ts",
+            "src/features/youtube/lib/extract-video-id.ts",
+            "src/features/youtube/lib/read-page-metadata.ts",
+            "src/lib/runtime/current-video.ts",
+            "src/lib/runtime/messages.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "asset:project-icon-r002-b",
+      "name": "R002-B extension icon",
+      "version": "R002-B",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "PROJECT_ASSET",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_DERIVED_ICON",
+          "output": "icon128.plasmo.3c1ed2d2.png",
+          "sources": [
+            "assets/icon.png",
+            ".plasmo/gen-assets/icon128.plasmo.png"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_DERIVED_ICON",
+          "output": "icon16.plasmo.6c567d50.png",
+          "sources": [
+            "assets/icon.png",
+            ".plasmo/gen-assets/icon16.plasmo.png"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_DERIVED_ICON",
+          "output": "icon32.plasmo.76b92899.png",
+          "sources": [
+            "assets/icon.png",
+            ".plasmo/gen-assets/icon32.plasmo.png"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_DERIVED_ICON",
+          "output": "icon48.plasmo.aced7582.png",
+          "sources": [
+            "assets/icon.png",
+            ".plasmo/gen-assets/icon48.plasmo.png"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_DERIVED_ICON",
+          "output": "icon64.plasmo.8bb5e6e0.png",
+          "sources": [
+            "assets/icon.png",
+            ".plasmo/gen-assets/icon64.plasmo.png"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "source:shadcn-templates",
+      "name": "shadcn-ui templates",
+      "version": "UNKNOWN_INTRODUCED_VERSION",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "INCORPORATED_SOURCE_OR_ASSET",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "src/components/ui/field.tsx",
+            "src/components/ui/input-group.tsx"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "src/components/ui/empty.tsx",
+            "src/components/ui/field.tsx"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "source:new-project-files",
+      "name": "Project source rights and licensing policy",
+      "version": "R002-B",
+      "membership": "UNKNOWN",
+      "coverage": "RIGHTS_REVIEW",
+      "evidence": []
+    },
+    {
+      "id": "npm:node_modules/@parcel/transformer-js/package.json",
+      "name": "@parcel/transformer-js",
+      "version": "2.9.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "SUPPLEMENTAL",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "bilibili-video.5fd6a346.js",
+          "sources": [
+            "node_modules/@parcel/transformer-js/src/esmodule-helpers.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "options.95eda3f3.js",
+          "sources": [
+            "node_modules/@parcel/transformer-js/src/esmodule-helpers.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "sidepanel.b7741352.js",
+          "sources": [
+            "node_modules/@parcel/transformer-js/src/esmodule-helpers.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "static/background/index.js",
+          "sources": [
+            "node_modules/@parcel/transformer-js/src/esmodule-helpers.js"
+          ]
+        },
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "youtube-watch.3b0aae31.js",
+          "sources": [
+            "node_modules/@parcel/transformer-js/src/esmodule-helpers.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@plasmohq/parcel-runtime/package.json",
+      "name": "@plasmohq/parcel-runtime",
+      "version": "0.25.2",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "SUPPLEMENTAL",
+      "evidence": [
+        {
+          "type": "SAME_BUILD_GRAPH",
+          "output": "manifest.json",
+          "sources": [
+            "node_modules/@plasmohq/parcel-runtime/dist/runtime-639a111d3a4b965e.json"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/@parcel/packager-js/package.json",
+      "name": "@parcel/packager-js",
+      "version": "2.9.3",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "SUPPLEMENTAL",
+      "evidence": [
+        {
+          "type": "EMITTED_PRELUDE",
+          "output": "bilibili-video.5fd6a346.js",
+          "sources": []
+        },
+        {
+          "type": "EMITTED_PRELUDE",
+          "output": "options.95eda3f3.js",
+          "sources": []
+        },
+        {
+          "type": "EMITTED_PRELUDE",
+          "output": "sidepanel.b7741352.js",
+          "sources": []
+        },
+        {
+          "type": "EMITTED_PRELUDE",
+          "output": "static/background/index.js",
+          "sources": []
+        },
+        {
+          "type": "EMITTED_PRELUDE",
+          "output": "youtube-watch.3b0aae31.js",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/plasmo/package.json",
+      "name": "plasmo",
+      "version": "0.90.5",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "SUPPLEMENTAL",
+      "evidence": [
+        {
+          "type": "GENERATED_TEMPLATES",
+          "output": "options.95eda3f3.js",
+          "sources": []
+        },
+        {
+          "type": "GENERATED_TEMPLATES",
+          "output": "options.html",
+          "sources": []
+        },
+        {
+          "type": "GENERATED_TEMPLATES",
+          "output": "sidepanel.b7741352.js",
+          "sources": []
+        },
+        {
+          "type": "GENERATED_TEMPLATES",
+          "output": "sidepanel.html",
+          "sources": []
+        },
+        {
+          "type": "GENERATED_TEMPLATES",
+          "output": "static/background/index.js",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/tailwindcss/package.json",
+      "name": "tailwindcss",
+      "version": "3.4.19",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "SUPPLEMENTAL",
+      "evidence": [
+        {
+          "type": "EMITTED_CSS",
+          "output": "options.cbd95b00.css",
+          "sources": []
+        }
+      ]
+    },
+    {
+      "id": "npm:node_modules/tailwindcss-animate/package.json",
+      "name": "tailwindcss-animate",
+      "version": "1.0.7",
+      "membership": "CONFIRMED_INCLUDED",
+      "coverage": "SUPPLEMENTAL",
+      "evidence": [
+        {
+          "type": "EMITTED_CSS",
+          "output": "options.cbd95b00.css",
+          "sources": []
+        }
+      ]
+    }
+  ],
+  "inheritedScope": {
+    "path": "docs/licensing/evidence/R002-B/distribution-scope-v3.json",
+    "sha256": "e09fea47e9f8d5b3e5987e44276daa428436c3f2df39090707d702b3b9fd8e92",
+    "schema": "vsa-r002-b-distribution-scope/v3"
+  },
+  "projectRights": {
+    "status": "OWNER_DECLARATION_RECORDED",
+    "actualBundleMembership": "UNKNOWN",
+    "sourceRightsSupplement": {
+      "path": "docs/licensing/evidence/R002-PR5/project-rights-supplement-v12.json",
+      "sha256": "cace36900d9208f5e227fcdcb53ab44a51aee2fd2c158c279a425d65ce4a04fa"
+    },
+    "contributorAuthority": {
+      "path": "docs/licensing/evidence/R002-PR5/contributor-authority-v12.json",
+      "sha256": "ae3f008036cb0f160c655f755b4274c55180291c7e100b180d593432d24acda3"
+    }
+  }
+}

@@ -19,6 +19,7 @@ const ROOT = resolve(import.meta.dir, "../..")
 const BASE_COMMIT = "de4bdcf811f93dab72bd748e314d59a414e1f251"
 const BASE_TREE = "18f3adfe593c40f84a2303c32542d1a68f83b6a5"
 const REVIEWED_CANDIDATE = "48ec9c5348d1fdc28796c91334e2d98c41617ac4"
+const R1_REPAIR_COMMIT = "5a7535363bc92a39683eff38514f7593cfa7bc4e"
 const PROJECT_LICENSE_SHA256 = "2033de464f1eaee84272cf1283dfafe6f505ebae08a65ac929941352ab0409d5"
 const LICENSE_SCOPE_SHA256 = "13427184d1ff51e46674e6e2fe382afb10cfc6852833ea1b28e682995788d06e"
 const CONTRIBUTOR_TERMS_SHA256 = "63aaf70e6e2be3eda8b5cb8706de376f22840320c7e3251ee8b3a6a8849525e6"
@@ -29,12 +30,12 @@ const HISTORICAL_RIGHTS_SHA256 = "aed77e5c89bc36cb226648016f26b1693cfb97bf3f9040
 const HISTORICAL_SCOPE = "docs/licensing/evidence/R002-B/distribution-scope-v3.json"
 const HISTORICAL_LEDGER = "docs/licensing/evidence/R002-B/candidate-ledger.json"
 const OUTPUT_ROOT = "docs/licensing/evidence/R002-PR5"
-const RIGHTS_SUPPLEMENT = `${OUTPUT_ROOT}/project-rights-supplement-v11.json`
-const CONTRIBUTOR_RECORD = `${OUTPUT_ROOT}/contributor-authority-v11.json`
-const CURRENT_SCOPE = `${OUTPUT_ROOT}/current-scope-v11.json`
-const CURRENT_LEDGER = `${OUTPUT_ROOT}/current-ledger-v11.json`
-const NOTICE_ROOT = `${OUTPUT_ROOT}/notice-preview-v11`
-const DECISION = `${OUTPUT_ROOT}/project-rights-decision-v11.json`
+const RIGHTS_SUPPLEMENT = `${OUTPUT_ROOT}/project-rights-supplement-v12.json`
+const CONTRIBUTOR_RECORD = `${OUTPUT_ROOT}/contributor-authority-v12.json`
+const CURRENT_SCOPE = `${OUTPUT_ROOT}/current-scope-v12.json`
+const CURRENT_LEDGER = `${OUTPUT_ROOT}/current-ledger-v12.json`
+const NOTICE_ROOT = `${OUTPUT_ROOT}/notice-preview-v12`
+const DECISION = `${OUTPUT_ROOT}/project-rights-decision-v12.json`
 const SUPERSEDED_SNAPSHOTS = [
   {
     version: 7,
@@ -55,6 +56,11 @@ const SUPERSEDED_SNAPSHOTS = [
     version: 10,
     decisionPath: `${OUTPUT_ROOT}/project-rights-decision-v10.json`,
     decisionSha256: "f300d9767b5752c83e7d4bdfe62c24fe93d711785f45f9a4bf5c542fe83b40ea",
+  },
+  {
+    version: 11,
+    decisionPath: `${OUTPUT_ROOT}/project-rights-decision-v11.json`,
+    decisionSha256: "af06f164e970ce73c7b033f73dd65ea4008ae5c7238afcc155e0a0feb14d00d9",
   },
 ]
 const STATUS = "THIRD_PARTY_NOTICES_COMPLETE"
@@ -289,7 +295,20 @@ function currentContributionIdentityReview() {
   const [toolLabel, toolEmail] = git("show", "-s", "--format=%an%x09%ae", INTEGRATION_COMMIT).split("\t")
   requireCheck(toolLabel === "RH-02 Integration" && Boolean(toolEmail),
     "Confirmed ChatGPT tool author identity changed")
-  const authorizedToolAuthors = new Set([`${toolLabel}\t${toolEmail}`])
+  requireCheck(
+    git("show", "-s", "--format=%s", R1_REPAIR_COMMIT)
+      === "fix: enforce current contribution coverage in release qualification",
+    "Recorded R1 repair commit subject changed",
+  )
+  const [repairToolLabel, repairToolEmail] = git(
+    "show", "-s", "--format=%an%x09%ae", R1_REPAIR_COMMIT,
+  ).split("\t")
+  requireCheck(Boolean(repairToolLabel) && Boolean(repairToolEmail),
+    "Recorded R1 repair commit author identity is missing")
+  const authorizedToolAuthors = new Set([
+    `${toolLabel}\t${toolEmail}`,
+    `${repairToolLabel}\t${repairToolEmail}`,
+  ])
   const authorizedAuthors = new Set([...reviewedHumanAuthors, ...authorizedToolAuthors])
 
   const mergeCommitters = new Set(git("log", BASE_COMMIT, "--format=%an%x09%ae%x09%cn%x09%ce%x09%P")
@@ -636,7 +655,7 @@ function createDecision(
     .map(([path, bytes]) => ({ path, ...identity(bytes) }))
   return {
     schema: "vsa-project-rights-decision/v1",
-    decisionId: "VSA-R002-PR5-2026-11-27-v11",
+    decisionId: "VSA-R002-PR5-2026-11-27-v12",
     status: "QUALIFIED_FOR_LOCAL_CANDIDATE",
     decisionSource: {
       kind: "RIGHTSHOLDER_DECLARATION_AND_REVIEWED_PROJECT_RECORD",
